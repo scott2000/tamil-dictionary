@@ -1,0 +1,16 @@
+#search-form {
+    display: flex;
+    margin: 20px auto 0 auto;
+    width: 350px;
+    max-width: 95%;
+}
+
+#search-form * {
+    padding: 5px;
+}
+
+#search-field {
+    flex-grow: 1;
+    margin-right: 5px;
+    font-size: 18px;
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="/main.css">
+        <link rel="stylesheet" href="/search.css">
+        <link rel="stylesheet" href="/search_bar.css">
+        {{#if query~}}
+            {{#if error_message~}}
+                <title>Search Error for &quot;{{query}}&quot;</title>
+            {{~else~}}
+                <title>Search Results for &quot;{{query}}&quot;</title>
+            {{~/if}}
+        {{~else~}}
+            <title>Tamil Dictionary</title>
+        {{~/if}}
+        {{~#if hide_other~}}
+            <script>
+                window.onload = function() {
+                    var link = document.getElementById('other-link');
+                    var msg = document.getElementById('other-msg');
+                    var div = document.getElementById('other');
+
+                    link.onclick = function() {
+                        msg.style.display = 'none';
+                        div.style.display = 'block';
+                        div.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                            inline: 'start',
+                        });
+                        return false;
+                    };
+                };
+            </script>
+        {{~/if}}
+    </head>
+    <body>
+        {{> common/search_bar}}
+        <div id="results">
+            {{~#if error_message}}
+                <p>
+                    {{error_message}}
+                    {{~#if definition_uri}}
+                        Try searching <a href="{{definition_uri}}">in definitions</a>?
+                    {{~/if}}
+                </p>
+            {{~/if}}
+            {{~#if best}}
+                <div id="best">
+                    <h2 class="header">Best Matches</h2>
+                    {{#each best~}}
+                        {{> common/definition}}
+                    {{~/each~}}
+                </div>
+            {{~/if}}
+            {{~#if related}}
+                <div id="related">
+                    <h2 class="header">Related Words</h2>
+                    {{#each related~}}
+                        {{> common/definition}}
+                    {{~/each~}}
+                </div>
+            {{~/if}}
+            {{~#if other}}
+                {{~#if hide_other~}}
+                    <p id="other-msg">
+                        There are some more results which may be less relevant to your search.
+                        <a id="other-link" href="{{other_uri}}#other">
+                            Show {{other_count}} other words.
+                        </a>
+                    </p>
+                    <div id="other" style="display:none;">
+                {{~else~}}
+                    <div id="other">
+                {{~/if}}
+                <h2 class="header">Other Words</h2>
+                {{#each other~}}
+                    {{> common/definition}}
+                {{~/each~}}
+                </div>
+            {{~/if~}}
+        </div>
+    </body>
+</html>

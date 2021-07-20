@@ -1,0 +1,27 @@
+#results {
+    margin: auto;
+    width: 800px;
+    max-width: 95%;
+}
+
+.header {
+    padding-top: 20px;
+    padding-bottom: 0px;
+    margin-top: 10px;
+    margin-bottom: 0px;
+    text-align: center;
+}
+
+.word {
+    color: black;
+    font-weight: bold;
+}
+
+.entry {
+    padding: 10px;
+    margin: 15px auto;
+    border-style: solid;
+    border-width: 1px;
+    border-color: #a0a0a0;
+    font-size: 18px;
+}
