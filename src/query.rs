@@ -119,7 +119,7 @@ impl Query {
             }
 
             // Parse the pattern and add it to the appropriate list
-            match Pattern::parse(&mut chars, false)? {
+            match Pattern::parse(&mut chars, quoted)? {
                 Pattern::Empty => {
                     if negative {
                         return Err(ParseError::EmptyNegative);
@@ -147,8 +147,12 @@ impl Query {
 
             // Check for closing quotes if there were opening quotes
             if quoted {
+                while let Some(' ') = chars.peek() {
+                    chars.next();
+                }
+
                 match chars.peek() {
-                    None | Some(' ') | Some(':') => {
+                    None => {
                         return Err(ParseError::Missing(SurroundKind::Quote));
                     }
                     Some('"') => {
