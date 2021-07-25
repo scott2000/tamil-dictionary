@@ -78,6 +78,7 @@ impl ResultSegment {
             }
         };
 
+        // Highlight any words which appear in this segment
         let mut start = seg.start as usize;
         let end = seg.end as usize;
         while let Some(&(range_start, range_end)) = state.highlight_ranges.last() {
@@ -88,12 +89,14 @@ impl ResultSegment {
                 break;
             }
 
+            // Split the segment into parts to add a bold segment
             state.highlight_ranges.pop();
             push(seg.kind, start, range_start);
             push(SegmentKind::Bold, range_start, range_end);
             start = range_end;
         }
 
+        // Push any remaining text in the segment
         push(seg.kind, start, end);
         segments
     }
@@ -160,6 +163,7 @@ impl ResultEntry {
     }
 
     fn render(SearchRankingEntry { entry, words }: SearchRankingEntry) -> Self {
+        // Create a stack of highlighted word ranges
         let mut highlight_ranges = Vec::new();
         for &index in words.iter().rev() {
             if index == NO_WORD {
@@ -175,16 +179,27 @@ impl ResultEntry {
             highlight_ranges,
         };
 
+        // Render all of the sections for the entry
         let mut sections: Vec<_> = entry.sections.iter()
             .enumerate()
             .map(|(i, sec)| ResultSection::render(&mut state, i == 0, sec))
             .collect();
 
+        // Check for single-segment, single-definition sections to join with the header
         if sections.len() == 1 {
             let only = &mut sections[0];
             if only.paragraphs.len() == 1 {
-                only.section.segments.push(ResultSegment::new(SegmentKind::Text, ": "));
-                only.section.segments.append(&mut only.paragraphs[0].segments);
+                let segments = &mut only.section.segments;
+
+                // Pick the joining string based on the last character of the header
+                let joiner = match segments.last().and_then(|seg| seg.text.chars().last()) {
+                    None | Some('.' | ',' | ':' | ';') => " ",
+                    _ => ": ",
+                };
+
+                // Push a joining segment before appending the definition
+                segments.push(ResultSegment::new(SegmentKind::Text, joiner));
+                segments.append(&mut only.paragraphs[0].segments);
                 only.paragraphs = Vec::new();
             }
         }
@@ -202,8 +217,8 @@ impl ResultEntry {
 struct Search {
     query: String,
     other_uri: String,
-    error_message: Option<String>,
-    definition_uri: Option<String>,
+    error: bool,
+    message: Option<String>,
     best_or_exact: bool,
     exact: Vec<ResultEntry>,
     best: Vec<ResultEntry>,
@@ -225,8 +240,8 @@ impl Search {
         Self {
             query: String::from(query),
             other_uri,
-            error_message: None,
-            definition_uri: None,
+            error: false,
+            message: None,
             best_or_exact: false,
             exact: Vec::new(),
             best: Vec::new(),
@@ -238,24 +253,18 @@ impl Search {
     }
 
     fn error(&mut self, err: impl ToString) {
-        self.error_message = Some(err.to_string());
+        self.error = true;
+        self.message = Some(err.to_string());
     }
 
     fn no_results(&mut self) {
-        self.error("No results found.");
+        if !self.error {
+            self.message = Some(String::from("No results found."));
+        }
     }
 
     fn result(&mut self, result: Result<SearchResult, SearchError>) {
         match result {
-            Err(SearchError::TryDefinition) => {
-                self.no_results();
-                let new_query = format!(": {}", self.query);
-                self.definition_uri = Some(if self.hide_other {
-                    uri!(search(new_query))
-                } else {
-                    uri!(search_all(new_query))
-                }.to_string());
-            },
             Err(err) => self.error(err),
             Ok(result) => {
                 let ranking = result.rank();

@@ -22,22 +22,6 @@ pub enum ParseError {
     EmptyNegative,
     #[error("Invalid syntax: alternatives must be surrounded by parentheses.")]
     SurroundWithParens,
-    #[error("Invalid syntax: missing double quote.")]
-    MissingQuote,
-    #[error("Invalid syntax: extra double quote.")]
-    ExtraQuote,
-    #[error("Invalid syntax: missing closing bracket.")]
-    MissingBracket,
-    #[error("Invalid syntax: extra closing bracket.")]
-    ExtraBracket,
-    #[error("Invalid syntax: missing closing parenthesis.")]
-    MissingParen,
-    #[error("Invalid syntax: extra closing parenthesis.")]
-    ExtraParen,
-    #[error("Invalid syntax: missing closing brace.")]
-    MissingBrace,
-    #[error("Invalid syntax: extra closing brace.")]
-    ExtraBrace,
     #[error("Invalid syntax: expected parentheses after hash symbol.")]
     InvalidExact,
     #[error("Invalid repetition: number must be between 0 and 255.")]
@@ -58,11 +42,34 @@ pub enum ParseError {
     InvalidUnicodeWhitespace(unicode::Name),
     #[error("Invalid character: {0:?}.")]
     InvalidOtherCharacter(char),
-    #[error("Invalid syntax: expected '{expected}' but found '{found}'.")]
+    #[error("Invalid syntax: missing {0}.")]
+    Missing(SurroundKind),
+    #[error("Invalid syntax: extra {0}.")]
+    Extra(SurroundKind),
+    #[error("Invalid syntax: expected {expected} but found '{found}'.")]
     ExpectedCharacter {
-        expected: char,
+        expected: SurroundKind,
         found: char,
     },
+}
+
+#[derive(Debug)]
+pub enum SurroundKind {
+    Quote,
+    Bracket,
+    Paren,
+    Brace,
+}
+
+impl Display for SurroundKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SurroundKind::Quote => write!(f, "double quote"),
+            SurroundKind::Bracket => write!(f, "closing bracket"),
+            SurroundKind::Paren => write!(f, "closing parenthesis"),
+            SurroundKind::Brace => write!(f, "closeing brace"),
+        }
+    }
 }
 
 type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
@@ -76,6 +83,7 @@ pub struct Query {
 
 impl Query {
     pub fn parse(s: &str) -> Result<Query, ParseError> {
+        // Make sure the query doesn't exceed the length limit
         if s.len() > MAX_LEN {
             return Err(ParseError::LengthExceeded);
         }
@@ -88,24 +96,30 @@ impl Query {
             negative_definition_patterns: Vec::new(),
         };
 
-        let mut positive_empty = true;
-        let mut negative_empty = true;
+        // Default to parsing word patterns
         let mut positives = &mut query.word_patterns;
         let mut negatives = &mut query.negative_word_patterns;
+
+        // Parse all of the patterns of the query
+        let mut positive_empty = true;
+        let mut negative_empty = true;
         loop {
+            // Check for negative patterns
             let mut negative = false;
             if let Some('!' | '-') = chars.peek() {
                 chars.next();
                 negative = true;
             }
 
+            // Check for quoted patterns
             let mut quoted = false;
             if let Some('"') = chars.peek() {
                 chars.next();
                 quoted = true;
             }
 
-            match Pattern::parse(&mut chars, quoted)? {
+            // Parse the pattern and add it to the appropriate list
+            match Pattern::parse(&mut chars, false)? {
                 Pattern::Empty => {
                     if negative {
                         return Err(ParseError::EmptyNegative);
@@ -113,6 +127,7 @@ impl Query {
                 },
                 mut pat => {
                     if quoted {
+                        // Replace "X" with <#(X)>
                         pat = Pattern::Concat(
                             Box::new(Pattern::AssertStart),
                             Box::new(Pattern::Concat(
@@ -130,20 +145,35 @@ impl Query {
                 },
             }
 
+            // Check for closing quotes if there were opening quotes
             if quoted {
-                if let Some('"') = chars.peek() {
-                    chars.next();
-                } else {
-                    return Err(ParseError::MissingQuote);
+                match chars.peek() {
+                    None | Some(' ') | Some(':') => {
+                        return Err(ParseError::Missing(SurroundKind::Quote));
+                    }
+                    Some('"') => {
+                        chars.next();
+                    }
+                    Some('|') => {
+                        return Err(ParseError::SurroundWithParens);
+                    }
+                    Some(&found) => {
+                        return Err(ParseError::ExpectedCharacter {
+                            expected: SurroundKind::Quote,
+                            found,
+                        });
+                    }
                 }
             }
 
+            // Check for invalid trailing characters
             match chars.peek() {
                 None => break,
                 Some(' ') => {
                     chars.next();
-                },
+                }
                 Some(':') => {
+                    // Switch to parsing definition patterns
                     chars.next();
                     positives = &mut query.definition_patterns;
                     negatives = &mut query.negative_definition_patterns;
@@ -152,16 +182,16 @@ impl Query {
                     return Err(ParseError::SurroundWithParens);
                 }
                 Some('"') => {
-                    return Err(ParseError::ExtraQuote);
+                    return Err(ParseError::Extra(SurroundKind::Quote));
                 }
                 Some(']') => {
-                    return Err(ParseError::ExtraBracket);
+                    return Err(ParseError::Extra(SurroundKind::Bracket));
                 }
                 Some(')') => {
-                    return Err(ParseError::ExtraParen);
+                    return Err(ParseError::Extra(SurroundKind::Paren));
                 }
                 Some('}') => {
-                    return Err(ParseError::ExtraBrace);
+                    return Err(ParseError::Extra(SurroundKind::Brace));
                 }
                 Some(&ch) => {
                     return Err(Self::invalid_character(ch, ParseError::InvalidCharacter));
@@ -174,10 +204,12 @@ impl Query {
                 return Err(ParseError::EmptyQuery);
             }
             (true, false) => {
+                // Don't allow negative word patterns by themselves
                 if query.negative_definition_patterns.is_empty() {
                     return Err(ParseError::OnlyNegativeWord);
                 }
 
+                // If only negative, push a pattern which will match anything
                 query.word_patterns.push(Pattern::Concat(
                         Box::new(Pattern::AssertStart),
                         Box::new(Pattern::Set(LetterSet::any()))));
@@ -192,26 +224,31 @@ impl Query {
         let mut intersect = Vec::new();
         let mut difference = Vec::new();
 
+        // Search using positive word patterns
         for pat in &self.word_patterns {
             intersect.push(pat.search(&tree::search_word())?.end()?);
         }
 
+        // Search using positive definition patterns
         for pat in &self.definition_patterns {
-            intersect.push(pat.search(&tree::search_definition())?.end()?);
+            intersect.push(pat.search(&tree::search_both())?.end()?);
         }
 
         let mut process_negatives = || {
+            // Search using negative word patterns
             for pat in &self.negative_word_patterns {
                 difference.push(pat.search(&tree::search_word())?.end()?);
             }
 
+            // Search using negative definition patterns
             for pat in &self.negative_definition_patterns {
-                difference.push(pat.search(&tree::search_definition())?.end()?);
+                difference.push(pat.search(&tree::search_both())?.end()?);
             }
 
             Ok(())
         };
 
+        // Give special error for failing negative patterns
         match process_negatives() {
             Err(SearchError::TooManyResults) => {
                 return Err(SearchError::CommonExclusion);
@@ -219,14 +256,35 @@ impl Query {
             _ => {}
         }
 
-        if intersect.iter().chain(&difference).all(SearchResult::is_empty)
-            && self.definition_patterns.is_empty()
+        // If there are no results, try again as a definition
+        if self.definition_patterns.is_empty()
             && self.negative_definition_patterns.is_empty()
+            && intersect.iter().chain(&difference).all(SearchResult::is_empty)
         {
-            Err(SearchError::TryDefinition)
-        } else {
-            Ok(SearchResult::intersect_difference(intersect, difference))
+            intersect.clear();
+            difference.clear();
+
+            let mut process_definitions = || -> Result<(), SearchError> {
+                // Search using positive word patterns as definition patterns
+                for pat in &self.word_patterns {
+                    intersect.push(pat.search(&tree::search_definition())?.end()?);
+                }
+
+                // Search using negative words patterns as definition patterns
+                for pat in &self.negative_word_patterns {
+                    difference.push(pat.search(&tree::search_definition())?.end()?);
+                }
+
+                Ok(())
+            };
+
+            // Ignore any errors since they weren't caused by the user
+            if let Err(_) = process_definitions() {
+                return Ok(SearchResult::default());
+            }
         }
+
+        Ok(SearchResult::intersect_difference(intersect, difference))
     }
 
     pub fn escape(s: &str) -> String {
@@ -362,12 +420,14 @@ impl Pattern {
     }
 
     fn parse(chars: &mut Chars, in_group: bool) -> Result<Self, ParseError> {
+        // Parse leading whitespace if in a group
         if in_group {
             while let Some(' ') = chars.peek() {
                 chars.next();
             }
         }
 
+        // Parse a single term of the pattern
         let mut split_text = false;
         let pat = match chars.peek() {
             None => Self::Empty,
@@ -396,12 +456,14 @@ impl Pattern {
             return Ok(pat);
         }
 
+        // Parse a repetition after the term of the pattern
         let pat = match Self::parse_repeat(chars)? {
             (0, 0) => return Ok(Self::Empty),
             (1, 1) => pat,
             (a, b) => {
                 match pat {
                     Self::Literal(text) if split_text && text.len() > 1 => {
+                        // Only apply the repetition to the last character in a literal
                         let split = text.len() - 1;
                         Self::Concat(
                             Box::new(Self::Literal(Box::from(&text[..split]))),
@@ -412,6 +474,7 @@ impl Pattern {
             },
         };
 
+        // Continue parsing if possible, and concatenate the result
         let next = Self::parse(chars, in_group)?;
         if let Self::Empty = next {
             Ok(pat)
@@ -439,13 +502,13 @@ impl Pattern {
         }
 
         match chars.peek() {
-            None => Err(ParseError::MissingParen),
+            None => Err(ParseError::Missing(SurroundKind::Paren)),
             Some(')') => {
                 chars.next();
                 Ok(pat)
             },
             Some(&found) => Err(ParseError::ExpectedCharacter {
-                expected: ')',
+                expected: SurroundKind::Paren,
                 found,
             }),
         }
@@ -464,7 +527,7 @@ impl Pattern {
         loop {
             match chars.next() {
                 None => {
-                    return Err(ParseError::MissingBracket);
+                    return Err(ParseError::Missing(SurroundKind::Bracket));
                 }
                 Some('-') => {
                     return Err(ParseError::PartialRange);
@@ -555,7 +618,7 @@ impl Pattern {
 
                 let a = Self::parse_bound(chars, 0)?;
                 match chars.next() {
-                    None => Err(ParseError::MissingBrace),
+                    None => Err(ParseError::Missing(SurroundKind::Brace)),
                     Some('}') => Ok((a, a)),
                     Some(':' | ',') => {
                         let b = Self::parse_bound(chars, u8::MAX)?;
@@ -565,10 +628,10 @@ impl Pattern {
                         }
 
                         match chars.next() {
-                            None => Err(ParseError::MissingBrace),
+                            None => Err(ParseError::Missing(SurroundKind::Brace)),
                             Some('}') => Ok((a, b)),
                             Some(found) => Err(ParseError::ExpectedCharacter {
-                                expected: '}',
+                                expected: SurroundKind::Brace,
                                 found,
                             }),
                         }

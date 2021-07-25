@@ -8,14 +8,12 @@ pub mod tree;
 
 #[derive(Error, Debug)]
 pub enum SearchError {
-    #[error("The search query is too complex. Try using fewer wildcards.")]
+    #[error("Error: the search query is too complex. Try using fewer wildcards.")]
     TooComplex,
-    #[error("The search query isn't specific enough.")]
+    #[error("Error: the search query isn't specific enough. Try surrounding it in quotes.")]
     TooManyResults,
-    #[error("An excluded word in the search is too common to be excluded.")]
+    #[error("Error: an excluded word in the search has too many matches.")]
     CommonExclusion,
-    #[error("No results found. Try again as a definition.")]
-    TryDefinition,
 }
 
 pub trait Search: Clone {
@@ -41,10 +39,15 @@ pub trait Search: Clone {
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum SearchPrecedence {
+    // Always top: exact word
     Top,
+    // Type A: exact definition, prefix word
     A,
+    // Type B: prefix definition, suffix word
     B,
+    // Type C: suffix definition
     C,
+    // Always bottom: other word, other definition
     Bottom,
 }
 
@@ -56,6 +59,7 @@ struct SearchResultEntry {
 
 impl SearchResultEntry {
     fn new(word: WordIndex, start: bool, end: bool) -> Self {
+        // Pick the precedence depending on if it is a definition
         let precedence = if word == NO_WORD {
             match (start, end) {
                 (true, true) => SearchPrecedence::Top,
@@ -87,9 +91,14 @@ impl SearchResultEntry {
 
     fn append(&mut self, mut other: Self) {
         self.precedence = match (self.word_match(), other.word_match()) {
+            // Combine word searches by taking the best precedence
             (true, true) => self.precedence.min(other.precedence),
+
+            // Combine word and definition searches by using word precedence
             (true, false) => self.precedence,
             (false, true) => other.precedence,
+
+            // Combine definition searches by taking the worst precedence
             (false, false) => self.precedence.max(other.precedence),
         };
 
@@ -130,19 +139,23 @@ impl SearchResult {
     pub fn intersect_difference(intersect: Vec<Self>, difference: Vec<Self>) -> Self {
         assert!(!intersect.is_empty());
 
+        // If the search is exactly one result, return it
         if intersect.len() == 1 && difference.is_empty() {
             return intersect.into_iter().next().unwrap()
         }
 
+        // Find the intersection of the positive results
         let mut intersect_set = intersect[0].map.keys().cloned().collect();
         for i in 1..intersect.len() {
             intersect[i].entry_intersection(&mut intersect_set);
         }
 
+        // Find the union of the negative results
         let difference_set: HashSet<_> = difference.iter()
             .flat_map(|result| result.map.keys().cloned())
             .collect();
 
+        // Combine results which are in intersection but not union
         let mut intersect_difference = Self::default();
         for result in intersect {
             for (index, entry) in result.map {
@@ -159,27 +172,34 @@ impl SearchResult {
         use SearchRank::*;
         use SearchPrecedence::*;
 
+        // Check for which precedence levels are present
         let mut has_a = false;
         let mut has_b = false;
-        let mut has_c_or_top = false;
+        let mut has_c = false;
         for entry in self.map.values() {
             match entry.precedence {
-                Top => has_c_or_top = true,
+                Top => has_a = true,
                 A => has_a = true,
                 B => has_b = true,
-                C => has_c_or_top = true,
+                C => has_c = true,
                 _ => {},
             }
         }
 
-        let (a, b, c, other) = match (has_a, has_b, has_c_or_top) {
+        let (a, b, c, other) = match (has_a, has_b, has_c) {
+            // Default ranking of precedences
             (true, true, _) => (Best, Related, Other, Other),
+
+            // Shift up due to missing precedence level
             (true, false, _) => (Best, Ignore, Related, Other),
             (false, true, _) => (Ignore, Best, Related, Other),
             (false, false, true) => (Ignore, Ignore, Best, Other),
+
+            // Shift other up since there's nothing else above it
             (false, false, false) => (Ignore, Ignore, Ignore, Best),
         };
 
+        // Insert results into the ranking at the appropriate level
         let mut ranking = SearchRanking::default();
         for (index, entry) in self.map {
             let rank = match entry.precedence {

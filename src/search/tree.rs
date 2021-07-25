@@ -21,7 +21,11 @@ pub fn search_word() -> Search {
 }
 
 pub fn search_definition() -> Search {
-    Search::new(&[&DEFINITION_TREES, &WORD_TREES])
+    Search::new(&[&DEFINITION_TREES])
+}
+
+pub fn search_both() -> Search {
+    Search::new(&[&WORD_TREES, &DEFINITION_TREES])
 }
 
 fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
@@ -125,6 +129,7 @@ impl super::Search for Search {
     fn end(mut self) -> Result<SearchResult, SearchError> {
         self.branches.retain(|branch| !branch.is_initial);
 
+        // Count non-terminal branches to make sure there's not too many
         let mut non_terminal_count = 0;
         for branch in &self.branches {
             if branch.branches.is_empty() {
@@ -137,27 +142,16 @@ impl super::Search for Search {
             }
         }
 
+        // Add all of the branches to the result
         let mut result = SearchResult::default();
+        let mut total_count = 0;
         for branch in self.branches {
-            if result.len() > SEARCH_MAX_RESULTS {
-                return Err(SearchError::TooManyResults);
-            }
-
-            add_branch_to_result(&mut result, branch.prefix.is_empty(), branch);
+            branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
         }
 
         Ok(result)
     }
-}
 
-fn add_branch_to_result(result: &mut SearchResult, suffix: bool, tree: SearchBranch<Loc>) {
-    for &loc in tree.leaves {
-        result.insert(loc, tree.is_prefix_tree, suffix);
-    }
-
-    for (_, branch) in tree.branches {
-        add_branch_to_result(result, false, tree.update(branch));
-    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -244,6 +238,33 @@ impl<T: Eq> SearchBranch<T> {
             if output.len() > SEARCH_MAX_BRANCHES {
                 return Err(SearchError::TooComplex);
             }
+        }
+
+        Ok(())
+    }
+}
+
+impl SearchBranch<Loc> {
+    fn add_to_result(
+        self,
+        result: &mut SearchResult,
+        total_count: &mut usize,
+        suffix: bool) -> Result<(), SearchError>
+    {
+        // Make sure the total count doesn't exceed the limit
+        *total_count += self.leaves.len();
+        if *total_count > SEARCH_MAX_RESULTS {
+            return Err(SearchError::TooManyResults);
+        }
+
+        // Add all of the leaves to the result
+        for &loc in self.leaves {
+            result.insert(loc, self.is_prefix_tree, suffix);
+        }
+
+        // Recursively add all of the branches to the result
+        for (_, branch) in self.branches {
+            self.update(branch).add_to_result(result, total_count, false)?;
         }
 
         Ok(())

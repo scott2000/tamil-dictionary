@@ -109,6 +109,7 @@ impl From<RawEntry> for Entry {
 
         let subword = raw.sub.and_then(|sub| sub.parse().ok());
 
+        // Load all of the text of the sections, and set the segments to refer to indices
         let mut text = String::new();
         let sections = raw.secs.into_iter()
             .map(|sec| {
@@ -132,19 +133,23 @@ impl From<RawEntry> for Entry {
             })
             .collect();
 
+        // Parse the words in the text, recording their start and end indices
         let mut parsed_text = Vec::new();
         let mut word_ranges = Vec::new();
         let mut chars = text.char_indices().peekable();
         loop {
+            // Skip non-word characters
             while let Some(_) = chars.next_if(|&(_, ch)| RawEntry::skip_char(ch)) {}
 
             if let Some((start, _)) = chars.next() {
+                // Skip word characters
                 while let Some(_) = chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)) {}
 
                 let end = chars.next()
                     .map(|(i, _)| i)
                     .unwrap_or(text.len());
 
+                // Push the parsed word and the indices
                 parsed_text.push(Letter::parse_str(&text[start..end]));
                 word_ranges.push((start as u32, end as u32));
             } else {
@@ -285,6 +290,7 @@ impl Letter {
                 'a'..='z' => word.push(Self(ch as u8 - b'a' + 36)),
                 'A'..='Z' => word.push(Self(ch as u8 - b'A' + 36)),
                 PULLI => {
+                    // Remove inherent 'a'
                     if let Some(x) = word.pop() {
                         if x != Self(0) {
                             word.push(x);
@@ -300,15 +306,22 @@ impl Letter {
                     } else if let Some(&n) = TAMIL_VOWEL_SIGN_MAP.get(&ch) {
                         match word.pop() {
                             None => {},
+
+                            // Remove inherent 'a' before adding vowel
                             Some(Self(0)) => {},
+
+                            // Convert short 'e' + 'aa' into short 'o'
                             Some(Self(6)) if n == Self(1) => {
                                 word.push(Self(9));
                                 continue;
                             },
+
+                            // Convert long 'e' + 'aa' into long 'o'
                             Some(Self(7)) if n == Self(1) => {
                                 word.push(Self(10));
                                 continue;
                             },
+
                             Some(x) => word.push(x),
                         }
                         word.push(n);
@@ -336,12 +349,15 @@ impl Letter {
                 0..=12 => {
                     match s.pop() {
                         None => {},
+
+                        // Remove pulli before adding vowel
                         Some(PULLI) => {
                             if ch > 0 {
                                 s.push(TAMIL_VOWEL_SIGNS[ch as usize - 1]);
                             }
                             continue;
                         },
+
                         Some(x) => s.push(x),
                     }
                     s.push(TAMIL_VOWELS[ch as usize]);

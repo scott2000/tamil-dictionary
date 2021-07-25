@@ -7,7 +7,7 @@
         <link rel="stylesheet" href="/search.css">
         <link rel="stylesheet" href="/search_bar.css">
         {{#if query~}}
-            {{#if error_message~}}
+            {{#if error~}}
                 <title>Search Error for &quot;{{query}}&quot;</title>
             {{~else~}}
                 <title>Search Results for &quot;{{query}}&quot;</title>
@@ -39,13 +39,8 @@
     <body>
         {{> common/search_bar}}
         <div id="results">
-            {{~#if error_message}}
-                <p>
-                    {{error_message}}
-                    {{~#if definition_uri}}
-                        Try searching <a href="{{definition_uri}}">in definitions</a>?
-                    {{~/if}}
-                </p>
+            {{~#if message~}}
+                <p>{{message}}</p>
             {{~/if}}
             {{~#if best_or_exact}}
                 <h2 class="header">Best Matches</h2>
