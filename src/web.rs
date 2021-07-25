@@ -214,18 +214,34 @@ impl ResultEntry {
 }
 
 #[derive(Serialize, Debug)]
+struct NumWithPlural {
+    num: usize,
+    is_plural: bool,
+}
+
+impl From<usize> for NumWithPlural {
+    fn from(num: usize) -> Self  {
+        Self {
+            num,
+            is_plural: num != 1,
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
 struct Search {
     query: String,
     other_uri: String,
+    hide_other: bool,
     error: bool,
     message: Option<String>,
-    best_or_exact: bool,
     exact: Vec<ResultEntry>,
     best: Vec<ResultEntry>,
     related: Vec<ResultEntry>,
-    hide_other: bool,
-    other_count: usize,
     other: Vec<ResultEntry>,
+    best_count: NumWithPlural,
+    related_count: NumWithPlural,
+    other_count: NumWithPlural,
 }
 
 impl Search {
@@ -240,15 +256,16 @@ impl Search {
         Self {
             query: String::from(query),
             other_uri,
+            hide_other: !all,
             error: false,
             message: None,
-            best_or_exact: false,
             exact: Vec::new(),
             best: Vec::new(),
             related: Vec::new(),
-            hide_other: !all,
-            other_count: 0,
             other: Vec::new(),
+            best_count: 0.into(),
+            related_count: 0.into(),
+            other_count: 0.into(),
         }
     }
 
@@ -278,14 +295,15 @@ impl Search {
                     self.related = ResultEntry::render_all(ranking.related);
                     self.other = ResultEntry::render_all(ranking.other);
 
-                    self.best_or_exact = !self.exact.is_empty() || !self.best.is_empty();
+                    self.best_count = (self.exact.len() + self.best.len()).into();
+                    self.related_count = self.related.len().into();
+                    self.other_count = self.other.len().into();
                 }
 
                 // Only hide the other results if they are too long
-                self.other_count = self.other.len();
-                if self.other_count <= 1 {
+                if self.other_count.num <= 1 {
                     self.hide_other = false;
-                } else if self.other_count <= MAX_OTHER_SECTIONS {
+                } else if self.other_count.num <= MAX_OTHER_SECTIONS {
                     // Count the number of sections in the other section
                     let other_section_count = self.other.iter()
                         .flat_map(|entry| entry.sections.iter())

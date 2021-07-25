@@ -42,8 +42,11 @@
             {{~#if message~}}
                 <p>{{message}}</p>
             {{~/if}}
-            {{~#if best_or_exact}}
+            {{~#if best_count.num}}
                 <h2 class="header">Best Matches</h2>
+                <p class="result-count">
+                    {{~> common/plural num=best_count s="result" p="results"~}}
+                </p>
                 {{~#if exact}}
                 <div id="exact">
                     {{#each exact~}}
@@ -62,6 +65,9 @@
             {{~#if related}}
                 <div id="related">
                     <h2 class="header">Related Words</h2>
+                    <p class="result-count">
+                        {{~> common/plural num=related_count s="result" p="results"~}}
+                    </p>
                     {{#each related~}}
                         {{> common/definition}}
                     {{~/each~}}
@@ -72,7 +78,7 @@
                     <p id="other-msg">
                         There are some more results which may be less relevant to your search.
                         <a id="other-link" href="{{other_uri}}#other">
-                            Show {{other_count}} other words.
+                            Show {{other_count.num}} other words.
                         </a>
                     </p>
                     <div id="other" style="display:none;">
@@ -80,6 +86,9 @@
                     <div id="other">
                 {{~/if}}
                 <h2 class="header">Other Words</h2>
+                <p class="result-count">
+                    {{~> common/plural num=other_count s="result" p="results"~}}
+                </p>
                 {{#each other~}}
                     {{> common/definition}}
                 {{~/each~}}
