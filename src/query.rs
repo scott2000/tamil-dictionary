@@ -231,7 +231,7 @@ impl Query {
 
         // Search using positive definition patterns
         for pat in &self.definition_patterns {
-            intersect.push(pat.search(&tree::search_both())?.end()?);
+            intersect.push(pat.search(&tree::search_definition())?.end()?);
         }
 
         let mut process_negatives = || {
@@ -242,7 +242,7 @@ impl Query {
 
             // Search using negative definition patterns
             for pat in &self.negative_definition_patterns {
-                difference.push(pat.search(&tree::search_both())?.end()?);
+                difference.push(pat.search(&tree::search_definition())?.end()?);
             }
 
             Ok(())
@@ -256,13 +256,15 @@ impl Query {
             _ => {}
         }
 
+        let result = SearchResult::intersect_difference(intersect, difference);
+
         // If there are no results, try again as a definition
-        if self.definition_patterns.is_empty()
+        if result.is_empty()
+            && self.definition_patterns.is_empty()
             && self.negative_definition_patterns.is_empty()
-            && intersect.iter().chain(&difference).all(SearchResult::is_empty)
         {
-            intersect.clear();
-            difference.clear();
+            let mut intersect = Vec::new();
+            let mut difference = Vec::new();
 
             let mut process_definitions = || -> Result<(), SearchError> {
                 // Search using positive word patterns as definition patterns
@@ -278,13 +280,13 @@ impl Query {
                 Ok(())
             };
 
-            // Ignore any errors since they weren't caused by the user
-            if let Err(_) = process_definitions() {
-                return Ok(SearchResult::default());
+            // If successful, return the definition search instead
+            if let Ok(_) = process_definitions() {
+                return Ok(SearchResult::intersect_difference(intersect, difference));
             }
         }
 
-        Ok(SearchResult::intersect_difference(intersect, difference))
+        Ok(result)
     }
 
     pub fn escape(s: &str) -> String {

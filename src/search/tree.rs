@@ -21,11 +21,7 @@ pub fn search_word() -> Search {
 }
 
 pub fn search_definition() -> Search {
-    Search::new(&[&DEFINITION_TREES])
-}
-
-pub fn search_both() -> Search {
-    Search::new(&[&WORD_TREES, &DEFINITION_TREES])
+    Search::new(&[&DEFINITION_TREES, &WORD_TREES])
 }
 
 fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
