@@ -9,7 +9,7 @@ use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind
 use crate::search::{SearchResult, SearchError, SearchRankingEntry};
 use crate::query::Query;
 
-const MAX_OTHER_WORDS: usize = 5;
+const MAX_OTHER_SECTIONS: usize = 5;
 
 #[get("/")]
 pub fn index() -> Template {
@@ -267,10 +267,12 @@ impl Search {
         match result {
             Err(err) => self.error(err),
             Ok(result) => {
+                // Convert the search results to a ranked page
                 let ranking = result.rank();
                 if ranking.is_empty() {
                     self.no_results();
                 } else {
+                    // Render the search results so they can be displayed
                     self.exact = ResultEntry::render_all(ranking.exact);
                     self.best = ResultEntry::render_all(ranking.best);
                     self.related = ResultEntry::render_all(ranking.related);
@@ -279,9 +281,19 @@ impl Search {
                     self.best_or_exact = !self.exact.is_empty() || !self.best.is_empty();
                 }
 
+                // Only hide the other results if they are too long
                 self.other_count = self.other.len();
-                if self.other_count <= MAX_OTHER_WORDS {
+                if self.other_count <= 1 {
                     self.hide_other = false;
+                } else if self.other_count <= MAX_OTHER_SECTIONS {
+                    // Count the number of sections in the other section
+                    let other_section_count = self.other.iter()
+                        .flat_map(|entry| entry.sections.iter())
+                        .count();
+
+                    if other_section_count <= MAX_OTHER_SECTIONS {
+                        self.hide_other = false;
+                    }
                 }
             },
         }
