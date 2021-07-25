@@ -12,14 +12,8 @@ lazy_static! {
         let file = File::open("dictionary.json")
             .expect("missing dictionary.json");
 
-        let entries: Vec<_> = serde_json::from_reader(file)
+        let mut entries: Box<[Entry]> = serde_json::from_reader(file)
             .expect("dictionary parse error");
-
-        let mut entries: Box<[Entry]> = entries.into_iter()
-            .enumerate()
-            .map(|(i, entry)| Entry::parse(i, entry))
-            .filter(|entry| !entry.parsed_words.is_empty() && !entry.definition.is_empty())
-            .collect();
 
         entries.sort();
 
@@ -28,64 +22,160 @@ lazy_static! {
     };
 }
 
+pub fn words() -> impl Iterator<Item = (&'static Word, Loc)> {
+    ENTRIES.iter()
+        .enumerate()
+        .flat_map(|(a, entry)|
+            entry.parsed_word.iter()
+                .map(move |word| (word.as_ref(), Loc { entry: a as u16, word: NO_WORD })))
+}
+
+pub fn definition_words() -> impl Iterator<Item = (&'static Word, Loc)> {
+    ENTRIES.iter()
+        .enumerate()
+        .flat_map(|(a, entry)|
+            entry.parsed_text.iter()
+                .enumerate()
+                .map(move |(b, word)| (word.as_ref(), Loc { entry: a as u16, word: b as u16 })))
+}
+
+pub type EntryIndex = u16;
+pub type WordIndex = u16;
+
+pub const NO_WORD: WordIndex = u16::MAX;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Loc {
+    // The index of the Entry in ENTRIES
+    pub entry: EntryIndex,
+    // The index of the word in the Entry (0 = word match)
+    pub word: WordIndex,
+}
+
 #[derive(Deserialize)]
 struct RawEntry {
     word: String,
-    definition: String,
+    sub: Option<String>,
+    secs: Vec<Vec<Vec<(SegmentKind, String)>>>,
 }
 
 impl RawEntry {
-    pub fn words(word: &str) -> impl Iterator<Item = &str> {
-        word.split(&[',', ';'][..])
-            .map(str::trim)
+    fn words(word: &str) -> impl Iterator<Item = &str> {
+        word.split(&[',', ';'][..]).map(str::trim)
+    }
+
+    fn skip_char(ch: char) -> bool {
+        ch.is_ascii() && !ch.is_ascii_alphabetic()
     }
 }
 
-#[derive(Eq, Debug)]
+#[derive(Deserialize, Copy, Clone, PartialEq, Eq, Debug)]
+pub enum SegmentKind {
+    #[serde(rename = "txt")]
+    Text,
+    #[serde(rename = "ref")]
+    Reference,
+    #[serde(rename = "sup")]
+    Superscript,
+    #[serde(rename = "bld")]
+    Bold,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(from = "RawEntry")]
 pub struct Entry {
-    pub word: String,
-    pub definition: String,
-    pub parsed_words: Vec<Box<Word>>,
-    pub parsed_definition: Vec<Box<Word>>,
-    original_index: usize,
+    pub word: Box<str>,
+    pub parsed_word: Box<[Box<Word>]>,
+    pub subword: Option<u8>,
+    pub text: Box<str>,
+    pub parsed_text: Box<[Box<Word>]>,
+    pub word_ranges: Box<[(u32, u32)]>,
+    pub sections: Box<[Section]>,
 }
 
 impl Entry {
     pub fn words(&self) -> impl Iterator<Item = &str> {
         RawEntry::words(&self.word)
     }
+}
 
-    fn parse(original_index: usize, entry: RawEntry) -> Self {
-        let parsed_words = RawEntry::words(&entry.word)
+impl From<RawEntry> for Entry {
+    fn from(raw: RawEntry) -> Self {
+        let parsed_word: Box<[_]> = RawEntry::words(&raw.word)
             .map(|s| Letter::parse_str(s))
             .collect();
 
-        let parsed_definition = entry.definition
-            .split(|ch: char| ch.is_ascii() && !ch.is_ascii_alphabetic())
-            .filter(|s| !s.is_empty())
-            .map(Letter::parse_str)
+        assert!(!parsed_word.is_empty());
+
+        let subword = raw.sub.and_then(|sub| sub.parse().ok());
+
+        let mut text = String::new();
+        let sections = raw.secs.into_iter()
+            .map(|sec| {
+                sec.into_iter()
+                    .map(|para| {
+                        para.into_iter()
+                            .map(|(kind, s)| {
+                                let start = text.len() as u32;
+                                text.push_str(&s);
+                                let end = text.len() as u32;
+                                text.push('\0');
+                                Segment {
+                                    kind,
+                                    start,
+                                    end,
+                                }
+                            })
+                            .collect()
+                    })
+                    .collect()
+            })
             .collect();
 
+        let mut parsed_text = Vec::new();
+        let mut word_ranges = Vec::new();
+        let mut chars = text.char_indices().peekable();
+        loop {
+            while let Some(_) = chars.next_if(|&(_, ch)| RawEntry::skip_char(ch)) {}
+
+            if let Some((start, _)) = chars.next() {
+                while let Some(_) = chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)) {}
+
+                let end = chars.next()
+                    .map(|(i, _)| i)
+                    .unwrap_or(text.len());
+
+                parsed_text.push(Letter::parse_str(&text[start..end]));
+                word_ranges.push((start as u32, end as u32));
+            } else {
+                break;
+            }
+        }
+
         Self {
-            word: entry.word,
-            definition: entry.definition,
-            parsed_words,
-            parsed_definition,
-            original_index,
+            word: raw.word.into_boxed_str(),
+            parsed_word,
+            subword,
+            text: text.into_boxed_str(),
+            parsed_text: parsed_text.into_boxed_slice(),
+            word_ranges: word_ranges.into_boxed_slice(),
+            sections,
         }
     }
 }
 
 impl PartialEq for Entry {
     fn eq(&self, rhs: &Self) -> bool {
-        self.parsed_words == rhs.parsed_words && self.original_index == rhs.original_index
+        self.parsed_word == rhs.parsed_word && self.subword == rhs.subword
     }
 }
 
+impl Eq for Entry {}
+
 impl Ord for Entry {
     fn cmp(&self, rhs: &Self) -> Ordering {
-        self.parsed_words.cmp(&rhs.parsed_words)
-            .then_with(|| self.original_index.cmp(&rhs.original_index))
+        self.parsed_word.cmp(&rhs.parsed_word)
+            .then_with(|| self.subword.cmp(&rhs.subword))
     }
 }
 
@@ -93,6 +183,17 @@ impl PartialOrd for Entry {
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
         Some(self.cmp(rhs))
     }
+}
+
+pub type Section = Box<[Paragraph]>;
+
+pub type Paragraph = Box<[Segment]>;
+
+#[derive(Debug)]
+pub struct Segment {
+    pub kind: SegmentKind,
+    pub start: u32,
+    pub end: u32,
 }
 
 const TAMIL_VOWELS: &'static [char] = &[
@@ -228,34 +329,34 @@ impl Letter {
         }
     }
 
-    pub fn to_str(s: &[Self]) -> String {
-        let mut word = String::new();
-        for &Letter(ch) in s {
+    pub fn to_str(word: &Word) -> String {
+        let mut s = String::new();
+        for &Letter(ch) in word {
             match ch {
                 0..=12 => {
-                    match word.pop() {
+                    match s.pop() {
                         None => {},
                         Some(PULLI) => {
                             if ch > 0 {
-                                word.push(TAMIL_VOWEL_SIGNS[ch as usize - 1]);
+                                s.push(TAMIL_VOWEL_SIGNS[ch as usize - 1]);
                             }
                             continue;
                         },
-                        Some(x) => word.push(x),
+                        Some(x) => s.push(x),
                     }
-                    word.push(TAMIL_VOWELS[ch as usize]);
+                    s.push(TAMIL_VOWELS[ch as usize]);
                 },
                 13..=35 => {
-                    word.push(TAMIL_CONSONANTS[ch as usize - 13]);
-                    word.push(PULLI);
+                    s.push(TAMIL_CONSONANTS[ch as usize - 13]);
+                    s.push(PULLI);
                 },
                 36..=61 => {
-                    word.push((ch - 36 + b'a') as char);
+                    s.push((ch - 36 + b'a') as char);
                 },
                 _ => unreachable!("invalid character: {}", ch),
             }
         }
-        word
+        s
     }
 
     pub fn category(self) -> Category {

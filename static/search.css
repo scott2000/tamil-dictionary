@@ -25,3 +25,20 @@
     border-color: #a0a0a0;
     font-size: 18px;
 }
+
+#exact .entry {
+    outline-style: solid;
+    outline-width: 3px;
+    outline-color: #d7e0f0;
+}
+
+.section-header {
+    margin-top: 10px;
+    margin-bottom: 15px;
+}
+
+.definition-list {
+    padding-left: 2em;
+    margin-top: 10px;
+    margin-bottom: 0;
+}

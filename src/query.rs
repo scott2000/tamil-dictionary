@@ -22,6 +22,10 @@ pub enum ParseError {
     EmptyNegative,
     #[error("Invalid syntax: alternatives must be surrounded by parentheses.")]
     SurroundWithParens,
+    #[error("Invalid syntax: missing double quote.")]
+    MissingQuote,
+    #[error("Invalid syntax: extra double quote.")]
+    ExtraQuote,
     #[error("Invalid syntax: missing closing bracket.")]
     MissingBracket,
     #[error("Invalid syntax: extra closing bracket.")]
@@ -95,13 +99,27 @@ impl Query {
                 negative = true;
             }
 
-            match Pattern::parse(&mut chars, false)? {
+            let mut quoted = false;
+            if let Some('"') = chars.peek() {
+                chars.next();
+                quoted = true;
+            }
+
+            match Pattern::parse(&mut chars, quoted)? {
                 Pattern::Empty => {
                     if negative {
                         return Err(ParseError::EmptyNegative);
                     }
                 },
-                pat => {
+                mut pat => {
+                    if quoted {
+                        pat = Pattern::Concat(
+                            Box::new(Pattern::AssertStart),
+                            Box::new(Pattern::Concat(
+                                Box::new(Pattern::Exact(Box::new(pat))),
+                                Box::new(Pattern::AssertEnd))));
+                    }
+
                     if negative {
                         negative_empty = false;
                         negatives.push(pat);
@@ -110,6 +128,14 @@ impl Query {
                         positives.push(pat);
                     }
                 },
+            }
+
+            if quoted {
+                if let Some('"') = chars.peek() {
+                    chars.next();
+                } else {
+                    return Err(ParseError::MissingQuote);
+                }
             }
 
             match chars.peek() {
@@ -124,6 +150,9 @@ impl Query {
                 }
                 Some('|') => {
                     return Err(ParseError::SurroundWithParens);
+                }
+                Some('"') => {
+                    return Err(ParseError::ExtraQuote);
                 }
                 Some(']') => {
                     return Err(ParseError::ExtraBracket);
@@ -168,7 +197,7 @@ impl Query {
         }
 
         for pat in &self.definition_patterns {
-            intersect.push(pat.search(&tree::search_definition())?.end()?.prefix_to_affix());
+            intersect.push(pat.search(&tree::search_definition())?.end()?);
         }
 
         let mut process_negatives = || {

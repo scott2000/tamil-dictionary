@@ -47,13 +47,22 @@
                     {{~/if}}
                 </p>
             {{~/if}}
-            {{~#if best}}
+            {{~#if best_or_exact}}
+                <h2 class="header">Best Matches</h2>
+                {{~#if exact}}
+                <div id="exact">
+                    {{#each exact~}}
+                        {{> common/definition}}
+                    {{~/each~}}
+                </div>
+                {{~/if}}
+                {{~#if best}}
                 <div id="best">
-                    <h2 class="header">Best Matches</h2>
                     {{#each best~}}
                         {{> common/definition}}
                     {{~/each~}}
                 </div>
+                {{~/if}}
             {{~/if}}
             {{~#if related}}
                 <div id="related">

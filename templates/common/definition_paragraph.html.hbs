@@ -1,0 +1,15 @@
+{{#each segments~}}
+    {{#if uri~}}
+        <a class="word" href="{{uri}}">
+    {{~/if}}
+    {{~#if tag~}}
+        <{{tag}}>
+    {{~/if}}
+    {{~text}}
+    {{~#if tag~}}
+        </{{tag}}>
+    {{~/if}}
+    {{~#if uri~}}
+        </a>
+    {{~/if~}}
+{{~/each}}

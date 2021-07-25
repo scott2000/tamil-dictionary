@@ -1,20 +1,19 @@
 use std::mem;
-use std::hash::Hash;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
-use crate::dictionary::{ENTRIES, Entry, Word, Letter, LetterSet};
+use crate::dictionary::{self, ENTRIES, Loc, Word, Letter, LetterSet};
 
 use super::{SearchError, SearchResult};
 
 lazy_static! {
-    static ref WORD_TREES: SearchTrees = build_trees("word", |entry| &entry.parsed_words);
-    static ref DEFINITION_TREES: SearchTrees = build_trees("definition", |entry| &entry.parsed_definition);
+    static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
+    static ref DEFINITION_TREES: SearchTrees = build_trees("definition", dictionary::definition_words());
 }
 
 #[derive(Debug)]
 struct SearchTrees {
-    prefix_tree: Tree<u32>,
-    suffix_tree: Tree<u32>,
+    prefix_tree: Tree<Loc>,
+    suffix_tree: Tree<Loc>,
 }
 
 pub fn search_word() -> Search {
@@ -25,24 +24,17 @@ pub fn search_definition() -> Search {
     Search::new(&[&DEFINITION_TREES, &WORD_TREES])
 }
 
-fn build_trees(kind: &str, f: fn(&'static Entry) -> &'static [Box<Word>]) -> SearchTrees {
+fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
     lazy_static::initialize(&ENTRIES);
     eprintln!("Building {} trees...", kind);
 
-    let iter = ENTRIES.iter()
-        .enumerate()
-        .flat_map(|(i, entry)|
-            f(entry).iter().map(move |word| (word.as_ref(), i as u32)));
-
-    let mut prefix_seen = HashSet::new();
-    let mut suffix_seen = HashSet::new();
     let mut prefix_tree = Tree::default();
     let mut suffix_tree = Tree::default();
-    for (key, value) in iter {
-        for i in 1..key.len() {
-            suffix_tree = suffix_tree.insert_unseen(&mut suffix_seen, &key[i..], value);
+    for (word, loc) in iter {
+        for i in 1..word.len() {
+            suffix_tree = suffix_tree.union(Tree::singleton(&word[i..], loc));
         }
-        prefix_tree = prefix_tree.insert_unseen(&mut prefix_seen, key, value);
+        prefix_tree = prefix_tree.union(Tree::singleton(word, loc));
     }
 
     eprintln!(" => {} {} prefix nodes (depth = {})", prefix_tree.size(), kind, prefix_tree.depth());
@@ -60,7 +52,7 @@ const SEARCH_MAX_FINAL_BRANCHES: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct Search {
-    branches: Vec<SearchBranch<u32>>,
+    branches: Vec<SearchBranch<Loc>>,
 }
 
 impl Search {
@@ -93,7 +85,7 @@ impl super::Search for Search {
     fn asserting_end(&self) -> Self {
         // Workaround: BTreeMap::new is not const
         lazy_static! {
-            static ref EMPTY: BTreeMap<Letter, Tree<u32>> = BTreeMap::new();
+            static ref EMPTY: BTreeMap<Letter, Tree<Loc>> = BTreeMap::new();
         };
 
         let branches = self.branches.iter()
@@ -133,8 +125,16 @@ impl super::Search for Search {
     fn end(mut self) -> Result<SearchResult, SearchError> {
         self.branches.retain(|branch| !branch.is_initial);
 
-        if self.branches.len() > SEARCH_MAX_FINAL_BRANCHES {
-            return Err(SearchError::TooComplex);
+        let mut non_terminal_count = 0;
+        for branch in &self.branches {
+            if branch.branches.is_empty() {
+                continue;
+            }
+
+            non_terminal_count += 1;
+            if non_terminal_count > SEARCH_MAX_FINAL_BRANCHES {
+                return Err(SearchError::TooComplex);
+            }
         }
 
         let mut result = SearchResult::default();
@@ -146,21 +146,13 @@ impl super::Search for Search {
             add_branch_to_result(&mut result, branch.prefix.is_empty(), branch);
         }
 
-        result.normalize();
         Ok(result)
     }
 }
 
-fn add_branch_to_result(result: &mut SearchResult, suffix: bool, tree: SearchBranch<u32>) {
-    for &index in tree.leaves {
-        let vec = match (tree.is_prefix_tree, suffix) {
-            (true, true) => &mut result.exact,
-            (true, false) => &mut result.prefix,
-            (false, true) => &mut result.affix,
-            (false, false) => &mut result.other,
-        };
-
-        vec.insert(index);
+fn add_branch_to_result(result: &mut SearchResult, suffix: bool, tree: SearchBranch<Loc>) {
+    for &loc in tree.leaves {
+        result.insert(loc, tree.is_prefix_tree, suffix);
     }
 
     for (_, branch) in tree.branches {
@@ -280,16 +272,6 @@ impl<T: Eq> Tree<T> {
 
     fn depth(&self) -> usize {
         self.branches.values().map(Self::depth).max().unwrap_or(0) + 1
-    }
-
-    fn insert_unseen(self, seen: &mut HashSet<(&'static Word, T)>, key: &'static Word, value: T) -> Self
-        where T: Clone + Hash
-    {
-        if seen.insert((key, value.clone())) {
-            self.union(Self::singleton(key, value))
-        } else {
-            self
-        }
     }
 
     fn strip_to(self, index: usize) -> Self {
