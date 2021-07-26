@@ -2,7 +2,7 @@ use std::mem;
 use std::sync::Mutex;
 use std::collections::HashSet;
 
-use crate::dictionary::Word;
+use crate::tamil::Word;
 
 lazy_static! {
     static ref WORDS: Mutex<HashSet<&'static Word>> = Mutex::new(HashSet::new());

@@ -2,7 +2,8 @@ use std::collections::{HashSet, BTreeMap, BTreeSet};
 
 use thiserror::Error;
 
-use crate::dictionary::{ENTRIES, NO_WORD, Entry, EntryIndex, WordIndex, Loc, Word, LetterSet};
+use crate::tamil::{Word, LetterSet};
+use crate::dictionary::{ENTRIES, NO_WORD, Entry, EntryIndex, WordIndex, Loc};
 
 pub mod tree;
 

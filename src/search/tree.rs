@@ -1,7 +1,8 @@
 use std::mem;
 use std::collections::BTreeMap;
 
-use crate::dictionary::{self, ENTRIES, Loc, Word, Letter, LetterSet};
+use crate::tamil::{Word, Letter, LetterSet};
+use crate::dictionary::{self, ENTRIES, Loc};
 
 use super::{SearchError, SearchResult};
 

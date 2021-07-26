@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::dictionary::{PULLI, Word, Letter, LetterSet, Category};
+use crate::tamil::{PULLI, Word, Letter, LetterSet, Category};
 use crate::search::{SearchError, Search, SearchResult, tree};
 
 const MAX_LEN: usize = 512;

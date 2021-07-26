@@ -6,6 +6,7 @@ use rocket_dyn_templates::Template;
 
 use tokio::task;
 
+pub mod tamil;
 pub mod intern;
 pub mod dictionary;
 pub mod search;
