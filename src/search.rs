@@ -89,17 +89,17 @@ impl SearchResultEntry {
         self.words.contains(&NO_WORD)
     }
 
-    fn append(&mut self, mut other: Self) {
+    fn append(&mut self, mut other: Self, intersect: bool) {
         self.precedence = match (self.word_match(), other.word_match()) {
-            // Combine word searches by taking the best precedence
-            (true, true) => self.precedence.min(other.precedence),
+            // Combine definition searches by taking the worst precedence when intersecting
+            (false, false) if intersect => self.precedence.max(other.precedence),
 
-            // Combine word and definition searches by using word precedence
+            // Combine mixed word and definition searches by using word precedence
             (true, false) => self.precedence,
             (false, true) => other.precedence,
 
-            // Combine definition searches by taking the worst precedence
-            (false, false) => self.precedence.max(other.precedence),
+            // Combine other searches by taking the best precedence
+            _ => self.precedence.min(other.precedence),
         };
 
         self.words.append(&mut other.words);
@@ -121,12 +121,12 @@ impl SearchResult {
     }
 
     pub fn insert(&mut self, loc: Loc, start: bool, end: bool) {
-        self.insert_entry(loc.entry, SearchResultEntry::new(loc.word, start, end));
+        self.insert_entry(loc.entry, SearchResultEntry::new(loc.word, start, end), false);
     }
 
-    fn insert_entry(&mut self, index: EntryIndex, entry: SearchResultEntry) {
+    fn insert_entry(&mut self, index: EntryIndex, entry: SearchResultEntry, intersect: bool) {
         if let Some(existing) = self.map.get_mut(&index) {
-            existing.append(entry);
+            existing.append(entry, intersect);
         } else {
             self.map.insert(index, entry);
         }
@@ -160,7 +160,7 @@ impl SearchResult {
         for result in intersect {
             for (index, entry) in result.map {
                 if intersect_set.contains(&index) && !difference_set.contains(&index) {
-                    intersect_difference.insert_entry(index, entry);
+                    intersect_difference.insert_entry(index, entry, true);
                 }
             }
         }

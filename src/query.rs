@@ -20,6 +20,8 @@ pub enum ParseError {
     OnlyNegativeWord,
     #[error("Invalid syntax: expected pattern after negation.")]
     EmptyNegative,
+    #[error("Invalid syntax: multiple words cannot appear together in double quotes.")]
+    SpaceInQuotes,
     #[error("Invalid syntax: alternatives must be surrounded by parentheses.")]
     SurroundWithParens,
     #[error("Invalid syntax: expected parentheses after hash symbol.")]
@@ -119,7 +121,7 @@ impl Query {
             }
 
             // Parse the pattern and add it to the appropriate list
-            match Pattern::parse(&mut chars, quoted)? {
+            match Pattern::parse(&mut chars, false)? {
                 Pattern::Empty => {
                     if negative {
                         return Err(ParseError::EmptyNegative);
@@ -147,16 +149,15 @@ impl Query {
 
             // Check for closing quotes if there were opening quotes
             if quoted {
-                while let Some(' ') = chars.peek() {
-                    chars.next();
-                }
-
                 match chars.peek() {
                     None => {
                         return Err(ParseError::Missing(SurroundKind::Quote));
                     }
                     Some('"') => {
                         chars.next();
+                    }
+                    Some(' ') => {
+                        return Err(ParseError::SpaceInQuotes);
                     }
                     Some('|') => {
                         return Err(ParseError::SurroundWithParens);
