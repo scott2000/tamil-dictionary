@@ -24,10 +24,16 @@ pub enum ParseError {
     SpaceInQuotes,
     #[error("Invalid syntax: alternatives must be surrounded by parentheses.")]
     SurroundWithParens,
+    #[error("Invalid syntax: expected character after backslash.")]
+    TrailingBackslash,
     #[error("Invalid syntax: expected parentheses after hash symbol.")]
     InvalidExact,
+    #[error("Invalid syntax: expected brackets after ampersand for assertion.")]
+    InvalidAssert,
     #[error("Invalid repetition: number must be between 0 and 255.")]
     InvalidRepetitionIndex,
+    #[error("Invalid syntax: expected pulli on consonant in character set.")]
+    MissingPulli,
     #[error("Invalid range: partial ranges are not allowed.")]
     PartialRange,
     #[error("Invalid range: cannot create range between {0} and {1}.")]
@@ -36,6 +42,8 @@ pub enum ParseError {
     InvalidRepetition(char),
     #[error("Invalid repetition: lower bound ({0}) must not exceed upper bound ({1}).")]
     InvalidRepetitionRange(u8, u8),
+    #[error("Invalid syntax: unknown escape sequence: '\\{0}'.")]
+    InvalidEscape(char),
     #[error("Invalid syntax: character not allowed in search: '{0}'.")]
     InvalidCharacter(char),
     #[error("Invalid character: {0}.")]
@@ -163,10 +171,7 @@ impl Query {
                         return Err(ParseError::SurroundWithParens);
                     }
                     Some(&found) => {
-                        return Err(ParseError::ExpectedCharacter {
-                            expected: SurroundKind::Quote,
-                            found,
-                        });
+                        return Err(Self::expected_character(SurroundKind::Quote, found));
                     }
                 }
             }
@@ -317,7 +322,13 @@ impl Query {
     fn invalid_character(ch: char, f: fn(char) -> ParseError) -> ParseError {
         if ch.is_ascii_graphic() {
             f(ch)
-        } else if let Some(name) = unicode::name(ch) {
+        } else {
+            Self::invalid_unicode(ch)
+        }
+    }
+
+    fn invalid_unicode(ch: char) -> ParseError {
+        if let Some(name) = unicode::name(ch) {
             if ch.is_whitespace() {
                 ParseError::InvalidUnicodeWhitespace(name)
             } else {
@@ -325,6 +336,17 @@ impl Query {
             }
         } else {
             ParseError::InvalidOtherCharacter(ch)
+        }
+    }
+
+    fn expected_character(expected: SurroundKind, found: char) -> ParseError {
+        if found.is_ascii_graphic() || found == ' ' {
+            ParseError::ExpectedCharacter {
+                expected,
+                found,
+            }
+        } else {
+            Self::invalid_unicode(found)
         }
     }
 }
@@ -367,6 +389,7 @@ enum Pattern {
     Empty,
     AssertStart,
     AssertEnd,
+    Assert(LetterSet),
     Set(LetterSet),
     Literal(Box<Word>),
     Exact(Box<Pattern>),
@@ -381,6 +404,7 @@ impl Pattern {
             Self::Empty => Ok(search.clone()),
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertEnd => Ok(search.asserting_end()),
+            &Self::Assert(lts) => Ok(search.asserting(lts)),
             &Self::Set(lts) => search.matching(lts),
             Self::Literal(word) => Ok(search.literal(word)),
             Self::Exact(pat) => pat.search(search),
@@ -439,8 +463,13 @@ impl Pattern {
         let pat = match chars.peek() {
             None => Self::Empty,
             Some('#') => Self::parse_exact(chars)?,
+            Some('&') => Self::parse_assert(chars)?,
             Some('(') => Self::parse_paren(chars)?,
-            Some('[') => Self::parse_bracket(chars)?,
+            Some('[') => Self::Set(Self::parse_bracket(chars)?),
+            Some('\\') => {
+                chars.next();
+                Self::Set(Self::parse_escape(chars)?)
+            }
             Some('<' | '^') => {
                 chars.next();
                 Self::AssertStart
@@ -490,6 +519,18 @@ impl Pattern {
         }
     }
 
+    fn parse_escape(chars: &mut Chars) -> Result<LetterSet, ParseError> {
+        if let Some(ch) = chars.next() {
+            if let Some(lts) = LetterSet::parse_escape(ch) {
+                Ok(lts)
+            } else {
+                Err(Query::invalid_character(ch, ParseError::InvalidEscape))
+            }
+        } else {
+            Err(ParseError::TrailingBackslash)
+        }
+    }
+
     fn parse_exact(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
@@ -497,6 +538,16 @@ impl Pattern {
             Ok(Pattern::Exact(Box::new(Self::parse_paren(chars)?)))
         } else {
             Err(ParseError::InvalidExact)
+        }
+    }
+
+    fn parse_assert(chars: &mut Chars) -> Result<Self, ParseError> {
+        chars.next();
+
+        if let Some('[') = chars.peek() {
+            Ok(Pattern::Assert(Self::parse_bracket(chars)?))
+        } else {
+            Err(ParseError::InvalidAssert)
         }
     }
 
@@ -514,14 +565,11 @@ impl Pattern {
                 chars.next();
                 Ok(pat)
             },
-            Some(&found) => Err(ParseError::ExpectedCharacter {
-                expected: SurroundKind::Paren,
-                found,
-            }),
+            Some(&found) => Err(Query::expected_character(SurroundKind::Paren, found)),
         }
     }
 
-    fn parse_bracket(chars: &mut Chars) -> Result<Self, ParseError> {
+    fn parse_bracket(chars: &mut Chars) -> Result<LetterSet, ParseError> {
         chars.next();
 
         let mut allowed = LetterSet::empty();
@@ -544,7 +592,10 @@ impl Pattern {
                         allowed = allowed.complement();
                     }
 
-                    return Ok(Self::Set(allowed));
+                    return Ok(allowed);
+                }
+                Some('\\') => {
+                    allowed = allowed.union(Self::parse_escape(chars)?);
                 }
                 Some(ch) => {
                     allowed = allowed.union(Self::parse_range(chars, ch)?);
@@ -554,17 +605,18 @@ impl Pattern {
     }
 
     fn parse_range(chars: &mut Chars, ch: char) -> Result<LetterSet, ParseError> {
-        if let Some(ch) = Letter::parse(ch) {
-            if let Some(&PULLI) = chars.peek() {
-                chars.next();
-            }
+        if let Some(start) = Letter::parse(ch) {
+            Self::parse_pulli(chars, start)?;
 
             if let Some('-') = chars.peek() {
                 chars.next();
-                if let Some(&x) = chars.peek() {
-                    if let Some(end) = Letter::parse(x) {
+
+                if let Some(ch) = chars.next() {
+                    if let Some(end) = Letter::parse(ch) {
+                        Self::parse_pulli(chars, end)?;
+
                         let mut result = LetterSet::empty();
-                        for i in ch.range(end).map_err(|(a, b)| ParseError::InvalidRange(a, b))? {
+                        for i in start.range(end).map_err(|(a, b)| ParseError::InvalidRange(a, b))? {
                             result = result.union(LetterSet::single(i));
                         }
 
@@ -576,11 +628,27 @@ impl Pattern {
                     Err(ParseError::PartialRange)
                 }
             } else {
-                Ok(LetterSet::single(ch))
+                Ok(LetterSet::single(start))
             }
         } else {
-            Ok(LetterSet::empty())
+            Err(Query::expected_character(SurroundKind::Bracket, ch))
         }
+    }
+
+    fn parse_pulli(chars: &mut Chars, lt: Letter) -> Result<(), ParseError> {
+        if lt.is_consonant() {
+            match chars.next() {
+                None => {
+                    return Err(ParseError::Missing(SurroundKind::Bracket));
+                }
+                Some(PULLI) => {}
+                Some(_) => {
+                    return Err(ParseError::MissingPulli);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn parse_text(chars: &mut Chars) -> Self {
@@ -637,10 +705,7 @@ impl Pattern {
                         match chars.next() {
                             None => Err(ParseError::Missing(SurroundKind::Brace)),
                             Some('}') => Ok((a, b)),
-                            Some(found) => Err(ParseError::ExpectedCharacter {
-                                expected: SurroundKind::Brace,
-                                found,
-                            }),
+                            Some(found) => Err(Query::expected_character(SurroundKind::Brace, found)),
                         }
                     }
                     Some(ch) => Err(Query::invalid_character(ch, ParseError::InvalidRepetition)),
@@ -675,8 +740,9 @@ impl Display for Pattern {
             Self::Empty => write!(f, "()"),
             Self::AssertStart => write!(f, "<"),
             Self::AssertEnd => write!(f, ">"),
-            Self::Set(cs) => write!(f, "{}", cs),
-            Self::Literal(s) => write!(f, "({})", Letter::to_str(s)),
+            Self::Assert(lts) => write!(f, "&{}", lts),
+            Self::Set(lts) => write!(f, "{}", lts),
+            Self::Literal(word) => write!(f, "({})", Letter::to_str(word)),
             Self::Exact(pat) => write!(f, "#({})", pat),
             Self::Repeat(pat, a, b) => write!(f, "{}{{{},{}}}", pat, a, b),
             Self::Concat(a, b) => write!(f, "{}{}", a, b),

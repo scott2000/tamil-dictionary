@@ -23,6 +23,8 @@ pub trait Search: Clone {
 
     fn asserting_end(&self) -> Self;
 
+    fn asserting(&self, lts: LetterSet) -> Self;
+
     fn literal(&self, word: &Word) -> Self;
 
     fn matching(&self, lts: LetterSet) -> Result<Self, SearchError>;

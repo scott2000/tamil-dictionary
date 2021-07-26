@@ -95,6 +95,14 @@ impl super::Search for Search {
         Self { branches }
     }
 
+    fn asserting(&self, lts: LetterSet) -> Self {
+        let branches = self.branches.iter()
+            .filter_map(|branch| branch.assert(lts))
+            .collect();
+
+        Self { branches }
+    }
+
     fn literal(&self, word: &Word) -> Self {
         let branches = self.branches.iter()
             .cloned()
@@ -154,6 +162,7 @@ impl super::Search for Search {
 struct SearchBranch<T: Eq + 'static> {
     is_prefix_tree: bool,
     is_initial: bool,
+    require: Option<LetterSet>,
     prefix: &'static Word,
     leaves: &'static [T],
     branches: &'static BTreeMap<Letter, Tree<T>>,
@@ -164,6 +173,7 @@ impl<T: Eq> SearchBranch<T> {
         Self {
             is_prefix_tree,
             is_initial: true,
+            require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
             branches: &tree.branches,
@@ -174,6 +184,7 @@ impl<T: Eq> SearchBranch<T> {
         Self {
             is_prefix_tree: self.is_prefix_tree,
             is_initial: false,
+            require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
             branches: &tree.branches,
@@ -183,8 +194,39 @@ impl<T: Eq> SearchBranch<T> {
     fn step(&self) -> Self {
         Self {
             is_initial: false,
+            require: None,
             prefix: &self.prefix[1..],
             ..*self
+        }
+    }
+
+    fn assert(&self, mut lts: LetterSet) -> Option<Self> {
+        if lts.is_any() {
+            return Some(Self { ..*self });
+        } else if let Some(require) = self.require {
+            lts = lts.intersect(require);
+        }
+
+        if lts.is_empty() {
+            return None;
+        }
+
+        if self.prefix.is_empty() {
+            if self.branches.is_empty() {
+                None
+            } else {
+                Some(Self {
+                    require: Some(lts),
+                    leaves: &[],
+                    ..*self
+                })
+            }
+        } else {
+            if lts.matches(self.prefix[0]) {
+                Some(Self { ..*self })
+            } else {
+                None
+            }
         }
     }
 
@@ -204,6 +246,19 @@ impl<T: Eq> SearchBranch<T> {
     }
 
     fn literal(mut self, word: &Word) -> Option<Self> {
+        if word.is_empty() {
+            return Some(self);
+        }
+
+        // Check for a requirement on the next letter
+        if let Some(require) = self.require {
+            if !require.matches(word[0]) {
+                return None;
+            }
+
+            self.require = None;
+        }
+
         for &lt in word {
             if self.prefix.is_empty() {
                 self = self.update(self.branches.get(&lt)?);
@@ -217,7 +272,16 @@ impl<T: Eq> SearchBranch<T> {
         Some(self)
     }
 
-    fn append_match(&self, output: &mut Vec<Self>, lts: LetterSet) -> Result<(), SearchError> {
+    fn append_match(&self, output: &mut Vec<Self>, mut lts: LetterSet) -> Result<(), SearchError> {
+        // Check for a requirement on the next letter
+        if let Some(require) = self.require {
+            lts = lts.intersect(require);
+        }
+
+        if lts.is_empty() {
+            return Ok(());
+        }
+
         if self.prefix.is_empty() {
             for (&lt, tree) in self.branches {
                 if lts.matches(lt) {
@@ -258,9 +322,17 @@ impl SearchBranch<Loc> {
             result.insert(loc, self.is_prefix_tree, suffix);
         }
 
-        // Recursively add all of the branches to the result
-        for (_, branch) in self.branches {
-            self.update(branch).add_to_result(result, total_count, false)?;
+        // Recursively add all of the matching branches to the result
+        for (&lt, branch) in self.branches {
+            match &self.require {
+                // If there is a requirement and it fails, then skip this branch
+                Some(require) if !require.matches(lt) => {},
+
+                // Otherwise, add the branch to the result
+                _ => {
+                    self.update(branch).add_to_result(result, total_count, false)?;
+                }
+            }
         }
 
         Ok(())
