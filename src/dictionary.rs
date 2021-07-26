@@ -5,6 +5,8 @@ use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 
+use crate::intern;
+
 lazy_static! {
     pub static ref ENTRIES: Box<[Entry]> = {
         eprintln!("Loading dictionary...");
@@ -14,6 +16,9 @@ lazy_static! {
 
         let mut entries: Box<[Entry]> = serde_json::from_reader(file)
             .expect("dictionary parse error");
+
+        // Clear the interning metadata since it won't be used anymore
+        intern::done();
 
         entries.sort();
 
@@ -85,10 +90,10 @@ pub enum SegmentKind {
 #[serde(from = "RawEntry")]
 pub struct Entry {
     pub word: Box<str>,
-    pub parsed_word: Box<[Box<Word>]>,
+    pub parsed_word: Box<[&'static Word]>,
     pub subword: Option<u8>,
     pub text: Box<str>,
-    pub parsed_text: Box<[Box<Word>]>,
+    pub parsed_text: Box<[&'static Word]>,
     pub word_ranges: Box<[(u32, u32)]>,
     pub sections: Box<[Section]>,
 }
@@ -102,7 +107,7 @@ impl Entry {
 impl From<RawEntry> for Entry {
     fn from(raw: RawEntry) -> Self {
         let parsed_word: Box<[_]> = RawEntry::words(&raw.word)
-            .map(|s| Letter::parse_str(s))
+            .map(|s| intern::word(Letter::parse_str(s)))
             .collect();
 
         assert!(!parsed_word.is_empty());
@@ -150,7 +155,7 @@ impl From<RawEntry> for Entry {
                     .unwrap_or(text.len());
 
                 // Push the parsed word and the indices
-                parsed_text.push(Letter::parse_str(&text[start..end]));
+                parsed_text.push(intern::word(Letter::parse_str(&text[start..end])));
                 word_ranges.push((start as u32, end as u32));
             } else {
                 break;
