@@ -1,6 +1,22 @@
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate lazy_static;
 
+#[doc(hidden)]
+macro_rules! letterset_impl {
+    ([$n:expr]) => { $n };
+    ([$n:expr], ) => { $n };
+    ([$n:expr], $lt:ident $($tt:tt)*) => {
+        letterset_impl!([$n | (1 << $crate::tamil::num::$lt)] $($tt)*)
+    };
+}
+
+macro_rules! letterset {
+    ($($tt:tt)*) => {{
+        const _LETTER_SET: $crate::tamil::LetterSet = $crate::tamil::LetterSet(letterset_impl!([0], $($tt)*));
+        _LETTER_SET
+    }};
+}
+
 use rocket::fs::{FileServer, relative};
 use rocket_dyn_templates::Template;
 

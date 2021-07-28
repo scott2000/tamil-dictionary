@@ -2,6 +2,8 @@ use std::iter;
 
 use serde::Serialize;
 
+use rand::seq::SliceRandom;
+
 use rocket::response::Redirect;
 use rocket_dyn_templates::Template;
 
@@ -11,9 +13,29 @@ use crate::query::Query;
 
 const MAX_OTHER_SECTIONS: usize = 5;
 
+const EXAMPLES: &'static [&'static str] = &[
+    "tamil",
+    "vanakkam",
+    "pazham",
+    "vendum",
+    "ellaam",
+    "utkaar",
+    "konduvaa",
+    "sandhosham",
+    "puttaham",
+    "koottam",
+];
+
+#[derive(Serialize, Debug)]
+struct Index {
+    example: &'static str,
+}
+
 #[get("/")]
 pub fn index() -> Template {
-    Template::render("index", ())
+    Template::render("index", &Index {
+        example: EXAMPLES.choose(&mut rand::thread_rng()).unwrap(),
+    })
 }
 
 fn link_alts<'a>(words: impl Iterator<Item = &'a str>) -> String {

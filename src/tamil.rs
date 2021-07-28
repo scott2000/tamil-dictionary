@@ -1,35 +1,76 @@
 use std::fmt::{self, Display, Debug};
 use std::collections::{HashMap, HashSet};
 
+#[doc(hidden)]
+macro_rules! letters_impl {
+    ([$($_:tt)*]) => {};
+    ([mod $n:expr] [$lt:ident] $($tt:tt)*) => {
+        pub const $lt: u8 = $n;
+        letters_impl!([mod $n] $($tt)*);
+    };
+    ([mod $n:expr] [..$lt:ident] $($tt:tt)*) => {
+        pub const $lt: u8 = $n - 1;
+        letters_impl!([mod $n] $($tt)*);
+    };
+    ([mod $n:expr] $lt:ident, $($tt:tt)*) => {
+        pub const $lt: u8 = $n;
+        letters_impl!([mod $n + 1] $($tt)*);
+    };
+    ([impl $n:expr] [$($_:tt)*] $($tt:tt)*) => {
+        letters_impl!([impl $n] $($tt)*);
+    };
+    ([impl $n:expr] $lt:ident, $($tt:tt)*) => {
+        pub const $lt: Letter = Letter(num::$lt);
+        letters_impl!([impl $n + 1] $($tt)*);
+    };
+}
+
+#[doc(hidden)]
 macro_rules! letters {
-    ($lt:ident, $($tt:tt)*) => {
-        mod num {
-            letters!([NUMBER 0] $lt, $($tt)*);
+    ($($tt:tt)*) => {
+        pub mod num {
+            letters_impl!([mod 0] $($tt)*);
         }
 
         impl Letter {
-            letters!([LETTER 0] $lt, $($tt)*);
+            letters_impl!([impl 0] $($tt)*);
         }
-    };
-    ([$_:ident $n:expr]) => {};
-    ([NUMBER   $n:expr] $lt:ident, $($tt:tt)*) => {
-        pub const $lt: u8 = $n;
-        letters!([NUMBER $n + 1] $($tt)*);
-    };
-    ([LETTER   $n:expr] $lt:ident, $($tt:tt)*) => {
-        pub const $lt: Letter = Letter(num::$lt);
-        letters!([LETTER $n + 1] $($tt)*);
     };
 }
 
 letters! {
-    SHORT_A,         LONG_A,           SHORT_I,      LONG_I,            SHORT_U,           LONG_U,
-    SHORT_E,         LONG_E,           AI,           SHORT_O,           LONG_O,            AU,
-    AAYDHAM,         VELAR_PLOSIVE,    VELAR_NASAL,  PALATAL_AFFRICATE, PALATAL_NASAL,     RETROFLEX_PLOSIVE,
-    RETROFLEX_NASAL, DENTAL_PLOSIVE,   DENTAL_NASAL, LABIAL_PLOSIVE,    LABIAL_NASAL,      PALATAL_GLIDE,
-    ALVEOLAR_RHOTIC, ALVEOLAR_LATERAL, LABIAL_GLIDE, RETROFLEX_RHOTIC,  RETROFLEX_LATERAL, ALVEOLAR_PLOSIVE,
-    ALVEOLAR_NASAL,  GRANTHA_J,        GRANTHA_S,    GRANTHA_SH,        GRANTHA_H,         GRANTHA_SSH,
-    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    [VOWEL_START]
+    SHORT_A, LONG_A,
+    SHORT_I, LONG_I,
+    SHORT_U, LONG_U,
+    SHORT_E, LONG_E, AI,
+    SHORT_O, LONG_O, AU,
+    [..VOWEL_END]
+
+    AAYDHAM,
+
+    [CONSONANT_START]
+    TAMIL_K,           TAMIL_NG,
+    TAMIL_CH,          TAMIL_NY,
+    TAMIL_RETRO_T,     TAMIL_RETRO_N,
+    TAMIL_T,           TAMIL_N,
+    TAMIL_P,           TAMIL_M,
+
+    TAMIL_Y, TAMIL_R,  TAMIL_ALVEOLAR_L,
+    TAMIL_V, TAMIL_ZH, TAMIL_RETRO_L,
+
+    TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N,
+    [..TAMIL_CONSONANT_END]
+
+    [GRANTHA_START]
+    GRANTHA_J, GRANTHA_S, GRANTHA_SH, GRANTHA_H, GRANTHA_SSH,
+    [..GRANTHA_END]
+    [..CONSONANT_END]
+
+    LATIN_A, LATIN_B, LATIN_C, LATIN_D, LATIN_E, LATIN_F,
+    LATIN_G, LATIN_H, LATIN_I, LATIN_J, LATIN_K, LATIN_L,
+    LATIN_M, LATIN_N, LATIN_O, LATIN_P, LATIN_Q, LATIN_R, LATIN_S,
+    LATIN_T, LATIN_U, LATIN_V, LATIN_W, LATIN_X, LATIN_Y, LATIN_Z,
 }
 
 pub const PULLI: char = '\u{bcd}';
@@ -42,7 +83,6 @@ const TAMIL_VOWELS: &'static [char] = &[
     'உ', 'ஊ',
     'எ', 'ஏ', 'ஐ',
     'ஒ', 'ஓ', 'ஔ',
-    'ஃ',
 ];
 
 const TAMIL_VOWEL_SIGNS: &'static [char] = &[
@@ -52,6 +92,8 @@ const TAMIL_VOWEL_SIGNS: &'static [char] = &[
     '\u{bc6}', '\u{bc7}', '\u{bc8}',
     '\u{bca}', '\u{bcb}', '\u{bcc}',
 ];
+
+const AAYDHAM: char = 'ஃ';
 
 const TAMIL_CONSONANTS: &'static [char] = &[
     'க', 'ங',
@@ -65,16 +107,16 @@ const TAMIL_CONSONANTS: &'static [char] = &[
 ];
 
 lazy_static! {
-    static ref TAMIL_VOWEL_MAP: HashMap<char, Letter> = to_map(num::SHORT_A, TAMIL_VOWELS);
+    static ref TAMIL_VOWEL_MAP: HashMap<char, Letter> = to_map(num::VOWEL_START, TAMIL_VOWELS);
     static ref TAMIL_VOWEL_SIGN_MAP: HashMap<char, Letter> = to_map(num::LONG_A, TAMIL_VOWEL_SIGNS);
-    static ref TAMIL_CONSONANT_MAP: HashMap<char, Letter> = to_map(num::VELAR_PLOSIVE, TAMIL_CONSONANTS);
+    static ref TAMIL_CONSONANT_MAP: HashMap<char, Letter> = to_map(num::CONSONANT_START, TAMIL_CONSONANTS);
     static ref VALID_LETTERS: HashSet<char> = {
         let mut set = HashSet::new();
         for ch in TAMIL_VOWELS.iter()
             .chain(TAMIL_VOWEL_SIGNS)
             .chain(TAMIL_CONSONANTS)
             .cloned()
-            .chain([PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
+            .chain([AAYDHAM, PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
             .chain('a'..='z')
             .chain('A'..='Z')
         {
@@ -105,8 +147,9 @@ impl Letter {
 
     pub fn parse(ch: char) -> Option<Self> {
         match ch {
-            'a'..='z' => Some(Self(ch as u8 - b'a' + num::A)),
-            'A'..='Z' => Some(Self(ch as u8 - b'A' + num::A)),
+            'a'..='z' => Some(Self(ch as u8 - b'a' + num::LATIN_A)),
+            'A'..='Z' => Some(Self(ch as u8 - b'A' + num::LATIN_A)),
+            AAYDHAM => Some(Self::AAYDHAM),
             _ => {
                 // Don't include vowel signs as they can't stand on their own
                 TAMIL_VOWEL_MAP.get(&ch)
@@ -120,8 +163,9 @@ impl Letter {
         let mut word = Vec::new();
         for ch in s.chars() {
             match ch {
-                'a'..='z' => word.push(Self(ch as u8 - b'a' + num::A)),
-                'A'..='Z' => word.push(Self(ch as u8 - b'A' + num::A)),
+                'a'..='z' => word.push(Self(ch as u8 - b'a' + num::LATIN_A)),
+                'A'..='Z' => word.push(Self(ch as u8 - b'A' + num::LATIN_A)),
+                AAYDHAM => word.push(Self::AAYDHAM),
                 PULLI => {
                     match word.pop() {
                         None => {}
@@ -130,30 +174,30 @@ impl Letter {
                         Some(Self::SHORT_A) => {}
 
                         // Convert 'aa' + pulli into 'r'
-                        Some(Self::LONG_A) => word.push(Self::ALVEOLAR_RHOTIC),
+                        Some(Self::LONG_A) => word.push(Self::TAMIL_R),
 
                         // Convert short 'o' + pulli into short 'e' + 'r'
                         Some(Self::SHORT_O) => {
                             word.push(Self::SHORT_E);
-                            word.push(Self::ALVEOLAR_RHOTIC);
+                            word.push(Self::TAMIL_R);
                         }
 
                         // Convert long 'o' + pulli into long 'e' + 'r'
                         Some(Self::LONG_O) => {
                             word.push(Self::LONG_E);
-                            word.push(Self::ALVEOLAR_RHOTIC);
+                            word.push(Self::TAMIL_R);
                         }
 
                         // Convert 'au' + pulli into short 'o' + 'L' at the start of a word
                         Some(Self::AU) if word.is_empty() => {
                             word.push(Self::SHORT_O);
-                            word.push(Self::RETROFLEX_LATERAL);
+                            word.push(Self::TAMIL_RETRO_L);
                         }
 
                         // Convert 'au' + pulli into short 'e' + 'L' otherwise
                         Some(Self::AU) => {
                             word.push(Self::SHORT_E);
-                            word.push(Self::RETROFLEX_LATERAL);
+                            word.push(Self::TAMIL_RETRO_L);
                         }
 
                         Some(x) => word.push(x),
@@ -175,14 +219,14 @@ impl Letter {
                     }
 
                     // Treat as 'La'
-                    word.push(Self::RETROFLEX_LATERAL);
+                    word.push(Self::TAMIL_RETRO_L);
                     word.push(Self::SHORT_A);
                 }
 
                 // Handle combined 'om'
                 OM => {
                     word.push(Self::LONG_O);
-                    word.push(Self::LABIAL_NASAL);
+                    word.push(Self::TAMIL_M);
                 }
 
                 _ => {
@@ -224,9 +268,13 @@ impl Letter {
     pub fn to_char(self) -> char {
         let ch = self.0;
         match ch {
-            num::SHORT_A..=num::AAYDHAM => TAMIL_VOWELS[ch as usize],
-            num::VELAR_PLOSIVE..=num::GRANTHA_SSH => TAMIL_CONSONANTS[(ch - num::VELAR_PLOSIVE) as usize],
-            num::A..=num::Z => (ch - num::A + b'a') as char,
+            num::VOWEL_START..=num::VOWEL_END =>
+                TAMIL_VOWELS[ch as usize],
+            num::AAYDHAM => AAYDHAM,
+            num::CONSONANT_START..=num::CONSONANT_END =>
+                TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize],
+            num::LATIN_A..=num::LATIN_Z =>
+                (ch - num::LATIN_A + b'a') as char,
             _ => unreachable!("invalid character: {}", ch),
         }
     }
@@ -235,13 +283,13 @@ impl Letter {
         let mut s = String::new();
         for &Letter(ch) in word {
             match ch {
-                num::SHORT_A..=num::AU => {
+                num::VOWEL_START..=num::VOWEL_END => {
                     match s.pop() {
                         None => {},
 
                         // Remove pulli before adding vowel
                         Some(PULLI) => {
-                            if ch > num::SHORT_A {
+                            if ch >= num::LONG_A {
                                 s.push(TAMIL_VOWEL_SIGNS[(ch - num::LONG_A) as usize]);
                             }
                             continue;
@@ -251,13 +299,13 @@ impl Letter {
                     }
                     s.push(TAMIL_VOWELS[ch as usize]);
                 },
-                num::AAYDHAM => s.push('ஃ'),
-                num::VELAR_PLOSIVE..=num::GRANTHA_SSH => {
-                    s.push(TAMIL_CONSONANTS[(ch - num::VELAR_PLOSIVE) as usize]);
+                num::AAYDHAM => s.push(AAYDHAM),
+                num::CONSONANT_START..=num::CONSONANT_END => {
+                    s.push(TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize]);
                     s.push(PULLI);
                 },
-                num::A..=num::Z => {
-                    s.push((ch - num::A + b'a') as char);
+                num::LATIN_A..=num::LATIN_Z => {
+                    s.push((ch - num::LATIN_A + b'a') as char);
                 },
                 _ => unreachable!("invalid character: {}", ch),
             }
@@ -267,27 +315,27 @@ impl Letter {
 
     pub fn is_consonant(self) -> bool {
         match self.0 {
-            num::VELAR_PLOSIVE..=num::GRANTHA_SSH => true,
+            num::CONSONANT_START..=num::CONSONANT_END => true,
             _ => false,
         }
     }
 
     pub fn category(self) -> Category {
         match self.0 {
-            num::SHORT_A..=num::AU => Category::TamilVowel,
+            num::VOWEL_START..=num::VOWEL_END => Category::TamilVowel,
             num::AAYDHAM => Category::TamilAaydham,
-            num::VELAR_PLOSIVE..=num::ALVEOLAR_NASAL => Category::TamilConsonant,
-            num::GRANTHA_J..=num::GRANTHA_SSH => Category::TamilGrantha,
-            num::A..=num::Z => Category::LatinAlpha,
+            num::CONSONANT_START..=num::TAMIL_CONSONANT_END => Category::TamilConsonant,
+            num::GRANTHA_START..=num::GRANTHA_END => Category::TamilGrantha,
+            num::LATIN_A..=num::LATIN_Z => Category::LatinAlpha,
             ch => unreachable!("invalid character: {}", ch),
         }
     }
 
-    pub fn range(self, to: Self) -> Result<impl Iterator<Item = Self>, (Category, Category)> {
+    pub fn range(self, to: Self) -> Result<LetterSet, (Category, Category)> {
         let a = self.category();
         let b = to.category();
         if a == b {
-            Ok((self.0..=to.0).map(Self))
+            Ok(LetterSet::range(self.0, to.0))
         } else {
             Err((a, b))
         }
@@ -364,42 +412,57 @@ impl LetterSet {
         Self(self.0 & other.0)
     }
 
+    const fn range(start: u8, end: u8) -> Self {
+        if end < start {
+            Self::empty()
+        } else {
+            Self(((1 << (end + 1)) - 1) & !((1 << start) - 1))
+        }
+    }
+
     pub const fn vowel() -> Self {
         Self::kuril()
             .union(Self::nedil())
     }
 
     pub const fn kuril() -> Self {
-        Self::single(Letter::SHORT_A)
-            .union(Self::single(Letter::SHORT_I))
-            .union(Self::single(Letter::SHORT_U))
-            .union(Self::single(Letter::SHORT_E))
-            .union(Self::single(Letter::SHORT_O))
+        letterset![
+            SHORT_A,
+            SHORT_I,
+            SHORT_U,
+            SHORT_E,
+            SHORT_O,
+        ]
     }
 
     pub const fn nedil() -> Self {
-        Self::single(Letter::LONG_A)
-            .union(Self::single(Letter::LONG_I))
-            .union(Self::single(Letter::LONG_U))
-            .union(Self::single(Letter::LONG_E))
-            .union(Self::single(Letter::AI))
-            .union(Self::single(Letter::LONG_O))
-            .union(Self::single(Letter::AU))
+        letterset![
+            LONG_A,
+            LONG_I,
+            LONG_U,
+            LONG_E,
+            AI,
+            LONG_O,
+            AU,
+        ]
     }
 
     pub const fn consonant() -> Self {
         Self::vallinam()
             .union(Self::idaiyinam())
             .union(Self::mellinam())
+            .union(Self::grantha())
     }
 
     pub const fn vallinam() -> Self {
-        Self::single(Letter::VELAR_PLOSIVE)
-            .union(Self::single(Letter::PALATAL_AFFRICATE))
-            .union(Self::single(Letter::RETROFLEX_PLOSIVE))
-            .union(Self::single(Letter::DENTAL_PLOSIVE))
-            .union(Self::single(Letter::LABIAL_PLOSIVE))
-            .union(Self::single(Letter::ALVEOLAR_PLOSIVE))
+        letterset![
+            TAMIL_K,
+            TAMIL_CH,
+            TAMIL_RETRO_T,
+            TAMIL_T,
+            TAMIL_P,
+            TAMIL_ALVEOLAR_TR,
+        ]
     }
 
     pub const fn idaiyinam() -> Self {
@@ -409,20 +472,18 @@ impl LetterSet {
     }
 
     pub const fn mellinam() -> Self {
-        Self::single(Letter::VELAR_NASAL)
-            .union(Self::single(Letter::PALATAL_NASAL))
-            .union(Self::single(Letter::RETROFLEX_NASAL))
-            .union(Self::single(Letter::DENTAL_NASAL))
-            .union(Self::single(Letter::LABIAL_NASAL))
-            .union(Self::single(Letter::ALVEOLAR_NASAL))
+        letterset![
+            TAMIL_NG,
+            TAMIL_NY,
+            TAMIL_RETRO_N,
+            TAMIL_N,
+            TAMIL_M,
+            TAMIL_ALVEOLAR_N,
+        ]
     }
 
     pub const fn grantha() -> Self {
-        Self::single(Letter::GRANTHA_J)
-            .union(Self::single(Letter::GRANTHA_S))
-            .union(Self::single(Letter::GRANTHA_SH))
-            .union(Self::single(Letter::GRANTHA_H))
-            .union(Self::single(Letter::GRANTHA_SSH))
+        Self::range(num::GRANTHA_START, num::GRANTHA_END)
     }
 
     pub const fn latin() -> Self {
@@ -433,69 +494,117 @@ impl LetterSet {
     }
 
     pub const fn glide() -> Self {
-        Self::single(Letter::PALATAL_GLIDE)
-            .union(Self::single(Letter::LABIAL_GLIDE))
+        letterset![
+            TAMIL_Y,
+            TAMIL_V,
+        ]
     }
 
     pub const fn rhotic() -> Self {
-        Self::single(Letter::ALVEOLAR_RHOTIC)
-            .union(Self::single(Letter::RETROFLEX_RHOTIC))
+        letterset![
+            TAMIL_R,
+            TAMIL_ZH,
+        ]
     }
 
     pub const fn lateral() -> Self {
-        Self::single(Letter::ALVEOLAR_LATERAL)
-            .union(Self::single(Letter::RETROFLEX_LATERAL))
+        letterset![
+            TAMIL_ALVEOLAR_L,
+            TAMIL_RETRO_L,
+        ]
     }
 
     pub const fn tamil_initial() -> Self {
         Self::vowel()
-            .union(Self::single(Letter::VELAR_PLOSIVE))
-            .union(Self::single(Letter::PALATAL_AFFRICATE))
-            .union(Self::single(Letter::PALATAL_NASAL))
-            .union(Self::single(Letter::DENTAL_PLOSIVE))
-            .union(Self::single(Letter::DENTAL_NASAL))
-            .union(Self::single(Letter::LABIAL_PLOSIVE))
-            .union(Self::single(Letter::LABIAL_NASAL))
             .union(Self::glide())
+            .union(letterset![
+                TAMIL_K,
+                TAMIL_CH,
+                TAMIL_NY,
+                TAMIL_T,
+                TAMIL_N,
+                TAMIL_P,
+                TAMIL_M,
+            ])
     }
 
     pub const fn tamil_final() -> Self {
         Self::vowel()
-            .union(Self::single(Letter::RETROFLEX_NASAL))
-            .union(Self::single(Letter::LABIAL_NASAL))
-            .union(Self::single(Letter::ALVEOLAR_NASAL))
-            .union(Self::single(Letter::PALATAL_GLIDE))
             .union(Self::rhotic())
             .union(Self::lateral())
+            .union(letterset![
+                TAMIL_RETRO_N,
+                TAMIL_M,
+                TAMIL_Y,
+                TAMIL_ALVEOLAR_N,
+            ])
     }
 
     pub fn matches(self, lt: Letter) -> bool {
         (self.0 & (1 << lt.0)) != 0
     }
 
-    pub fn parse_escape(ch: char) -> Option<LetterSet> {
+    pub fn parse_escape(ch: char) -> Option<Self> {
         match ch {
-            'V' => Some(LetterSet::vowel()),
-            'C' => Some(LetterSet::consonant()),
-            'P' => Some(LetterSet::vallinam()),
-            'N' => Some(LetterSet::mellinam()),
-            'G' => Some(LetterSet::glide()),
-            'R' => Some(LetterSet::rhotic()),
-            'L' => Some(LetterSet::lateral()),
+            'V' => Some(Self::vowel()),
+            'C' => Some(Self::consonant()),
+            'P' => Some(Self::vallinam()),
+            'N' => Some(Self::mellinam()),
+            'G' => Some(Self::glide()),
+            'R' => Some(Self::rhotic()),
+            'L' => Some(Self::lateral()),
 
-            'k' => Some(LetterSet::kuril()),
-            'n' => Some(LetterSet::nedil()),
-            'v' => Some(LetterSet::vallinam()),
-            'i' => Some(LetterSet::idaiyinam()),
-            'm' => Some(LetterSet::mellinam()),
-            'g' => Some(LetterSet::grantha()),
-            'l' => Some(LetterSet::latin()),
+            'k' => Some(Self::kuril()),
+            'n' => Some(Self::nedil()),
+            'v' => Some(Self::vallinam()),
+            'i' => Some(Self::idaiyinam()),
+            'm' => Some(Self::mellinam()),
+            'g' => Some(Self::grantha()),
+            'l' => Some(Self::latin()),
 
-            '<' | '^' => Some(LetterSet::tamil_initial()),
-            '>' | '$' => Some(LetterSet::tamil_final()),
+            '<' | '^' => Some(Self::tamil_initial()),
+            '>' | '$' => Some(Self::tamil_final()),
 
             _ => None,
         }
+    }
+
+    pub fn transliterate(ch: char) -> Option<(TransliterationKind, Self)> {
+        use TransliterationKind as T;
+
+        match ch.to_ascii_lowercase() {
+            'a' => Some((T::NONE,     letterset![SHORT_A, LONG_A])),
+            'b' => Some((T::DOUBLE_H, letterset![TAMIL_P])),
+            'c' => Some((T::DOUBLE_H, letterset![TAMIL_CH])),
+            'd' => Some((T::DOUBLE_H, letterset![TAMIL_T, TAMIL_RETRO_T])),
+            'e' => Some((T::NONE,     letterset![SHORT_E, LONG_E, AI])),
+            'f' => Some((T::DOUBLE,   letterset![TAMIL_P])),
+            'g' => Some((T::DOUBLE_H, letterset![TAMIL_K])),
+            'h' => Some((T::NONE,     letterset![TAMIL_K, GRANTHA_H, AAYDHAM])),
+            'i' => Some((T::NONE,     letterset![SHORT_I, LONG_I, TAMIL_Y])),
+            'j' => Some((T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_J])),
+            'k' => Some((T::DOUBLE_H, letterset![TAMIL_K, AAYDHAM])),
+            'l' => Some((T::DOUBLE,   letterset![TAMIL_ALVEOLAR_L, TAMIL_RETRO_L, TAMIL_ZH])),
+            'm' => Some((T::DOUBLE,   letterset![TAMIL_M])),
+            'n' => Some((T::DOUBLE,   letterset![TAMIL_NG, TAMIL_NY, TAMIL_N, TAMIL_ALVEOLAR_N, TAMIL_RETRO_N])),
+            'o' => Some((T::NONE,     letterset![SHORT_O, LONG_O, AU])),
+            'p' => Some((T::DOUBLE,   letterset![TAMIL_P])),
+            'q' => Some((T::DOUBLE,   letterset![TAMIL_K])),
+            'r' => Some((T::DOUBLE,   letterset![TAMIL_R, TAMIL_ALVEOLAR_TR, TAMIL_ZH])),
+            's' => Some((T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_S, GRANTHA_SH, GRANTHA_SSH])),
+            't' => Some((T::DOUBLE_H, letterset![TAMIL_T, TAMIL_ALVEOLAR_TR, TAMIL_RETRO_T])),
+            'u' => Some((T::NONE,     letterset![SHORT_U, LONG_U])),
+            'v' => Some((T::DOUBLE,   letterset![TAMIL_V])),
+            'w' => Some((T::DOUBLE,   letterset![TAMIL_V])),
+            'x' => Some((T::NONE,     letterset![GRANTHA_S])),
+            'y' => Some((T::DOUBLE,   letterset![TAMIL_Y])),
+            'z' => Some((T::ALLOW_H,  letterset![TAMIL_ZH])),
+            _ => None,
+        }
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = Letter> {
+        (0..62).map(Letter).filter(move |&lt| self.matches(lt))
     }
 }
 
@@ -519,4 +628,32 @@ impl Display for LetterSet {
 
         write!(f, "]")
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct TransliterationKind {
+    pub can_double: bool,
+    pub follow_by_h: bool,
+}
+
+impl TransliterationKind {
+    pub const NONE: Self = Self {
+        can_double: false,
+        follow_by_h: false,
+    };
+
+    pub const DOUBLE: Self = Self {
+        can_double: true,
+        follow_by_h: false,
+    };
+
+    pub const ALLOW_H: Self = Self {
+        can_double: false,
+        follow_by_h: true,
+    };
+
+    pub const DOUBLE_H: Self = Self {
+        can_double: true,
+        follow_by_h: true,
+    };
 }

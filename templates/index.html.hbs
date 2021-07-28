@@ -4,11 +4,57 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" href="/main.css">
+        <link rel="stylesheet" href="/index.css">
         <link rel="stylesheet" href="/search_bar.css">
         <title>Tamil Dictionary</title>
     </head>
     <body>
-        <h1 style="text-align: center;">Tamil Dictionary</h1>
+        <h1 id="title">Tamil Dictionary</h1>
         {{> common/search_bar}}
+        <div id="search-tips">
+            <h2>Search Tips</h2>
+            <ul>
+                <li>Search for A and B together: <span>A B</span></li>
+                <li>Search for A excluding B: <span>A -B</span></li>
+                <li>Search for A with B in definition: <span>A: B</span></li>
+                <li>Use transliteration: <span>%({{example}})</span></li>
+                <li>Only allow exact matches: <span>&quot;A&quot;</span></li>
+                <li>Match one of two patterns: <span>(A | B)</span></li>
+                <li>Make part optional: <span>A?</span>
+                <ul>
+                    <li><span>AB?</span> = <span>(A | AB)</span></li>
+                </ul>
+                <li>Allow any number: <span>A*</span></li>
+                <ul>
+                    <li><span>AB*</span> = <span>(A | AB | ABB | ...)</span></li>
+                </ul>
+                <li>Allow at least one: <span>A+</span></li>
+                <ul>
+                    <li><span>AB+</span> = <span>(AB | ABB | ...)</span></li>
+                </ul>
+                <li>Match any of a set: <span>[ஃஅக்]</span></li>
+                <li>Match any in a range: <span>[க்-ம்]</span></li>
+                <li>Negate a set/range: <span>[^a-z]</span></li>
+                <li>Match any vowels: <span>\V</span></li>
+                <ul>
+                    <li>&quot;kuril&quot;: <span>\k</span></li>
+                    <li>&quot;nedil&quot;: <span>\n</span></li>
+                </ul>
+                <li>Match any consonants: <span>\C</span></li>
+                <ul>
+                    <li>&quot;vallinam&quot;: <span>\v</span></li>
+                    <li>&quot;idaiyinam&quot;: <span>\i</span></li>
+                    <li>&quot;mellinam&quot;: <span>\m</span></li>
+                    <li>&quot;grantha&quot;: <span>\g</span></li>
+                </ul>
+                <li>Match the start of a word: <span>&lt;</span> or <span>^</span></li>
+                <li>Match the end of a word: <span>&gt;</span> or <span>$</span></li>
+            </ul>
+            <p>Examples:</p>
+            <ul>
+                <li>Short words: <span>&quot;\C?\k\C\k?&quot;</span></li>
+                <li>Words starting with 'க' or 'ப': <span>&lt;[க்ப்]அ</span></li>
+            </ul>
+        </div>
     </body>
 </html>

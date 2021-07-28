@@ -1446,6 +1446,7 @@ name = "tamil_dictionary"
 version = "0.1.0"
 dependencies = [
  "lazy_static",
+ "rand",
  "rocket",
  "rocket_dyn_templates",
  "serde",
