@@ -4,8 +4,10 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::tamil::{PULLI, Word, Letter, LetterSet, Category, TransliterationKind};
+use crate::tamil::{PULLI, Word, Letter, LetterSet, Category};
 use crate::search::{SearchError, Search, SearchResult, tree};
+
+mod transform;
 
 const MAX_LEN: usize = 512;
 
@@ -28,6 +30,8 @@ pub enum ParseError {
     TrailingBackslash,
     #[error("Invalid syntax: expected parentheses after hash symbol.")]
     InvalidExact,
+    #[error("Invalid syntax: expected parentheses after percent symbol.")]
+    InvalidTransliteration,
     #[error("Invalid syntax: expected brackets after ampersand for assertion.")]
     InvalidAssert,
     #[error("Invalid repetition: number must be between 0 and 255.")]
@@ -36,8 +40,6 @@ pub enum ParseError {
     MissingPulli,
     #[error("Invalid range: partial ranges are not allowed.")]
     PartialRange,
-    #[error("Invalid range: transliterated ranges are not allowed.")]
-    TransliterationRange,
     #[error("Invalid range: cannot create range between {0} and {1}.")]
     InvalidRange(Category, Category),
     #[error("Invalid syntax: character not allowed in repetition: '{0}'.")]
@@ -86,6 +88,7 @@ impl Display for SurroundKind {
 
 type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
 
+#[derive(Debug)]
 pub struct Query {
     word_patterns: Vec<Pattern>,
     definition_patterns: Vec<Pattern>,
@@ -131,7 +134,7 @@ impl Query {
             }
 
             // Parse the pattern and add it to the appropriate list
-            match Pattern::parse(&mut chars, false, false)? {
+            match Pattern::parse(&mut chars, false)? {
                 Pattern::Empty => {
                     if negative {
                         return Err(ParseError::EmptyNegative);
@@ -139,12 +142,10 @@ impl Query {
                 },
                 mut pat => {
                     if quoted {
-                        // Replace "X" with <#(X)>
-                        pat = Pattern::Concat(
+                        // Replace "X" with #(<X>)
+                        pat = Pattern::Exact(Box::new(Pattern::Concat(
                             Box::new(Pattern::AssertStart),
-                            Box::new(Pattern::Concat(
-                                Box::new(Pattern::Exact(Box::new(pat))),
-                                Box::new(Pattern::AssertEnd))));
+                            Box::new(Pattern::Concat(Box::new(pat), Box::new(Pattern::AssertEnd))))));
                     }
 
                     if negative {
@@ -241,23 +242,23 @@ impl Query {
 
         // Search using positive word patterns
         for pat in &self.word_patterns {
-            intersect.push(pat.search(&tree::search_word())?.end()?);
+            intersect.push(pat.search(&tree::search_word(), true, true)?.end()?);
         }
 
         // Search using positive definition patterns
         for pat in &self.definition_patterns {
-            intersect.push(pat.search(&tree::search_definition())?.end()?);
+            intersect.push(pat.search(&tree::search_definition(), true, false)?.end()?);
         }
 
         let mut process_negatives = || {
             // Search using negative word patterns
             for pat in &self.negative_word_patterns {
-                difference.push(pat.search(&tree::search_word())?.end()?);
+                difference.push(pat.search(&tree::search_word(), false, true)?.end()?);
             }
 
             // Search using negative definition patterns
             for pat in &self.negative_definition_patterns {
-                difference.push(pat.search(&tree::search_definition())?.end()?);
+                difference.push(pat.search(&tree::search_definition(), false, false)?.end()?);
             }
 
             Ok(())
@@ -284,12 +285,12 @@ impl Query {
             let mut process_definitions = || -> Result<(), SearchError> {
                 // Search using positive word patterns as definition patterns
                 for pat in &self.word_patterns {
-                    intersect.push(pat.search(&tree::search_definition())?.end()?);
+                    intersect.push(pat.search(&tree::search_definition(), true, false)?.end()?);
                 }
 
                 // Search using negative words patterns as definition patterns
                 for pat in &self.negative_word_patterns {
-                    difference.push(pat.search(&tree::search_definition())?.end()?);
+                    difference.push(pat.search(&tree::search_definition(), false, false)?.end()?);
                 }
 
                 Ok(())
@@ -390,7 +391,7 @@ impl Display for Query {
 }
 
 #[derive(Debug)]
-enum Pattern {
+pub enum Pattern {
     Empty,
     AssertStart,
     AssertEnd,
@@ -398,25 +399,27 @@ enum Pattern {
     Set(LetterSet),
     Literal(Box<Word>),
     Exact(Box<Pattern>),
+    Trans(Box<Pattern>),
     Repeat(Box<Pattern>, u8, u8),
     Concat(Box<Pattern>, Box<Pattern>),
     Alternative(Box<Pattern>, Box<Pattern>),
 }
 
 impl Pattern {
-    fn search<S: Search>(&self, search: &S) -> Result<S, SearchError> {
+    pub fn search<S: Search>(&self, search: &S, expand: bool, trans: bool) -> Result<S, SearchError> {
         match self {
             Self::Empty => Ok(search.clone()),
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertEnd => Ok(search.asserting_end()),
             &Self::Assert(lts) => Ok(search.asserting(lts)),
-            &Self::Set(lts) => search.matching(lts),
-            Self::Literal(word) => Ok(search.literal(word)),
-            Self::Exact(pat) => pat.search(search),
+            &Self::Set(lts) => search.matching(transform::letter_set(lts, expand, trans)),
+            Self::Literal(word) => transform::literal_search(search, word, expand, trans),
+            Self::Exact(pat) => pat.search(search, false, false),
+            Self::Trans(pat) => pat.search(search, expand, true),
             &Self::Repeat(ref pat, a, b) => {
                 let mut search = search.clone();
                 for _ in 0..a {
-                    search = pat.search(&search)?;
+                    search = pat.search(&search, expand, trans)?;
                 }
 
                 let mut result = search.clone();
@@ -425,39 +428,42 @@ impl Pattern {
                         break;
                     }
 
-                    search = pat.search(&search)?;
+                    search = pat.search(&search, expand, trans)?;
                     result.join(&search)?;
                 }
 
                 Ok(result)
             },
             Self::Concat(a, b) => {
-                let search = a.search(search)?;
+                let search = a.search(search, expand, trans)?;
                 if search.is_empty() {
                     Ok(search)
                 } else {
-                    b.search(&search)
+                    b.search(&search, expand, trans)
                 }
             },
-            Self::Alternative(a, b) => a.search(search)?.joining(&b.search(search)?),
+            Self::Alternative(a, b) => {
+                a.search(search, expand, trans)?
+                    .joining(&b.search(search, expand, trans)?)
+            },
         }
     }
 
-    fn parse_group(chars: &mut Chars, trans: bool) -> Result<Self, ParseError> {
-        let pat = Self::parse(chars, trans, true)?;
+    fn parse_group(chars: &mut Chars) -> Result<Self, ParseError> {
+        let pat = Self::parse(chars, true)?;
 
         Self::skip_spaces(chars, true);
 
         if let Some('|') = chars.peek() {
             chars.next();
-            let next = Self::parse_group(chars, trans)?;
+            let next = Self::parse_group(chars)?;
             Ok(Self::Alternative(Box::new(pat), Box::new(next)))
         } else {
             Ok(pat)
         }
     }
 
-    fn parse(chars: &mut Chars, trans: bool, in_group: bool) -> Result<Self, ParseError> {
+    fn parse(chars: &mut Chars, in_group: bool) -> Result<Self, ParseError> {
         Self::skip_spaces(chars, in_group);
 
         // Parse a single term of the pattern
@@ -466,9 +472,9 @@ impl Pattern {
             None => Self::Empty,
             Some('#') => Self::parse_exact(chars)?,
             Some('%') => Self::parse_trans(chars)?,
-            Some('&') => Self::parse_assert(chars, trans)?,
-            Some('(') => Self::parse_paren(chars, trans)?,
-            Some('[') => Self::Set(Self::parse_bracket(chars, trans)?),
+            Some('&') => Self::parse_assert(chars)?,
+            Some('(') => Self::parse_paren(chars)?,
+            Some('[') => Self::Set(Self::parse_bracket(chars)?),
             Some('\\') => {
                 chars.next();
                 Self::Set(Self::parse_escape(chars)?)
@@ -487,7 +493,7 @@ impl Pattern {
             },
             Some(_) => {
                 split_text = true;
-                Self::parse_text(chars, trans, in_group)
+                Self::parse_text(chars, in_group)
             },
         };
 
@@ -514,7 +520,7 @@ impl Pattern {
         };
 
         // Continue parsing if possible, and concatenate the result
-        let next = Self::parse(chars, trans, in_group)?;
+        let next = Self::parse(chars, in_group)?;
         if let Self::Empty = next {
             Ok(pat)
         } else {
@@ -538,7 +544,7 @@ impl Pattern {
         chars.next();
 
         if let Some('(') = chars.peek() {
-            Ok(Pattern::Exact(Box::new(Self::parse_paren(chars, false)?)))
+            Ok(Pattern::Exact(Box::new(Self::parse_paren(chars)?)))
         } else {
             Err(ParseError::InvalidExact)
         }
@@ -548,26 +554,26 @@ impl Pattern {
         chars.next();
 
         if let Some('(') = chars.peek() {
-            Ok(Self::parse_paren(chars, true)?)
+            Ok(Pattern::Trans(Box::new(Self::parse_paren(chars)?)))
         } else {
-            Err(ParseError::InvalidExact)
+            Err(ParseError::InvalidTransliteration)
         }
     }
 
-    fn parse_assert(chars: &mut Chars, trans: bool) -> Result<Self, ParseError> {
+    fn parse_assert(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
         if let Some('[') = chars.peek() {
-            Ok(Pattern::Assert(Self::parse_bracket(chars, trans)?))
+            Ok(Pattern::Assert(Self::parse_bracket(chars)?))
         } else {
             Err(ParseError::InvalidAssert)
         }
     }
 
-    fn parse_paren(chars: &mut Chars, trans: bool) -> Result<Self, ParseError> {
+    fn parse_paren(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
-        let pat = Self::parse_group(chars, trans)?;
+        let pat = Self::parse_group(chars)?;
 
         Self::skip_spaces(chars, true);
 
@@ -581,7 +587,7 @@ impl Pattern {
         }
     }
 
-    fn parse_bracket(chars: &mut Chars, trans: bool) -> Result<LetterSet, ParseError> {
+    fn parse_bracket(chars: &mut Chars) -> Result<LetterSet, ParseError> {
         chars.next();
 
         let mut allowed = LetterSet::empty();
@@ -611,28 +617,13 @@ impl Pattern {
                 }
                 Some(' ') => {}
                 Some(ch) => {
-                    allowed = allowed.union(Self::parse_range(chars, trans, ch)?);
+                    allowed = allowed.union(Self::parse_range(chars, ch)?);
                 }
             }
         }
     }
 
-    fn parse_range(chars: &mut Chars, trans: bool, ch: char) -> Result<LetterSet, ParseError> {
-        if trans {
-            // Check for transliteration
-            if let Some((_, lts)) = LetterSet::transliterate(ch) {
-                chars.next();
-
-                // Don't allow range after transliterated character
-                if let Some('-') = chars.peek() {
-                    return Err(ParseError::TransliterationRange);
-                }
-
-                return Ok(lts);
-            }
-        }
-
-        // Parse non-transliterated range
+    fn parse_range(chars: &mut Chars, ch: char) -> Result<LetterSet, ParseError> {
         if let Some(start) = Letter::parse(ch) {
             Self::parse_pulli(chars, start)?;
 
@@ -674,42 +665,13 @@ impl Pattern {
         Ok(())
     }
 
-    fn parse_text(chars: &mut Chars, trans: bool, in_group: bool) -> Self {
-        if trans {
-            // Check for transliteration
-            if let Some((kind, lts)) = Self::transliterate(chars) {
-                if kind.follow_by_h {
-                    if let Some('h' | 'H') = chars.peek() {
-                        chars.next();
-                    }
-                }
-
-                let set = Self::Set(lts);
-                if kind.can_double {
-                    return lts.iter()
-                        .map(|lt| Self::may_double(lt))
-                        .reduce(|a, b| Self::Alternative(Box::new(a), Box::new(b)))
-                        .unwrap_or(set);
-                }
-
-                return set;
-            }
-        }
-
-        // Parse non-transliterated text
+    fn parse_text(chars: &mut Chars, in_group: bool) -> Self {
         let mut buffer = String::new();
         while let Some(&ch) = chars.peek() {
             Self::skip_spaces(chars, in_group);
 
             if !Letter::is_valid(ch) {
                 break;
-            }
-
-            if trans {
-                // Stop parsing non-transliterated text when valid transliterated text is found
-                if let Some(_) = LetterSet::transliterate(ch) {
-                    break;
-                }
             }
 
             chars.next();
@@ -791,70 +753,6 @@ impl Pattern {
             }
         }
     }
-
-    fn may_double(lt: Letter) -> Self {
-        Self::Repeat(Box::new(Self::Literal(Box::from(&[lt][..]))), 1, 2)
-    }
-
-    fn transliterate(chars: &mut Chars) -> Option<(TransliterationKind, LetterSet)> {
-        use crate::tamil::TransliterationKind as T;
-        match chars.peek()? {
-            'a' | 'A' => {
-                chars.next();
-                match chars.peek() {
-                    Some('i' | 'I') => {
-                        chars.next();
-                        Some((T::NONE, letterset![AI]))
-                    }
-                    Some('u' | 'U' | 'w' | 'W') => {
-                        chars.next();
-                        Some((T::NONE, letterset![AU]))
-                    }
-                    Some('a' | 'A') => {
-                        chars.next();
-                        Some((T::NONE, letterset![LONG_A]))
-                    }
-                    _ => Some((T::NONE, letterset![SHORT_A])),
-                }
-            }
-            'i' | 'I' => {
-                chars.next();
-                Some((T::NONE, letterset![SHORT_I]))
-            }
-            'u' | 'U' => {
-                chars.next();
-                Some((T::NONE, letterset![SHORT_U]))
-            }
-            'e' | 'E' => {
-                chars.next();
-                match chars.peek() {
-                    Some('e' | 'E') => {
-                        chars.next();
-                        Some((T::NONE, letterset![LONG_I]))
-                    }
-                    _ => Some((T::NONE, letterset![SHORT_E, LONG_E, AI])),
-                }
-            }
-            'o' | 'O' => {
-                chars.next();
-                match chars.peek() {
-                    Some('o' | 'O') => {
-                        chars.next();
-                        Some((T::NONE, letterset![LONG_U]))
-                    }
-                    _ => Some((T::NONE, letterset![SHORT_O, LONG_O, AU])),
-                }
-            }
-            &ch => {
-                if let Some((kind, lts)) = LetterSet::transliterate(ch) {
-                    chars.next();
-                    Some((kind, lts))
-                } else {
-                    None
-                }
-            }
-        }
-    }
 }
 
 impl Display for Pattern {
@@ -867,6 +765,7 @@ impl Display for Pattern {
             Self::Set(lts) => write!(f, "{}", lts),
             Self::Literal(word) => write!(f, "({})", Letter::to_str(word)),
             Self::Exact(pat) => write!(f, "#({})", pat),
+            Self::Trans(pat) => write!(f, "%({})", pat),
             Self::Repeat(pat, a, b) => write!(f, "{}{{{},{}}}", pat, a, b),
             Self::Concat(a, b) => write!(f, "{}{}", a, b),
             Self::Alternative(a, b) => write!(f, "({}|{})", a, b),

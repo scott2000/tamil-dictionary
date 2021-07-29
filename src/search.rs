@@ -18,6 +18,8 @@ pub enum SearchError {
 }
 
 pub trait Search: Clone {
+    fn empty() -> Self;
+
     fn is_empty(&self) -> bool;
 
     fn asserting_start(&self) -> Self;

@@ -270,11 +270,15 @@ impl Letter {
         match ch {
             num::VOWEL_START..=num::VOWEL_END =>
                 TAMIL_VOWELS[ch as usize],
+
             num::AAYDHAM => AAYDHAM,
+
             num::CONSONANT_START..=num::CONSONANT_END =>
                 TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize],
+
             num::LATIN_A..=num::LATIN_Z =>
                 (ch - num::LATIN_A + b'a') as char,
+
             _ => unreachable!("invalid character: {}", ch),
         }
     }
@@ -299,14 +303,18 @@ impl Letter {
                     }
                     s.push(TAMIL_VOWELS[ch as usize]);
                 },
+
                 num::AAYDHAM => s.push(AAYDHAM),
+
                 num::CONSONANT_START..=num::CONSONANT_END => {
                     s.push(TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize]);
                     s.push(PULLI);
                 },
+
                 num::LATIN_A..=num::LATIN_Z => {
                     s.push((ch - num::LATIN_A + b'a') as char);
                 },
+
                 _ => unreachable!("invalid character: {}", ch),
             }
         }
@@ -322,11 +330,21 @@ impl Letter {
 
     pub fn category(self) -> Category {
         match self.0 {
-            num::VOWEL_START..=num::VOWEL_END => Category::TamilVowel,
-            num::AAYDHAM => Category::TamilAaydham,
-            num::CONSONANT_START..=num::TAMIL_CONSONANT_END => Category::TamilConsonant,
-            num::GRANTHA_START..=num::GRANTHA_END => Category::TamilGrantha,
-            num::LATIN_A..=num::LATIN_Z => Category::LatinAlpha,
+            num::VOWEL_START..=num::VOWEL_END =>
+                Category::TamilVowel,
+
+            num::AAYDHAM =>
+                Category::TamilAaydham,
+
+            num::CONSONANT_START..=num::TAMIL_CONSONANT_END =>
+                Category::TamilConsonant,
+
+            num::GRANTHA_START..=num::GRANTHA_END =>
+                Category::TamilGrantha,
+
+            num::LATIN_A..=num::LATIN_Z =>
+                Category::LatinAlpha,
+
             ch => unreachable!("invalid character: {}", ch),
         }
     }
@@ -569,40 +587,6 @@ impl LetterSet {
         }
     }
 
-    pub fn transliterate(ch: char) -> Option<(TransliterationKind, Self)> {
-        use TransliterationKind as T;
-
-        match ch.to_ascii_lowercase() {
-            'a' => Some((T::NONE,     letterset![SHORT_A, LONG_A])),
-            'b' => Some((T::DOUBLE_H, letterset![TAMIL_P])),
-            'c' => Some((T::DOUBLE_H, letterset![TAMIL_CH])),
-            'd' => Some((T::DOUBLE_H, letterset![TAMIL_T, TAMIL_RETRO_T])),
-            'e' => Some((T::NONE,     letterset![SHORT_E, LONG_E, AI])),
-            'f' => Some((T::DOUBLE,   letterset![TAMIL_P])),
-            'g' => Some((T::DOUBLE_H, letterset![TAMIL_K])),
-            'h' => Some((T::NONE,     letterset![TAMIL_K, GRANTHA_H, AAYDHAM])),
-            'i' => Some((T::NONE,     letterset![SHORT_I, LONG_I, TAMIL_Y])),
-            'j' => Some((T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_J])),
-            'k' => Some((T::DOUBLE_H, letterset![TAMIL_K, AAYDHAM])),
-            'l' => Some((T::DOUBLE,   letterset![TAMIL_ALVEOLAR_L, TAMIL_RETRO_L, TAMIL_ZH])),
-            'm' => Some((T::DOUBLE,   letterset![TAMIL_M])),
-            'n' => Some((T::DOUBLE,   letterset![TAMIL_NG, TAMIL_NY, TAMIL_N, TAMIL_ALVEOLAR_N, TAMIL_RETRO_N])),
-            'o' => Some((T::NONE,     letterset![SHORT_O, LONG_O, AU])),
-            'p' => Some((T::DOUBLE,   letterset![TAMIL_P])),
-            'q' => Some((T::DOUBLE,   letterset![TAMIL_K])),
-            'r' => Some((T::DOUBLE,   letterset![TAMIL_R, TAMIL_ALVEOLAR_TR, TAMIL_ZH])),
-            's' => Some((T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_S, GRANTHA_SH, GRANTHA_SSH])),
-            't' => Some((T::DOUBLE_H, letterset![TAMIL_T, TAMIL_ALVEOLAR_TR, TAMIL_RETRO_T])),
-            'u' => Some((T::NONE,     letterset![SHORT_U, LONG_U])),
-            'v' => Some((T::DOUBLE,   letterset![TAMIL_V])),
-            'w' => Some((T::DOUBLE,   letterset![TAMIL_V])),
-            'x' => Some((T::NONE,     letterset![GRANTHA_S])),
-            'y' => Some((T::DOUBLE,   letterset![TAMIL_Y])),
-            'z' => Some((T::ALLOW_H,  letterset![TAMIL_ZH])),
-            _ => None,
-        }
-    }
-
     pub fn iter(self) -> impl Iterator<Item = Letter> {
         (0..62).map(Letter).filter(move |&lt| self.matches(lt))
     }
@@ -628,32 +612,4 @@ impl Display for LetterSet {
 
         write!(f, "]")
     }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct TransliterationKind {
-    pub can_double: bool,
-    pub follow_by_h: bool,
-}
-
-impl TransliterationKind {
-    pub const NONE: Self = Self {
-        can_double: false,
-        follow_by_h: false,
-    };
-
-    pub const DOUBLE: Self = Self {
-        can_double: true,
-        follow_by_h: false,
-    };
-
-    pub const ALLOW_H: Self = Self {
-        can_double: false,
-        follow_by_h: true,
-    };
-
-    pub const DOUBLE_H: Self = Self {
-        can_double: true,
-        follow_by_h: true,
-    };
 }

@@ -70,6 +70,10 @@ impl Search {
 }
 
 impl super::Search for Search {
+    fn empty() -> Self {
+        Self { branches: Vec::new() }
+    }
+
     fn is_empty(&self) -> bool {
         self.branches.is_empty()
     }
