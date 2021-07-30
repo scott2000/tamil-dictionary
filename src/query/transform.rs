@@ -108,6 +108,14 @@ fn transliterate<S: Search>(search: &S, letters: &mut Letters, lt: Letter) -> Re
             }
         }
 
+        // Check for "dr"
+        L::LATIN_D if letters.peek() == Some(&L::LATIN_R) => {
+            letters.next();
+            search.matching(letterset![TAMIL_T, TAMIL_RETRO_T])?
+                .literal(&[Letter::TAMIL_R])
+                .joining(&optional_double(search, Letter::TAMIL_ALVEOLAR_TR)?)?
+        }
+
         _ => {
             if let Some((kind, lts)) = transliterate_letter(lt) {
                 let mut search = if kind.can_double {

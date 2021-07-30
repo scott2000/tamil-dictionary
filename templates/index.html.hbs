@@ -16,22 +16,18 @@
             <ul>
                 <li>Search for A and B together: <span>A B</span></li>
                 <li>Search for A excluding B: <span>A -B</span></li>
-                <li>Search for A with B in definition: <span>A: B</span></li>
+                <li>Search for A with B in definition: <span>A : B</span></li>
+                <li>Search for A in definition: <span>: A</span></li>
+                <ul>
+                    <li>If no word matches are found, this happens automatically</li>
+                </ul>
                 <li>Use transliteration: <span>%({{example}})</span></li>
+                <ul>
+                    <li>In word searches, this happens automatically</li>
+                </ul>
                 <li>Only allow exact matches: <span>&quot;A&quot;</span></li>
                 <li>Match one of two patterns: <span>(A | B)</span></li>
-                <li>Make part optional: <span>A?</span>
-                <ul>
-                    <li><span>AB?</span> = <span>(A | AB)</span></li>
-                </ul>
-                <li>Allow any number: <span>A*</span></li>
-                <ul>
-                    <li><span>AB*</span> = <span>(A | AB | ABB | ...)</span></li>
-                </ul>
-                <li>Allow at least one: <span>A+</span></li>
-                <ul>
-                    <li><span>AB+</span> = <span>(AB | ABB | ...)</span></li>
-                </ul>
+                <li>Make part optional: <span>AB?</span> = <span>(A | AB)</span></li>
                 <li>Match any of a set: <span>[ஃஅக்]</span></li>
                 <li>Match any in a range: <span>[க்-ம்]</span></li>
                 <li>Negate a set/range: <span>[^a-z]</span></li>

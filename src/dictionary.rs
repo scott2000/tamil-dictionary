@@ -68,6 +68,30 @@ impl RawEntry {
         word.split(&[',', ';'][..]).map(str::trim)
     }
 
+    fn joined_subwords(word: &str) -> Vec<&'static Word> {
+        // Split the word into parts
+        let mut parts = word.split(Self::skip_char)
+            .filter(|s| !s.is_empty());
+
+        // Take the first part as the base word
+        let first = parts.next().unwrap_or("");
+        let mut parsed = vec![Letter::parse_str_unboxed(first)];
+
+        // Add on all suffixes as necessary
+        for part in parts {
+            let mut result = Vec::new();
+            for word in parsed {
+                result.append(&mut Letter::join(word, &Letter::parse_str_unboxed(part)));
+            }
+            parsed = result;
+        }
+
+        // Intern the resulting words
+        parsed.into_iter()
+            .map(|word| intern::word(word.into_boxed_slice()))
+            .collect()
+    }
+
     fn skip_char(ch: char) -> bool {
         ch.is_ascii() && !ch.is_ascii_alphabetic()
     }
@@ -106,7 +130,7 @@ impl Entry {
 impl From<RawEntry> for Entry {
     fn from(raw: RawEntry) -> Self {
         let parsed_word: Box<[_]> = RawEntry::words(&raw.word)
-            .map(|s| intern::word(Letter::parse_str(s)))
+            .flat_map(|word| RawEntry::joined_subwords(word))
             .collect();
 
         assert!(!parsed_word.is_empty());

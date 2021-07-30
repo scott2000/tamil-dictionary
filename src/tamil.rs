@@ -159,7 +159,7 @@ impl Letter {
         }
     }
 
-    pub fn parse_str(s: &str) -> Box<Word> {
+    pub fn parse_str_unboxed(s: &str) -> Vec<Self> {
         let mut word = Vec::new();
         for ch in s.chars() {
             match ch {
@@ -262,7 +262,12 @@ impl Letter {
                 }
             }
         }
-        word.into_boxed_slice()
+
+        word
+    }
+
+    pub fn parse_str(s: &str) -> Box<Word> {
+        Self::parse_str_unboxed(s).into_boxed_slice()
     }
 
     pub fn to_char(self) -> char {
@@ -319,6 +324,150 @@ impl Letter {
             }
         }
         s
+    }
+
+    pub fn join(mut prefix: Vec<Self>, mut suffix: &Word) -> Vec<Vec<Self>> {
+        use Category::*;
+
+        if suffix.is_empty() {
+            return vec![prefix];
+        } else if prefix.is_empty() {
+            return vec![Vec::from(suffix)];
+        }
+
+        let just_extend = |mut prefix: Vec<Self>, suffix: &Word| {
+            prefix.extend_from_slice(suffix);
+            vec![prefix]
+        };
+
+        let left = *prefix.last().unwrap();
+        let right = *suffix.first().unwrap();
+        let joins: Vec<Vec<Letter>> = match (left.category(), right.category()) {
+            // Joining two vowels together
+            (TamilVowel, TamilVowel) => {
+                match left {
+                    // Kutriyal ugaram
+                    Self::SHORT_U => {
+                        prefix.pop();
+                        vec![vec![], vec![Letter::SHORT_U], vec![Letter::SHORT_U, Letter::TAMIL_V]]
+                    },
+
+                    // Joining with "v"
+                    Self::SHORT_A | Self::LONG_A | Self::LONG_U | Self::SHORT_O | Self::LONG_O | Self::AU =>
+                        vec![vec![], vec![Letter::TAMIL_V]],
+
+                    // Joining with "y"
+                    _ => vec![vec![], vec![Letter::TAMIL_Y]],
+                }
+            },
+
+            // Joining a consonant with a vowel (could double)
+            (TamilConsonant | TamilGrantha, TamilVowel) => {
+                vec![vec![], vec![left]]
+            },
+
+            // Joining two consonants
+            (TamilConsonant, TamilConsonant) => {
+                if LetterSet::vallinam().matches(right) {
+                    match left {
+                        // Retroflex assimilation
+                        Self::TAMIL_RETRO_T | Self::TAMIL_RETRO_N | Self::TAMIL_RETRO_L => {
+                            prefix.pop();
+                            suffix = &suffix[1..];
+                            vec![
+                                vec![Self::TAMIL_RETRO_T, right],
+                                vec![Self::TAMIL_RETRO_N, right],
+                                vec![Self::TAMIL_RETRO_L, right],
+                                vec![Self::TAMIL_RETRO_T, Self::TAMIL_T],
+                                vec![Self::TAMIL_RETRO_N, Self::TAMIL_T],
+                                vec![Self::TAMIL_RETRO_L, Self::TAMIL_T],
+                            ]
+                        },
+
+                        // Alveolar assimilation
+                        Self::TAMIL_ALVEOLAR_TR | Self::TAMIL_ALVEOLAR_N | Self::TAMIL_ALVEOLAR_L => {
+                            prefix.pop();
+                            suffix = &suffix[1..];
+                            vec![
+                                vec![Self::TAMIL_ALVEOLAR_TR, right],
+                                vec![Self::TAMIL_ALVEOLAR_N, right],
+                                vec![Self::TAMIL_ALVEOLAR_L, right],
+                                vec![Self::TAMIL_ALVEOLAR_TR, Self::TAMIL_T],
+                                vec![Self::TAMIL_ALVEOLAR_N, Self::TAMIL_T],
+                                vec![Self::TAMIL_ALVEOLAR_L, Self::TAMIL_T],
+                            ]
+                        },
+
+                        // Nasal assimilation of "m"
+                        Self::TAMIL_M => {
+                            prefix.pop();
+                            let paired = Letter(right.0 + 1);
+                            vec![vec![paired], vec![Letter::TAMIL_M]]
+                        },
+
+                        _ => {
+                            // Nasal assimilation of "m" (reversed)
+                            if LetterSet::mellinam().matches(left) {
+                                prefix.pop();
+                                vec![vec![left], vec![Letter::TAMIL_M]]
+                            } else {
+                                return just_extend(prefix, suffix)
+                            }
+                        },
+                    }
+                } else if LetterSet::mellinam().matches(right) {
+                    prefix.pop();
+                    suffix = &suffix[1..];
+                    match (left, right) {
+                        // Nasal assimilation of "n" or "m" with "n"
+                        (Letter::TAMIL_N | Letter::TAMIL_M, Letter::TAMIL_N) => vec![
+                            vec![Letter::TAMIL_N, right],
+                            vec![Letter::TAMIL_M, right],
+                        ],
+
+                        // Dropping of doubled "m"
+                        (Letter::TAMIL_M, Letter::TAMIL_M) => vec![
+                            vec![left, right],
+                            vec![left],
+                        ],
+
+                        // Nasal assimilation of "n"
+                        (_, Letter::TAMIL_N) => vec![
+                            vec![left, right],
+                            vec![left, left],
+                        ],
+
+                        // Nasal assimilation of "m"
+                        (Letter::TAMIL_M, _) => vec![
+                            vec![left, right],
+                            vec![right, right],
+                        ],
+
+                        // Nasal assimilation of "m" or "n" (reversed)
+                        _ => vec![
+                            vec![left, right],
+                            vec![left, Letter::TAMIL_N],
+                            vec![Letter::TAMIL_M, right],
+                        ],
+                    }
+                } else {
+                    return just_extend(prefix, suffix)
+                }
+            },
+
+            // Natural joining
+            _ => return just_extend(prefix, suffix),
+        };
+
+        let mut result = Vec::new();
+        for mut join in joins {
+            let mut word = prefix.clone();
+            word.append(&mut join);
+            word.extend_from_slice(suffix);
+            result.push(word);
+        }
+
+        result
     }
 
     pub fn is_consonant(self) -> bool {
