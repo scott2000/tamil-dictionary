@@ -29,6 +29,8 @@ pub mod search;
 pub mod query;
 pub mod web;
 
+pub mod debug;
+
 use search::tree;
 
 #[rocket::main]

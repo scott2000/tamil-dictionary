@@ -45,11 +45,13 @@
                 </ul>
                 <li>Match the start of a word: <span>&lt;</span> or <span>^</span></li>
                 <li>Match the end of a word: <span>&gt;</span> or <span>$</span></li>
+                <li>Match not start and not end: <span>~</span></li>
             </ul>
             <p>Examples:</p>
             <ul>
                 <li>Short words: <span>&quot;\C?\k\C\k?&quot;</span></li>
                 <li>Words starting with 'க' or 'ப': <span>&lt;[க்ப்]அ</span></li>
+                <li>Words with -avan/-avar as a suffix: <span>~ava[nr]&gt;</span></li>
             </ul>
         </div>
     </body>

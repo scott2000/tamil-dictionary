@@ -357,43 +357,11 @@ impl Query {
     }
 }
 
-impl Display for Query {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut first = true;
-        for pat in &self.word_patterns {
-            if first {
-                first = false;
-            } else {
-                write!(f, " ")?;
-            }
-            write!(f, "{}", pat)?;
-        }
-
-        for pat in &self.negative_word_patterns {
-            if first {
-                first = false;
-            } else {
-                write!(f, " ")?;
-            }
-            write!(f, "!{}", pat)?;
-        }
-
-        write!(f, ":")?;
-        for pat in &self.definition_patterns {
-            write!(f, " {}", pat)?;
-        }
-
-        for pat in &self.negative_definition_patterns {
-            write!(f, " !{}", pat)?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug)]
 pub enum Pattern {
     Empty,
     AssertStart,
+    AssertMiddle,
     AssertEnd,
     Assert(LetterSet),
     Set(LetterSet),
@@ -406,10 +374,11 @@ pub enum Pattern {
 }
 
 impl Pattern {
-    pub fn search<S: Search>(&self, search: &S, expand: bool, trans: bool) -> Result<S, SearchError> {
+    pub fn search<S: Search>(&self, search: &S, expand: bool, trans: bool) -> Result<S, S::Error> {
         match self {
             Self::Empty => Ok(search.clone()),
             Self::AssertStart => Ok(search.asserting_start()),
+            Self::AssertMiddle => Ok(search.asserting_middle()),
             Self::AssertEnd => Ok(search.asserting_end()),
             &Self::Assert(lts) => Ok(search.asserting(lts)),
             &Self::Set(lts) => search.matching(transform::letter_set(lts, expand, trans)),
@@ -482,6 +451,10 @@ impl Pattern {
             Some('<' | '^') => {
                 chars.next();
                 Self::AssertStart
+            },
+            Some('~') => {
+                chars.next();
+                Self::AssertMiddle
             },
             Some('>' | '$') => {
                 chars.next();
@@ -751,24 +724,6 @@ impl Pattern {
             } else {
                 break;
             }
-        }
-    }
-}
-
-impl Display for Pattern {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Empty => write!(f, "()"),
-            Self::AssertStart => write!(f, "<"),
-            Self::AssertEnd => write!(f, ">"),
-            Self::Assert(lts) => write!(f, "&{}", lts),
-            Self::Set(lts) => write!(f, "{}", lts),
-            Self::Literal(word) => write!(f, "({})", Letter::to_str(word)),
-            Self::Exact(pat) => write!(f, "#({})", pat),
-            Self::Trans(pat) => write!(f, "%({})", pat),
-            Self::Repeat(pat, a, b) => write!(f, "{}{{{},{}}}", pat, a, b),
-            Self::Concat(a, b) => write!(f, "{}{}", a, b),
-            Self::Alternative(a, b) => write!(f, "({}|{})", a, b),
         }
     }
 }

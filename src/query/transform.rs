@@ -1,5 +1,5 @@
 use crate::tamil::{Word, Letter, LetterSet};
-use crate::search::{SearchError, Search};
+use crate::search::Search;
 
 type Letters<'a> = std::iter::Peekable<std::iter::Copied<std::slice::Iter<'a, Letter>>>;
 
@@ -11,7 +11,7 @@ pub fn letter_set(lts: LetterSet, _expand: bool, trans: bool) -> LetterSet {
     }
 }
 
-pub fn literal_search<S: Search>(search: &S, word: &Word, _expand: bool, trans: bool) -> Result<S, SearchError> {
+pub fn literal_search<S: Search>(search: &S, word: &Word, _expand: bool, trans: bool) -> Result<S, S::Error> {
     if !trans {
         return Ok(search.literal(word));
     }
@@ -30,7 +30,7 @@ pub fn literal_search<S: Search>(search: &S, word: &Word, _expand: bool, trans: 
     Ok(search)
 }
 
-fn transliterate<S: Search>(search: &S, letters: &mut Letters, lt: Letter) -> Result<Option<S>, SearchError> {
+fn transliterate<S: Search>(search: &S, letters: &mut Letters, lt: Letter) -> Result<Option<S>, S::Error> {
     use Letter as L;
 
     let search = match lt {
@@ -143,11 +143,11 @@ fn transliterate<S: Search>(search: &S, letters: &mut Letters, lt: Letter) -> Re
     Ok(Some(search))
 }
 
-fn optional_double_set<S: Search>(search: &S, lts: LetterSet) -> Result<S, SearchError> {
+fn optional_double_set<S: Search>(search: &S, lts: LetterSet) -> Result<S, S::Error> {
     lts.iter().try_fold(S::empty(), |a, b| a.joining(&optional_double(search, b)?))
 }
 
-fn optional_double<S: Search>(search: &S, lt: Letter) -> Result<S, SearchError> {
+fn optional_double<S: Search>(search: &S, lt: Letter) -> Result<S, S::Error> {
     let search = search.literal(&[lt]);
     search.literal(&[lt]).joining(&search)
 }

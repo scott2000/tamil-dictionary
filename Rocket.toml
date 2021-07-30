@@ -1,3 +1,7 @@
-[global]
+[debug]
 address = "192.168.1.220"
 port = 3108
+
+[release]
+address = "127.0.0.1"
+port = 4120

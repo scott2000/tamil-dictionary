@@ -18,11 +18,16 @@ pub enum SearchError {
 }
 
 pub trait Search: Clone {
+    type Output;
+    type Error;
+
     fn empty() -> Self;
 
     fn is_empty(&self) -> bool;
 
     fn asserting_start(&self) -> Self;
+
+    fn asserting_middle(&self) -> Self;
 
     fn asserting_end(&self) -> Self;
 
@@ -30,16 +35,16 @@ pub trait Search: Clone {
 
     fn literal(&self, word: &Word) -> Self;
 
-    fn matching(&self, lts: LetterSet) -> Result<Self, SearchError>;
+    fn matching(&self, lts: LetterSet) -> Result<Self, Self::Error>;
 
-    fn join(&mut self, other: &Self) -> Result<(), SearchError>;
+    fn join(&mut self, other: &Self) -> Result<(), Self::Error>;
 
-    fn joining(mut self, other: &Self) -> Result<Self, SearchError> {
+    fn joining(mut self, other: &Self) -> Result<Self, Self::Error> {
         self.join(other)?;
         Ok(self)
     }
 
-    fn end(self) -> Result<SearchResult, SearchError>;
+    fn end(self) -> Result<Self::Output, Self::Error>;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]

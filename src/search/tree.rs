@@ -70,6 +70,9 @@ impl Search {
 }
 
 impl super::Search for Search {
+    type Output = SearchResult;
+    type Error = SearchError;
+
     fn empty() -> Self {
         Self { branches: Vec::new() }
     }
@@ -82,6 +85,14 @@ impl super::Search for Search {
         let branches = self.branches.iter()
             .filter(|branch| branch.is_start())
             .cloned()
+            .collect();
+
+        Self { branches }
+    }
+
+    fn asserting_middle(&self) -> Self {
+        let branches = self.branches.iter()
+            .filter_map(|branch| branch.middle())
             .collect();
 
         Self { branches }
@@ -135,7 +146,7 @@ impl super::Search for Search {
         Ok(())
     }
 
-    fn end(mut self) -> Result<SearchResult, SearchError> {
+    fn end(mut self) -> Result<Self::Output, SearchError> {
         self.branches.retain(|branch| !branch.is_initial);
 
         // Count non-terminal branches to make sure there's not too many
@@ -237,6 +248,21 @@ impl<T: Eq> SearchBranch<T> {
 
     fn is_start(&self) -> bool {
         self.is_initial && self.is_prefix_tree
+    }
+
+    fn middle(&self) -> Option<Self> {
+        if self.is_initial && self.is_prefix_tree {
+            None
+        } else if !self.prefix.is_empty() {
+            Some(Self { ..*self })
+        }  else if !self.branches.is_empty() {
+            Some(Self {
+                leaves: &[],
+                ..*self
+            })
+        } else {
+            None
+        }
     }
 
     fn suffix(&self, empty: &'static BTreeMap<Letter, Tree<T>>) -> Option<Self> {

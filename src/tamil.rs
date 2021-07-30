@@ -270,24 +270,6 @@ impl Letter {
         Self::parse_str_unboxed(s).into_boxed_slice()
     }
 
-    pub fn to_char(self) -> char {
-        let ch = self.0;
-        match ch {
-            num::VOWEL_START..=num::VOWEL_END =>
-                TAMIL_VOWELS[ch as usize],
-
-            num::AAYDHAM => AAYDHAM,
-
-            num::CONSONANT_START..=num::CONSONANT_END =>
-                TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize],
-
-            num::LATIN_A..=num::LATIN_Z =>
-                (ch - num::LATIN_A + b'a') as char,
-
-            _ => unreachable!("invalid character: {}", ch),
-        }
-    }
-
     pub fn to_str(word: &Word) -> String {
         let mut s = String::new();
         for &Letter(ch) in word {
@@ -511,7 +493,22 @@ impl Letter {
 
 impl Display for Letter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_char())
+        let ch = self.0;
+        match ch {
+            num::VOWEL_START..=num::VOWEL_END =>
+                write!(f, "{}", TAMIL_VOWELS[ch as usize]),
+
+            num::AAYDHAM =>
+                write!(f, "{}", AAYDHAM),
+
+            num::CONSONANT_START..=num::CONSONANT_END =>
+                write!(f, "{}{}", TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize], PULLI),
+
+            num::LATIN_A..=num::LATIN_Z =>
+                write!(f, "{}", (ch - num::LATIN_A + b'a') as char),
+
+            _ => unreachable!("invalid character: {}", ch),
+        }
     }
 }
 
@@ -747,14 +744,13 @@ impl Display for LetterSet {
 
         write!(f, "[")?;
 
-        let flip = (lts.0 & (1 << 63)) != 0;
-        if flip {
+        if (lts.0 & (1 << 63)) != 0 {
             write!(f, "!")?;
             lts = lts.complement();
         }
 
         for i in 0..62 {
-            if lts.matches(Letter(i)) != flip {
+            if lts.matches(Letter(i)) {
                 write!(f, "{}", Letter(i))?;
             }
         }
