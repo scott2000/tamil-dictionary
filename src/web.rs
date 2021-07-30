@@ -72,21 +72,24 @@ struct ResultSegment {
     text: &'static str,
     uri: String,
     tag: Option<&'static str>,
+    close_tag: bool,
 }
 
 impl ResultSegment {
     fn new(kind: SegmentKind, text: &'static str) -> Self {
-        let (uri, tag) = match kind {
-            SegmentKind::Text => (String::new(), None),
-            SegmentKind::Reference => (link(text), None),
-            SegmentKind::Superscript => (String::new(), Some("sup")),
-            SegmentKind::Bold => (String::new(), Some("strong")),
+        let (uri, tag, close_tag) = match kind {
+            SegmentKind::Text => (String::new(), None, true),
+            SegmentKind::Reference => (link(text), None, true),
+            SegmentKind::Superscript => (String::new(), Some("sup"), true),
+            SegmentKind::Bold => (String::new(), Some("strong"), true),
+            SegmentKind::WordBreak => (String::new(), Some("wbr"), false),
         };
 
         Self {
             text,
             uri,
             tag,
+            close_tag,
         }
     }
 

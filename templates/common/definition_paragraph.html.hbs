@@ -7,7 +7,9 @@
     {{~/if}}
     {{~text}}
     {{~#if tag~}}
-        </{{tag}}>
+        {{#if close_tag~}}
+            </{{tag}}>
+        {{~/if}}
     {{~/if}}
     {{~#if uri~}}
         </a>

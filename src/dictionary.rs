@@ -107,6 +107,8 @@ pub enum SegmentKind {
     Superscript,
     #[serde(rename = "bld")]
     Bold,
+    #[serde(rename = "wbr")]
+    WordBreak,
 }
 
 #[derive(Deserialize, Debug)]
