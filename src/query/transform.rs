@@ -11,7 +11,7 @@ pub fn letter_set(lts: LetterSet, _expand: bool, trans: bool) -> LetterSet {
     }
 }
 
-pub fn literal_search<S: Search>(search: &S, word: &Word, _expand: bool, trans: bool) -> Result<S, S::Error> {
+pub fn literal_search<S: Search>(search: &S, word: &Word, expand: bool, trans: bool) -> Result<S, S::Error> {
     if !trans {
         return Ok(search.literal(word));
     }
@@ -19,7 +19,7 @@ pub fn literal_search<S: Search>(search: &S, word: &Word, _expand: bool, trans: 
     let mut search = search.clone();
     let mut letters = word.iter().copied().peekable();
     while let Some(lt) = letters.next() {
-        if let Some(result) = transliterate(&search, &mut letters, lt)? {
+        if let Some(result) = transliterate(&search, expand, &mut letters, lt)? {
             search = result;
             continue;
         }
@@ -30,7 +30,12 @@ pub fn literal_search<S: Search>(search: &S, word: &Word, _expand: bool, trans: 
     Ok(search)
 }
 
-fn transliterate<S: Search>(search: &S, letters: &mut Letters, lt: Letter) -> Result<Option<S>, S::Error> {
+fn transliterate<S: Search>(
+    search: &S,
+    expand: bool,
+    letters: &mut Letters,
+    lt: Letter) -> Result<Option<S>, S::Error>
+{
     use Letter as L;
 
     let search = match lt {
@@ -57,9 +62,17 @@ fn transliterate<S: Search>(search: &S, letters: &mut Letters, lt: Letter) -> Re
                     search.literal(&[Letter::LONG_A])
                 }
 
-                _ => search.literal(&[Letter::SHORT_A]),
+                _ => if expand {
+                    search.matching(letterset![SHORT_A, LONG_A, AI])?
+                } else {
+                    search.literal(&[Letter::SHORT_A])
+                }
             }
         }
+
+        // If not expanding, treat these more strictly
+        L::LATIN_I if !expand => search.literal(&[Letter::SHORT_I]),
+        L::LATIN_U if !expand => search.literal(&[Letter::SHORT_U]),
 
         L::LATIN_E => {
             match letters.peek() {
@@ -163,7 +176,7 @@ const fn transliterate_letter(lt: Letter) -> Option<(TransliterationKind, Letter
     use TransliterationKind as T;
 
     let (kind, lts) = match lt {
-        L::LATIN_A => (T::NONE,     letterset![SHORT_A, LONG_A]),
+        L::LATIN_A => (T::NONE,     letterset![SHORT_A, LONG_A, AI]),
         L::LATIN_B => (T::DOUBLE_H, letterset![TAMIL_P]),
         L::LATIN_C => (T::DOUBLE_H, letterset![TAMIL_CH]),
         L::LATIN_D => (T::DOUBLE_H, letterset![TAMIL_T, TAMIL_RETRO_T]),
