@@ -1,10 +1,12 @@
 use std::mem;
 use std::collections::BTreeMap;
 
+use thiserror::Error;
+
 use crate::tamil::{Word, Letter, LetterSet};
 use crate::dictionary::{self, ENTRIES, Loc};
 
-use super::{SearchError, SearchResult};
+use super::SearchResult;
 
 lazy_static! {
     static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
@@ -38,6 +40,10 @@ fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> 
         prefix_tree = prefix_tree.union(Tree::singleton(word, loc));
     }
 
+    // Shrink the leaves of the trees to reduce unused space
+    prefix_tree.shrink();
+    suffix_tree.shrink();
+
     eprintln!(" => {} {} prefix nodes (depth = {})", prefix_tree.size(), kind, prefix_tree.depth());
     eprintln!(" => {} {} suffix nodes (depth = {})", suffix_tree.size(), kind, suffix_tree.depth());
 
@@ -47,9 +53,18 @@ fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> 
     }
 }
 
-const SEARCH_MAX_RESULTS: usize = 16384;
+const SEARCH_MAX_RESULTS: usize = 32768;
 const SEARCH_MAX_BRANCHES: usize = 8192;
-const SEARCH_MAX_FINAL_BRANCHES: usize = 64;
+
+#[derive(Error, Debug)]
+pub enum SearchError {
+    #[error("Error: the search query is too complex. Try using fewer wildcards.")]
+    TooComplex,
+    #[error("Error: the search query isn't specific enough. Try surrounding it in quotes.")]
+    TooManyResults,
+    #[error("Error: an excluded word in the search has too many matches.")]
+    CommonExclusion,
+}
 
 #[derive(Clone, Debug)]
 pub struct Search {
@@ -70,7 +85,6 @@ impl Search {
 }
 
 impl super::Search for Search {
-    type Output = SearchResult;
     type Error = SearchError;
 
     fn empty() -> Self {
@@ -128,7 +142,7 @@ impl super::Search for Search {
         Self { branches }
     }
 
-    fn matching(&self, lts: LetterSet) -> Result<Search, SearchError> {
+    fn matching(&self, lts: LetterSet) -> Result<Search, Self::Error> {
         let mut branches = Vec::new();
         for branch in &self.branches {
             branch.append_match(&mut branches, lts)?;
@@ -137,7 +151,7 @@ impl super::Search for Search {
         Ok(Self { branches })
     }
 
-    fn join(&mut self, other: &Self) -> Result<(), SearchError> {
+    fn join(&mut self, other: &Self) -> Result<(), Self::Error> {
         if self.branches.len() + other.branches.len() > SEARCH_MAX_BRANCHES {
             return Err(SearchError::TooComplex);
         }
@@ -146,23 +160,9 @@ impl super::Search for Search {
         Ok(())
     }
 
-    fn end(mut self) -> Result<Self::Output, SearchError> {
+    fn end(mut self) -> Result<SearchResult, Self::Error> {
         self.branches.retain(|branch| !branch.is_initial);
 
-        // Count non-terminal branches to make sure there's not too many
-        let mut non_terminal_count = 0;
-        for branch in &self.branches {
-            if branch.branches.is_empty() {
-                continue;
-            }
-
-            non_terminal_count += 1;
-            if non_terminal_count > SEARCH_MAX_FINAL_BRANCHES {
-                return Err(SearchError::TooComplex);
-            }
-        }
-
-        // Add all of the branches to the result
         let mut result = SearchResult::default();
         let mut total_count = 0;
         for branch in self.branches {
@@ -171,7 +171,6 @@ impl super::Search for Search {
 
         Ok(result)
     }
-
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -251,7 +250,7 @@ impl<T: Eq> SearchBranch<T> {
     }
 
     fn middle(&self) -> Option<Self> {
-        if self.is_initial && self.is_prefix_tree {
+        if self.is_start() {
             None
         } else if !self.prefix.is_empty() {
             Some(Self { ..*self })
@@ -290,7 +289,7 @@ impl<T: Eq> SearchBranch<T> {
             self.require = None;
         }
 
-        for &lt in word {
+        for lt in word {
             if self.prefix.is_empty() {
                 self = self.update(self.branches.get(&lt)?);
             } else if self.prefix[0] == lt {
@@ -401,6 +400,13 @@ impl<T: Eq> Tree<T> {
         }
     }
 
+    fn shrink(&mut self) {
+        self.leaves.shrink_to_fit();
+        for branch in self.branches.values_mut() {
+            branch.shrink();
+        }
+    }
+
     fn append_branch(&mut self, key: Letter, tree: Self) {
         if let Some(old) = self.branches.remove(&key) {
             self.branches.insert(key, old.union(tree));
@@ -416,7 +422,7 @@ impl<T: Eq> Tree<T> {
         }
 
         // Check for a difference to split on
-        for (i, (&a, &b)) in self.prefix.iter().zip(rhs.prefix).enumerate() {
+        for (i, (a, b)) in self.prefix.iter().zip(rhs.prefix).enumerate() {
             if a == b {
                 continue;
             }
@@ -456,7 +462,7 @@ impl<T: Eq> Tree<T> {
 impl<T: Eq> Default for Tree<T> {
     fn default() -> Self {
         Self {
-            prefix: &[],
+            prefix: Word::new(),
             leaves: Vec::new(),
             branches: BTreeMap::new(),
         }

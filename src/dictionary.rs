@@ -31,7 +31,7 @@ pub fn words() -> impl Iterator<Item = (&'static Word, Loc)> {
         .enumerate()
         .flat_map(|(a, entry)|
             entry.parsed_word.iter()
-                .map(move |word| (word.as_ref(), Loc { entry: a as u16, word: NO_WORD })))
+                .map(move |&word| (word, Loc { entry: a as u16, word: NO_WORD })))
 }
 
 pub fn definition_words() -> impl Iterator<Item = (&'static Word, Loc)> {
@@ -40,7 +40,7 @@ pub fn definition_words() -> impl Iterator<Item = (&'static Word, Loc)> {
         .flat_map(|(a, entry)|
             entry.parsed_text.iter()
                 .enumerate()
-                .map(move |(b, word)| (word.as_ref(), Loc { entry: a as u16, word: b as u16 })))
+                .map(move |(b, &word)| (word, Loc { entry: a as u16, word: b as u16 })))
 }
 
 pub type EntryIndex = u16;
@@ -75,20 +75,20 @@ impl RawEntry {
 
         // Take the first part as the base word
         let first = parts.next().unwrap_or("");
-        let mut parsed = vec![Letter::parse_str_unboxed(first)];
+        let mut parsed = vec![Word::parse_unboxed(first)];
 
         // Add on all suffixes as necessary
         for part in parts {
             let mut result = Vec::new();
             for word in parsed {
-                result.append(&mut Letter::join(word, &Letter::parse_str_unboxed(part)));
+                result.append(&mut Letter::join(word, &Word::parse(part)));
             }
             parsed = result;
         }
 
         // Intern the resulting words
         parsed.into_iter()
-            .map(|word| intern::word(word.into_boxed_slice()))
+            .map(|word| intern::word(word.into()))
             .collect()
     }
 
@@ -180,7 +180,7 @@ impl From<RawEntry> for Entry {
                     .unwrap_or(text.len());
 
                 // Push the parsed word and the indices
-                parsed_text.push(intern::word(Letter::parse_str(&text[start..end])));
+                parsed_text.push(intern::word(Word::parse(&text[start..end])));
                 word_ranges.push((start as u32, end as u32));
             } else {
                 break;

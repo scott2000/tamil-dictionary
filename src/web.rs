@@ -8,7 +8,7 @@ use rocket::response::Redirect;
 use rocket_dyn_templates::Template;
 
 use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind};
-use crate::search::{SearchResult, SearchError, SearchRankingEntry};
+use crate::search::{SearchResult, SearchRankingEntry};
 use crate::query::Query;
 
 const MAX_OTHER_SECTIONS: usize = 5;
@@ -305,7 +305,7 @@ impl Search {
         }
     }
 
-    fn result(&mut self, result: Result<SearchResult, SearchError>) {
+    fn result(&mut self, result: Result<SearchResult, impl ToString>) {
         match result {
             Err(err) => self.error(err),
             Ok(result) => {
@@ -326,13 +326,11 @@ impl Search {
                 }
 
                 // Only hide the other results if they are too long
-                if self.other_count.num <= 1 {
-                    self.hide_other = false;
-                } else if self.other_count.num <= MAX_OTHER_SECTIONS {
+                if self.other_count.num <= MAX_OTHER_SECTIONS {
                     // Count the number of sections in the other section
                     let other_section_count = self.other.iter()
-                        .flat_map(|entry| entry.sections.iter())
-                        .count();
+                        .map(|entry| entry.sections.len())
+                        .sum::<usize>();
 
                     if other_section_count <= MAX_OTHER_SECTIONS {
                         self.hide_other = false;
@@ -353,8 +351,13 @@ pub fn search(q: &str) -> Template {
     search_query(q, false)
 }
 
+#[get("/search?q=")]
+pub fn search_empty_query() -> Redirect {
+    Redirect::to(uri!(index()))
+}
+
 #[get("/search")]
-pub fn search_empty() -> Redirect {
+pub fn search_no_query() -> Redirect {
     Redirect::to(uri!(index()))
 }
 

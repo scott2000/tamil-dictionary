@@ -1,3 +1,5 @@
+use std::ops::*;
+use std::cmp::Ordering;
 use std::fmt::{self, Display, Debug};
 use std::collections::{HashMap, HashSet};
 
@@ -135,8 +137,6 @@ fn to_map(mut offset: u8, chars: &'static [char]) -> HashMap<char, Letter> {
     map
 }
 
-pub type Word = [Letter];
-
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Letter(u8);
 
@@ -159,171 +159,22 @@ impl Letter {
         }
     }
 
-    pub fn parse_str_unboxed(s: &str) -> Vec<Self> {
-        let mut word = Vec::new();
-        for ch in s.chars() {
-            match ch {
-                'a'..='z' => word.push(Self(ch as u8 - b'a' + num::LATIN_A)),
-                'A'..='Z' => word.push(Self(ch as u8 - b'A' + num::LATIN_A)),
-                AAYDHAM => word.push(Self::AAYDHAM),
-                PULLI => {
-                    match word.pop() {
-                        None => {}
-
-                        // Remove inherent 'a'
-                        Some(Self::SHORT_A) => {}
-
-                        // Convert 'aa' + pulli into 'r'
-                        Some(Self::LONG_A) => word.push(Self::TAMIL_R),
-
-                        // Convert short 'o' + pulli into short 'e' + 'r'
-                        Some(Self::SHORT_O) => {
-                            word.push(Self::SHORT_E);
-                            word.push(Self::TAMIL_R);
-                        }
-
-                        // Convert long 'o' + pulli into long 'e' + 'r'
-                        Some(Self::LONG_O) => {
-                            word.push(Self::LONG_E);
-                            word.push(Self::TAMIL_R);
-                        }
-
-                        // Convert 'au' + pulli into short 'o' + 'L' at the start of a word
-                        Some(Self::AU) if word.is_empty() => {
-                            word.push(Self::SHORT_O);
-                            word.push(Self::TAMIL_RETRO_L);
-                        }
-
-                        // Convert 'au' + pulli into short 'e' + 'L' otherwise
-                        Some(Self::AU) => {
-                            word.push(Self::SHORT_E);
-                            word.push(Self::TAMIL_RETRO_L);
-                        }
-
-                        Some(x) => word.push(x),
-                    }
-                }
-
-                // Handle combining 'La'
-                COMBINING_LA => {
-                    match word.pop() {
-                        None => {}
-
-                        // Combine with previous short 'e' or 'o' to form 'au'
-                        Some(Self::SHORT_E | Self::SHORT_O) => {
-                            word.push(Self::AU);
-                            continue;
-                        }
-
-                        Some(x) => word.push(x),
-                    }
-
-                    // Treat as 'La'
-                    word.push(Self::TAMIL_RETRO_L);
-                    word.push(Self::SHORT_A);
-                }
-
-                // Handle combined 'om'
-                OM => {
-                    word.push(Self::LONG_O);
-                    word.push(Self::TAMIL_M);
-                }
-
-                _ => {
-                    if let Some(&n) = TAMIL_VOWEL_MAP.get(&ch) {
-                        word.push(n);
-                    } else if let Some(&n) = TAMIL_CONSONANT_MAP.get(&ch) {
-                        word.push(n);
-                        word.push(Self::SHORT_A);
-                    } else if let Some(&n) = TAMIL_VOWEL_SIGN_MAP.get(&ch) {
-                        match word.pop() {
-                            None => {}
-
-                            // Remove inherent 'a' before adding vowel
-                            Some(Self::SHORT_A) => {}
-
-                            // Convert short 'e' + 'aa' into short 'o'
-                            Some(Self::SHORT_E) if n == Self::LONG_A => {
-                                word.push(Self::SHORT_O);
-                                continue;
-                            }
-
-                            // Convert long 'e' + 'aa' into long 'o'
-                            Some(Self::LONG_E) if n == Self::LONG_A => {
-                                word.push(Self::LONG_O);
-                                continue;
-                            }
-
-                            Some(x) => word.push(x),
-                        }
-
-                        word.push(n);
-                    }
-                }
-            }
-        }
-
-        word
-    }
-
-    pub fn parse_str(s: &str) -> Box<Word> {
-        Self::parse_str_unboxed(s).into_boxed_slice()
-    }
-
-    pub fn to_str(word: &Word) -> String {
-        let mut s = String::new();
-        for &Letter(ch) in word {
-            match ch {
-                num::VOWEL_START..=num::VOWEL_END => {
-                    match s.pop() {
-                        None => {},
-
-                        // Remove pulli before adding vowel
-                        Some(PULLI) => {
-                            if ch >= num::LONG_A {
-                                s.push(TAMIL_VOWEL_SIGNS[(ch - num::LONG_A) as usize]);
-                            }
-                            continue;
-                        },
-
-                        Some(x) => s.push(x),
-                    }
-                    s.push(TAMIL_VOWELS[ch as usize]);
-                },
-
-                num::AAYDHAM => s.push(AAYDHAM),
-
-                num::CONSONANT_START..=num::CONSONANT_END => {
-                    s.push(TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize]);
-                    s.push(PULLI);
-                },
-
-                num::LATIN_A..=num::LATIN_Z => {
-                    s.push((ch - num::LATIN_A + b'a') as char);
-                },
-
-                _ => unreachable!("invalid character: {}", ch),
-            }
-        }
-        s
-    }
-
     pub fn join(mut prefix: Vec<Self>, mut suffix: &Word) -> Vec<Vec<Self>> {
         use Category::*;
 
         if suffix.is_empty() {
             return vec![prefix];
         } else if prefix.is_empty() {
-            return vec![Vec::from(suffix)];
+            return vec![Vec::from(suffix.as_ref())];
         }
 
         let just_extend = |mut prefix: Vec<Self>, suffix: &Word| {
-            prefix.extend_from_slice(suffix);
+            prefix.extend_from_slice(suffix.as_ref());
             vec![prefix]
         };
 
         let left = *prefix.last().unwrap();
-        let right = *suffix.first().unwrap();
+        let right = suffix.first().unwrap();
         let joins: Vec<Vec<Letter>> = match (left.category(), right.category()) {
             // Joining two vowels together
             (TamilVowel, TamilVowel) => {
@@ -445,11 +296,18 @@ impl Letter {
         for mut join in joins {
             let mut word = prefix.clone();
             word.append(&mut join);
-            word.extend_from_slice(suffix);
+            word.extend_from_slice(suffix.as_ref());
             result.push(word);
         }
 
         result
+    }
+
+    pub fn is_vowel(self) -> bool {
+        match self.0 {
+            num::VOWEL_START..=num::VOWEL_END => true,
+            _ => false,
+        }
     }
 
     pub fn is_consonant(self) -> bool {
@@ -757,4 +615,372 @@ impl Display for LetterSet {
 
         write!(f, "]")
     }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Word([Letter]);
+
+impl Word {
+    pub fn new() -> &'static Self {
+        word![]
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn first(&self) -> Option<Letter> {
+        self.0.first().cloned()
+    }
+
+    pub fn last(&self) -> Option<Letter> {
+        self.0.last().cloned()
+    }
+
+    pub fn iter(&self) -> WordIter {
+        self.0.iter().copied()
+    }
+
+    pub fn parse(s: &str) -> Box<Word> {
+        Self::parse_unboxed(s).into()
+    }
+
+    pub fn parse_unboxed(s: &str) -> Vec<Letter> {
+        let mut word = Vec::new();
+        for ch in s.chars() {
+            match ch {
+                'a'..='z' => word.push(Letter(ch as u8 - b'a' + num::LATIN_A)),
+                'A'..='Z' => word.push(Letter(ch as u8 - b'A' + num::LATIN_A)),
+                AAYDHAM => word.push(Letter::AAYDHAM),
+                PULLI => {
+                    match word.pop() {
+                        None => {}
+
+                        // Remove inherent 'a'
+                        Some(Letter::SHORT_A) => {}
+
+                        // Convert 'aa' + pulli into 'r'
+                        Some(Letter::LONG_A) => word.push(Letter::TAMIL_R),
+
+                        // Convert short 'o' + pulli into short 'e' + 'r'
+                        Some(Letter::SHORT_O) => {
+                            word.push(Letter::SHORT_E);
+                            word.push(Letter::TAMIL_R);
+                        }
+
+                        // Convert long 'o' + pulli into long 'e' + 'r'
+                        Some(Letter::LONG_O) => {
+                            word.push(Letter::LONG_E);
+                            word.push(Letter::TAMIL_R);
+                        }
+
+                        // Convert 'au' + pulli into short 'o' + 'L' at the start of a word
+                        Some(Letter::AU) if word.is_empty() => {
+                            word.push(Letter::SHORT_O);
+                            word.push(Letter::TAMIL_RETRO_L);
+                        }
+
+                        // Convert 'au' + pulli into short 'e' + 'L' otherwise
+                        Some(Letter::AU) => {
+                            word.push(Letter::SHORT_E);
+                            word.push(Letter::TAMIL_RETRO_L);
+                        }
+
+                        Some(x) => word.push(x),
+                    }
+                }
+
+                // Handle combining 'La'
+                COMBINING_LA => {
+                    match word.pop() {
+                        None => {}
+
+                        // Combine with previous short 'e' or 'o' to form 'au'
+                        Some(Letter::SHORT_E | Letter::SHORT_O) => {
+                            word.push(Letter::AU);
+                            continue;
+                        }
+
+                        Some(x) => word.push(x),
+                    }
+
+                    // Treat as 'La'
+                    word.push(Letter::TAMIL_RETRO_L);
+                    word.push(Letter::SHORT_A);
+                }
+
+                // Handle combined 'om'
+                OM => {
+                    word.push(Letter::LONG_O);
+                    word.push(Letter::TAMIL_M);
+                }
+
+                _ => {
+                    if let Some(&n) = TAMIL_VOWEL_MAP.get(&ch) {
+                        word.push(n);
+                    } else if let Some(&n) = TAMIL_CONSONANT_MAP.get(&ch) {
+                        word.push(n);
+                        word.push(Letter::SHORT_A);
+                    } else if let Some(&n) = TAMIL_VOWEL_SIGN_MAP.get(&ch) {
+                        match word.pop() {
+                            None => {}
+
+                            // Remove inherent 'a' before adding vowel
+                            Some(Letter::SHORT_A) => {}
+
+                            // Convert short 'e' + 'aa' into short 'o'
+                            Some(Letter::SHORT_E) if n == Letter::LONG_A => {
+                                word.push(Letter::SHORT_O);
+                                continue;
+                            }
+
+                            // Convert long 'e' + 'aa' into long 'o'
+                            Some(Letter::LONG_E) if n == Letter::LONG_A => {
+                                word.push(Letter::LONG_O);
+                                continue;
+                            }
+
+                            Some(x) => word.push(x),
+                        }
+
+                        word.push(n);
+                    }
+                }
+            }
+        }
+
+        word
+    }
+}
+
+impl Display for Word {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = String::new();
+        for Letter(ch) in self {
+            match ch {
+                num::VOWEL_START..=num::VOWEL_END => {
+                    match s.pop() {
+                        None => {},
+
+                        // Remove pulli before adding vowel
+                        Some(PULLI) => {
+                            if ch >= num::LONG_A {
+                                s.push(TAMIL_VOWEL_SIGNS[(ch - num::LONG_A) as usize]);
+                            }
+                            continue;
+                        },
+
+                        Some(x) => s.push(x),
+                    }
+                    s.push(TAMIL_VOWELS[ch as usize]);
+                },
+
+                num::AAYDHAM => s.push(AAYDHAM),
+
+                num::CONSONANT_START..=num::CONSONANT_END => {
+                    s.push(TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize]);
+                    s.push(PULLI);
+                },
+
+                num::LATIN_A..=num::LATIN_Z => {
+                    s.push((ch - num::LATIN_A + b'a') as char);
+                },
+
+                _ => unreachable!("invalid character: {}", ch),
+            }
+        }
+
+        write!(f, "{}", s)
+    }
+}
+
+impl Debug for Word {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\"{}\"", self)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LetterCombination {
+    pub base: Letter,
+    pub combining: Option<Letter>,
+}
+
+impl LetterCombination {
+    pub fn take(iter: &mut std::iter::Peekable<impl Iterator<Item = Letter>>) -> Option<LetterCombination> {
+        if let Some(base) = iter.next() {
+            if base.is_consonant() {
+                if let Some(combining) = iter.peek() {
+                    if combining.is_vowel() {
+                        return Some(LetterCombination {
+                            base,
+                            combining: iter.next(),
+                        });
+                    }
+                }
+            }
+
+            return Some(LetterCombination {
+                base,
+                combining: None,
+            });
+        }
+
+        None
+    }
+}
+
+impl Ord for Word {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        let mut a = self.iter().peekable();
+        let mut b = rhs.iter().peekable();
+        loop {
+            match (LetterCombination::take(&mut a), LetterCombination::take(&mut b)) {
+                (Some(a), Some(b)) => {
+                    match a.cmp(&b) {
+                        Ordering::Equal => {},
+                        other => return other,
+                    }
+                }
+                (Some(_), None) => return Ordering::Greater,
+                (None, Some(_)) => return Ordering::Less,
+                (None, None) => return Ordering::Equal,
+            }
+        }
+    }
+}
+
+impl PartialOrd for Word {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        Some(self.cmp(rhs))
+    }
+}
+
+impl<'a> From<&'a [Letter]> for &'a Word {
+    fn from(lts: &'a [Letter]) -> Self {
+        let ptr = lts as *const [Letter] as *const Word;
+        unsafe {
+            &*ptr
+        }
+    }
+}
+
+impl<'a> From<&'a mut [Letter]> for &'a mut Word {
+    fn from(lts: &'a mut [Letter]) -> Self {
+        let ptr = lts as *mut [Letter] as *mut Word;
+        unsafe {
+            &mut *ptr
+        }
+    }
+}
+
+impl<'a> From<&'a Word> for Box<Word> {
+    fn from(lts: &'a Word) -> Self {
+        let boxed: Box<[Letter]> = Box::from(&lts.0);
+        Self::from(boxed)
+    }
+}
+
+impl<'a> From<&'a [Letter]> for Box<Word> {
+    fn from(lts: &'a [Letter]) -> Self {
+        let boxed: Box<[Letter]> = Box::from(lts);
+        Self::from(boxed)
+    }
+}
+
+impl From<Vec<Letter>> for Box<Word> {
+    fn from(lts: Vec<Letter>) -> Self {
+        Self::from(lts.into_boxed_slice())
+    }
+}
+
+impl From<Box<[Letter]>> for Box<Word> {
+    fn from(boxed: Box<[Letter]>) -> Self {
+        let ptr = Box::into_raw(boxed) as *mut Word;
+        unsafe {
+            Box::from_raw(ptr)
+        }
+    }
+}
+
+impl AsMut<[Letter]> for Word {
+    fn as_mut(&mut self) -> &mut [Letter] {
+        &mut self.0
+    }
+}
+
+impl AsRef<[Letter]> for Word {
+    fn as_ref(&self) -> &[Letter] {
+        &self.0
+    }
+}
+
+pub type WordIter<'a> = std::iter::Copied<std::slice::Iter<'a, Letter>>;
+
+impl<'a> IntoIterator for &'a Word {
+    type Item = Letter;
+    type IntoIter = WordIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Word {
+    type Item = &'a mut Letter;
+    type IntoIter = std::slice::IterMut<'a, Letter>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (&mut self.0).into_iter()
+    }
+}
+
+impl Index<usize> for Word {
+    type Output = Letter;
+
+    fn index(&self, index: usize) -> &Letter {
+        self.0.index(index).into()
+    }
+}
+
+impl IndexMut<usize> for Word {
+    fn index_mut(&mut self, index: usize) -> &mut Letter {
+        self.0.index_mut(index).into()
+    }
+}
+
+#[doc(hiddden)]
+macro_rules! index_impl {
+    () => {};
+    ($ty:ty; $($tt:tt)*) => {
+        impl Index<$ty> for Word {
+            type Output = Self;
+
+            fn index(&self, index: $ty) -> &Self {
+                self.0.index(index).into()
+            }
+        }
+
+        impl IndexMut<$ty> for Word {
+            fn index_mut(&mut self, index: $ty) -> &mut Self {
+                self.0.index_mut(index).into()
+            }
+        }
+
+        index_impl!($($tt)*);
+    };
+}
+
+index_impl! {
+    RangeFull;
+    RangeFrom<usize>;
+    RangeTo<usize>;
+    RangeToInclusive<usize>;
+    Range<usize>;
+    RangeInclusive<usize>;
 }

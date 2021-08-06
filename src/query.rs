@@ -5,7 +5,7 @@ use thiserror::Error;
 use unicode_names2 as unicode;
 
 use crate::tamil::{PULLI, Word, Letter, LetterSet, Category};
-use crate::search::{SearchError, Search, SearchResult, tree};
+use crate::search::{Search, SearchResult, tree};
 
 mod transform;
 
@@ -236,7 +236,7 @@ impl Query {
         Ok(query)
     }
 
-    pub fn search(self) -> Result<SearchResult, SearchError> {
+    pub fn search(self) -> Result<SearchResult, tree::SearchError> {
         let mut intersect = Vec::new();
         let mut difference = Vec::new();
 
@@ -266,8 +266,8 @@ impl Query {
 
         // Give special error for failing negative patterns
         match process_negatives() {
-            Err(SearchError::TooManyResults) => {
-                return Err(SearchError::CommonExclusion);
+            Err(tree::SearchError::TooManyResults) => {
+                return Err(tree::SearchError::CommonExclusion);
             }
             _ => {}
         }
@@ -282,7 +282,7 @@ impl Query {
             let mut intersect = Vec::new();
             let mut difference = Vec::new();
 
-            let mut process_definitions = || -> Result<(), SearchError> {
+            let mut process_definitions = || -> Result<(), tree::SearchError> {
                 // Search using positive word patterns as definition patterns
                 for pat in &self.word_patterns {
                     intersect.push(pat.search(&tree::search_definition(), true, false)?.end()?);
@@ -654,7 +654,7 @@ impl Pattern {
         if buffer.is_empty() {
             Self::Empty
         } else {
-            Self::Literal(Letter::parse_str(&buffer))
+            Self::Literal(Word::parse(&buffer))
         }
     }
 

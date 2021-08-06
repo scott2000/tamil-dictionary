@@ -17,6 +17,12 @@ macro_rules! letterset {
     }};
 }
 
+macro_rules! word {
+    ($($tt:tt)*) => {
+        [$($tt)*][..].into()
+    };
+}
+
 use rocket::fs::{FileServer, relative};
 use rocket_dyn_templates::Template;
 
@@ -29,8 +35,6 @@ pub mod search;
 pub mod query;
 pub mod web;
 
-pub mod debug;
-
 use search::tree;
 
 #[rocket::main]
@@ -41,7 +45,8 @@ async fn main() -> Result<(), rocket::Error> {
                 web::index,
                 web::search_all,
                 web::search,
-                web::search_empty,
+                web::search_empty_query,
+                web::search_no_query,
             ])
             .mount("/", FileServer::from(relative!("static")))
             .attach(Template::fairing())

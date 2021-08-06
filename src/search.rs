@@ -1,24 +1,11 @@
 use std::collections::{HashSet, BTreeMap, BTreeSet};
 
-use thiserror::Error;
-
 use crate::tamil::{Word, LetterSet};
 use crate::dictionary::{ENTRIES, NO_WORD, Entry, EntryIndex, WordIndex, Loc};
 
 pub mod tree;
 
-#[derive(Error, Debug)]
-pub enum SearchError {
-    #[error("Error: the search query is too complex. Try using fewer wildcards.")]
-    TooComplex,
-    #[error("Error: the search query isn't specific enough. Try surrounding it in quotes.")]
-    TooManyResults,
-    #[error("Error: an excluded word in the search has too many matches.")]
-    CommonExclusion,
-}
-
 pub trait Search: Clone {
-    type Output;
     type Error;
 
     fn empty() -> Self;
@@ -44,7 +31,7 @@ pub trait Search: Clone {
         Ok(self)
     }
 
-    fn end(self) -> Result<Self::Output, Self::Error>;
+    fn end(self) -> Result<SearchResult, Self::Error>;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -183,20 +170,20 @@ impl SearchResult {
         use SearchPrecedence::*;
 
         // Check for which precedence levels are present
-        let mut has_a = false;
-        let mut has_b = false;
-        let mut has_c = false;
+        let mut a_count = 0;
+        let mut b_count = 0;
+        let mut c_count = 0;
+        let mut other_count = 0;
         for entry in self.map.values() {
             match entry.precedence {
-                Top => has_a = true,
-                A => has_a = true,
-                B => has_b = true,
-                C => has_c = true,
-                _ => {},
+                Top | A => a_count += 1,
+                B => b_count += 1,
+                C => c_count += 1,
+                Bottom => other_count += 1,
             }
         }
 
-        let (a, b, c, other) = match (has_a, has_b, has_c) {
+        let (a, mut b, mut c, mut other) = match (a_count > 0, b_count > 0, c_count > 0) {
             // Default ranking of precedences
             (true, true, _) => (Best, Related, Other, Other),
 
@@ -208,6 +195,24 @@ impl SearchResult {
             // Shift other up since there's nothing else above it
             (false, false, false) => (Ignore, Ignore, Ignore, Best),
         };
+
+        // Hide lower-ranked results if there are too many higher-ranked results
+        let mut total_count = a_count;
+        let mut limit = |count, flag: &mut SearchRank| {
+            const SOFT_LIMIT: u32 = 1000;
+            const HARD_LIMIT: u32 = 5000;
+            const CATEGORY_MIN: u32 = 10;
+
+            if total_count > HARD_LIMIT || (count > CATEGORY_MIN && total_count > SOFT_LIMIT) {
+                *flag = Ignore;
+            }
+
+            total_count += count;
+        };
+
+        limit(b_count, &mut b);
+        limit(c_count, &mut c);
+        limit(other_count, &mut other);
 
         // Insert results into the ranking at the appropriate level
         let mut ranking = SearchRanking::default();
