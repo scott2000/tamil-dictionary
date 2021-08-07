@@ -49,13 +49,6 @@
                 <p class="result-count">
                     {{~> common/plural num=best_count s="result" p="results"~}}
                 </p>
-                {{~#if exact}}
-                <div id="exact">
-                    {{#each exact~}}
-                        {{> common/definition}}
-                    {{~/each~}}
-                </div>
-                {{~/if}}
                 {{~#if best}}
                 <div id="best">
                     {{#each best~}}

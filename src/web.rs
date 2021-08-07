@@ -176,6 +176,7 @@ impl ResultSection {
 struct ResultEntry {
     uri: String,
     word: &'static str,
+    exact: bool,
     subword: Option<u8>,
     sections: Vec<ResultSection>,
 }
@@ -187,7 +188,7 @@ impl ResultEntry {
             .collect()
     }
 
-    fn render(SearchRankingEntry { entry, words }: SearchRankingEntry) -> Self {
+    fn render(SearchRankingEntry { entry, words, exact }: SearchRankingEntry) -> Self {
         // Create a stack of highlighted word ranges
         let mut highlight_ranges = Vec::new();
         for &index in words.iter().rev() {
@@ -232,6 +233,7 @@ impl ResultEntry {
         Self {
             uri: link_alts(entry.words()),
             word: &entry.word,
+            exact,
             subword: entry.subword,
             sections,
         }
@@ -260,7 +262,6 @@ struct Search {
     hide_other: bool,
     error: bool,
     message: Option<String>,
-    exact: Vec<ResultEntry>,
     best: Vec<ResultEntry>,
     related: Vec<ResultEntry>,
     other: Vec<ResultEntry>,
@@ -284,7 +285,6 @@ impl Search {
             hide_other: !all,
             error: false,
             message: None,
-            exact: Vec::new(),
             best: Vec::new(),
             related: Vec::new(),
             other: Vec::new(),
@@ -315,12 +315,11 @@ impl Search {
                     self.no_results();
                 } else {
                     // Render the search results so they can be displayed
-                    self.exact = ResultEntry::render_all(ranking.exact);
                     self.best = ResultEntry::render_all(ranking.best);
                     self.related = ResultEntry::render_all(ranking.related);
                     self.other = ResultEntry::render_all(ranking.other);
 
-                    self.best_count = (self.exact.len() + self.best.len()).into();
+                    self.best_count = self.best.len().into();
                     self.related_count = self.related.len().into();
                     self.other_count = self.other.len().into();
                 }

@@ -148,8 +148,8 @@ impl SearchResult {
         }
 
         // Find the union of the negative results
-        let difference_set: HashSet<_> = difference.iter()
-            .flat_map(|result| result.map.keys().cloned())
+        let difference_set: HashSet<_> = difference.into_iter()
+            .flat_map(|result| result.map.into_keys())
             .collect();
 
         // Combine results which are in intersection but not union
@@ -232,7 +232,7 @@ impl SearchResult {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum SearchRank {
     Exact,
     Best,
@@ -245,11 +245,11 @@ enum SearchRank {
 pub struct SearchRankingEntry {
     pub entry: &'static Entry,
     pub words: BTreeSet<WordIndex>,
+    pub exact: bool,
 }
 
 #[derive(Default, Debug)]
 pub struct SearchRanking {
-    pub exact: Vec<SearchRankingEntry>,
     pub best: Vec<SearchRankingEntry>,
     pub related: Vec<SearchRankingEntry>,
     pub other: Vec<SearchRankingEntry>,
@@ -257,8 +257,7 @@ pub struct SearchRanking {
 
 impl SearchRanking {
     pub fn is_empty(&self) -> bool {
-        self.exact.is_empty()
-            && self.best.is_empty()
+        self.best.is_empty()
             && self.related.is_empty()
             && self.other.is_empty()
     }
@@ -269,11 +268,11 @@ impl SearchRanking {
         let entry = SearchRankingEntry {
             entry: &ENTRIES[index as usize],
             words,
+            exact: rank == Exact,
         };
 
         match rank {
-            Exact => self.exact.push(entry),
-            Best => self.best.push(entry),
+            Exact | Best => self.best.push(entry),
             Related => self.related.push(entry),
             Other => self.other.push(entry),
             Ignore => {},

@@ -34,7 +34,7 @@
     overflow-wrap: break-word;
 }
 
-#exact .entry {
+.exact {
     outline-style: solid;
     outline-width: 3px;
     outline-color: #d7e0f0;
