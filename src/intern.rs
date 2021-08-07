@@ -1,11 +1,10 @@
-use std::mem;
 use std::sync::Mutex;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use crate::tamil::Word;
 
 lazy_static! {
-    static ref WORDS: Mutex<HashSet<&'static Word>> = Mutex::new(HashSet::new());
+    static ref WORDS: Mutex<BTreeSet<&'static Word>> = Mutex::new(BTreeSet::new());
 }
 
 pub fn word(word: Box<Word>) -> &'static Word {
@@ -15,7 +14,10 @@ pub fn word(word: Box<Word>) -> &'static Word {
     // Get any existing interned static copy
     let mut words = WORDS.lock().expect("cannot lock mutex");
     let existing = unsafe {
-        words.get(&(&*ptr)).cloned()
+        let word: &'static Word = &(&*ptr);
+        words.range(word..)
+            .next()
+            .and_then(|&full_word| full_word.take_prefix(word))
     };
 
     if let Some(word) = existing {
@@ -25,10 +27,8 @@ pub fn word(word: Box<Word>) -> &'static Word {
         // Leak the word so that it is available statically
         let word = Box::leak(word);
 
-        // Add the word and every suffix of the word
-        for i in 0..word.len() {
-            words.insert(&word[i..]);
-        }
+        // Add the word to the set of interned words
+        words.insert(word);
 
         word
     }
@@ -36,5 +36,5 @@ pub fn word(word: Box<Word>) -> &'static Word {
 
 pub fn done() {
     let mut words = WORDS.lock().expect("cannot lock mutex");
-    mem::swap(&mut *words, &mut HashSet::new());
+    *words = BTreeSet::new();
 }

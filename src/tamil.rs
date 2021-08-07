@@ -646,6 +646,20 @@ impl Word {
         self.0.iter().copied()
     }
 
+    pub fn take_prefix<'a, 'b>(&'a self, prefix: &'b Self) -> Option<&'a Self> {
+        if prefix.len() > self.len() {
+            return None;
+        }
+
+        for (a, b) in self.iter().zip(prefix) {
+            if a != b {
+                return None;
+            }
+        }
+
+        Some(&self[0..prefix.len()])
+    }
+
     pub fn parse(s: &str) -> Box<Word> {
         Self::parse_unboxed(s).into()
     }
