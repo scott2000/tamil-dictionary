@@ -194,7 +194,7 @@ const fn transliterate_letter(lt: Letter) -> Option<(TransliterationKind, Letter
         L::LATIN_P => (T::DOUBLE,   letterset![TAMIL_P]),
         L::LATIN_Q => (T::DOUBLE,   letterset![TAMIL_K]),
         L::LATIN_R => (T::DOUBLE,   letterset![TAMIL_R, TAMIL_ALVEOLAR_TR]),
-        L::LATIN_S => (T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_S, GRANTHA_SH, GRANTHA_SSH]),
+        L::LATIN_S => (T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_S, GRANTHA_SH]),
         L::LATIN_T => (T::DOUBLE_H, letterset![TAMIL_T, TAMIL_ALVEOLAR_TR, TAMIL_RETRO_T]),
         L::LATIN_U => (T::NONE,     letterset![SHORT_U, LONG_U]),
         L::LATIN_V => (T::DOUBLE,   letterset![TAMIL_V]),

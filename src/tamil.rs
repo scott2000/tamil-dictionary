@@ -65,7 +65,7 @@ letters! {
     [..TAMIL_CONSONANT_END]
 
     [GRANTHA_START]
-    GRANTHA_J, GRANTHA_SSH, GRANTHA_SH, GRANTHA_S, GRANTHA_H,
+    GRANTHA_J, GRANTHA_SH, GRANTHA_S, GRANTHA_H,
     [..GRANTHA_END]
     [..CONSONANT_END]
 
@@ -96,6 +96,7 @@ const TAMIL_VOWEL_SIGNS: &'static [char] = &[
 ];
 
 const AAYDHAM: char = 'ஃ';
+const GRANTHA_SSH: char = 'ஶ';
 
 const TAMIL_CONSONANTS: &'static [char] = &[
     'க', 'ங',
@@ -105,20 +106,26 @@ const TAMIL_CONSONANTS: &'static [char] = &[
     'ப', 'ம',
     'ய', 'ர', 'ல', 'வ', 'ழ', 'ள',
     'ற', 'ன',
-    'ஜ', 'ஸ', 'ஷ', 'ஹ', 'ஶ',
+    'ஜ', 'ஷ', 'ஸ', 'ஹ',
 ];
 
 lazy_static! {
     static ref TAMIL_VOWEL_MAP: HashMap<char, Letter> = to_map(num::VOWEL_START, TAMIL_VOWELS);
     static ref TAMIL_VOWEL_SIGN_MAP: HashMap<char, Letter> = to_map(num::LONG_A, TAMIL_VOWEL_SIGNS);
-    static ref TAMIL_CONSONANT_MAP: HashMap<char, Letter> = to_map(num::CONSONANT_START, TAMIL_CONSONANTS);
+
+    static ref TAMIL_CONSONANT_MAP: HashMap<char, Letter> = {
+        let mut map = to_map(num::CONSONANT_START, TAMIL_CONSONANTS);
+        map.insert(GRANTHA_SSH, Letter::GRANTHA_S);
+        map
+    };
+
     static ref VALID_LETTERS: HashSet<char> = {
         let mut set = HashSet::new();
         for ch in TAMIL_VOWELS.iter()
             .chain(TAMIL_VOWEL_SIGNS)
             .chain(TAMIL_CONSONANTS)
             .cloned()
-            .chain([AAYDHAM, PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
+            .chain([AAYDHAM, GRANTHA_SSH, PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
             .chain('a'..='z')
             .chain('A'..='Z')
         {
