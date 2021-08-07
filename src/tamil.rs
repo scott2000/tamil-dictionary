@@ -65,7 +65,7 @@ letters! {
     [..TAMIL_CONSONANT_END]
 
     [GRANTHA_START]
-    GRANTHA_J, GRANTHA_S, GRANTHA_SH, GRANTHA_H, GRANTHA_SSH,
+    GRANTHA_J, GRANTHA_SSH, GRANTHA_SH, GRANTHA_S, GRANTHA_H,
     [..GRANTHA_END]
     [..CONSONANT_END]
 
@@ -806,15 +806,31 @@ impl Debug for Word {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LetterBase {
+    Single(Letter),
+    Double(Letter, Letter),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LetterCombination {
-    pub base: Letter,
+    pub base: LetterBase,
     pub combining: Option<Letter>,
 }
 
 impl LetterCombination {
     pub fn take(iter: &mut std::iter::Peekable<impl Iterator<Item = Letter>>) -> Option<LetterCombination> {
-        if let Some(base) = iter.next() {
-            if base.is_consonant() {
+        if let Some(letter) = iter.next() {
+            let mut base = LetterBase::Single(letter);
+
+            // Check for consonant which may have combining letters
+            if letter.is_consonant() {
+                // Check for 'ksh' cluster
+                if letter == Letter::TAMIL_K && iter.peek() == Some(&Letter::GRANTHA_SH) {
+                    iter.next();
+                    base = LetterBase::Double(letter, Letter::GRANTHA_SH);
+                }
+
+                // Check for combining vowel
                 if let Some(combining) = iter.peek() {
                     if combining.is_vowel() {
                         return Some(LetterCombination {
