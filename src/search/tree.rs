@@ -6,11 +6,12 @@ use thiserror::Error;
 use crate::tamil::{Word, Letter, LetterSet};
 use crate::dictionary::{self, ENTRIES, Loc};
 
-use super::SearchResult;
+use super::{SearchResult, SuggestionList};
 
 lazy_static! {
     static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
     static ref DEFINITION_TREES: SearchTrees = build_trees("definition", dictionary::definition_words());
+    static ref EMPTY_MAP: BTreeMap<Letter, Tree<Loc>> = BTreeMap::new();
 }
 
 #[derive(Debug)]
@@ -25,6 +26,12 @@ pub fn search_word() -> Search {
 
 pub fn search_definition() -> Search {
     Search::new(&[&DEFINITION_TREES, &WORD_TREES])
+}
+
+pub fn search_word_prefix() -> Search {
+    Search {
+        branches: vec![SearchBranch::new(&WORD_TREES.prefix_tree, true)],
+    }
 }
 
 fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
@@ -113,13 +120,10 @@ impl super::Search for Search {
     }
 
     fn asserting_end(&self) -> Self {
-        // Workaround: BTreeMap::new is not const
-        lazy_static! {
-            static ref EMPTY: BTreeMap<Letter, Tree<Loc>> = BTreeMap::new();
-        };
+        let empty_map = &EMPTY_MAP;
 
         let branches = self.branches.iter()
-            .filter_map(|branch| branch.suffix(&EMPTY))
+            .filter_map(|branch| branch.suffix(empty_map))
             .collect();
 
         Self { branches }
@@ -170,6 +174,15 @@ impl super::Search for Search {
         }
 
         Ok(result)
+    }
+
+    fn suggest(mut self, suggestions: &mut SuggestionList) {
+        self.branches.retain(|branch| !branch.is_initial);
+
+        let is_single_branch = self.branches.len() == 1;
+        for branch in self.branches {
+            branch.append_suggestions(suggestions, true, is_single_branch && branch.prefix.is_empty());
+        }
     }
 }
 
@@ -366,6 +379,37 @@ impl SearchBranch<Loc> {
         }
 
         Ok(())
+    }
+
+    fn append_suggestions(self, suggestions: &mut SuggestionList, mut from_leaf: bool, exact: bool) -> bool {
+        // Add suggestions for all of the leaves, returning early if one fails
+        for leaf in self.leaves {
+            if suggestions.add_suggestion(leaf.entry, from_leaf) {
+                return true;
+            }
+        }
+
+        // If there was a successful match that wasn't exact, then the branches aren't important
+        if !exact && !self.leaves.is_empty() {
+            from_leaf = false;
+        }
+
+        // Recursively add suggestions for all of the child branches
+        for (&lt, branch) in self.branches {
+            match &self.require {
+                // If there is a requirement and it fails, then skip this branch
+                Some(require) if !require.matches(lt) => {},
+
+                // Otherwise, add the branch to the suggestion, returning early if it fails
+                _ => {
+                    if self.update(branch).append_suggestions(suggestions, from_leaf, false) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        false
     }
 }
 

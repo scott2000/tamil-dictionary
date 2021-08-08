@@ -5,7 +5,7 @@ use thiserror::Error;
 use unicode_names2 as unicode;
 
 use crate::tamil::{PULLI, Word, Letter, LetterSet, Category};
-use crate::search::{Search, SearchResult, tree};
+use crate::search::{Search, SearchResult, SuggestionList, tree};
 
 mod transform;
 
@@ -305,6 +305,21 @@ impl Query {
         Ok(result)
     }
 
+    pub fn suggest(self, suggestions: &mut SuggestionList) {
+        if self.word_patterns.len() != 1
+            || !self.negative_word_patterns.is_empty()
+            || !self.definition_patterns.is_empty()
+            || !self.negative_definition_patterns.is_empty()
+        {
+            return;
+        }
+
+        let pat = &self.word_patterns[0];
+        if let Ok(search) = pat.search(&tree::search_word_prefix(), true, true) {
+            search.suggest(suggestions);
+        }
+    }
+
     pub fn escape(s: &str) -> String {
         let mut buffer = String::new();
         let mut has_space = true;
@@ -380,7 +395,7 @@ impl Pattern {
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertMiddle => Ok(search.asserting_middle()),
             Self::AssertEnd => Ok(search.asserting_end()),
-            &Self::Assert(lts) => Ok(search.asserting(lts)),
+            &Self::Assert(lts) => Ok(search.asserting(transform::letter_set(lts, expand, trans))),
             &Self::Set(lts) => search.matching(transform::letter_set(lts, expand, trans)),
             Self::Literal(word) => transform::literal_search(search, word, expand, trans),
             Self::Exact(pat) => pat.search(search, false, false),

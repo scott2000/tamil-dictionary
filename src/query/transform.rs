@@ -3,12 +3,23 @@ use crate::search::Search;
 
 type Letters<'a> = std::iter::Peekable<WordIter<'a>>;
 
-pub fn letter_set(lts: LetterSet, _expand: bool, trans: bool) -> LetterSet {
+pub fn letter_set(mut lts: LetterSet, _expand: bool, trans: bool) -> LetterSet {
     if trans {
-        transliterate_letter_set(lts)
-    } else {
-        lts
+        // If the letter set is negated, transliterate the non-negated version
+        let complement = lts.is_complement();
+
+        if complement {
+            lts = lts.complement();
+        }
+
+        lts = transliterate_letter_set(lts);
+
+        if complement {
+            lts = lts.complement();
+        }
     }
+
+    lts
 }
 
 pub fn literal_search<S: Search>(search: &S, word: &Word, expand: bool, trans: bool) -> Result<S, S::Error> {

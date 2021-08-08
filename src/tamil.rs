@@ -569,6 +569,10 @@ impl LetterSet {
             ])
     }
 
+    pub fn is_complement(self) -> bool {
+        (self.0 & (1 << 63)) != 0
+    }
+
     pub fn matches(self, lt: Letter) -> bool {
         (self.0 & (1 << lt.0)) != 0
     }
@@ -609,7 +613,7 @@ impl Display for LetterSet {
 
         write!(f, "[")?;
 
-        if (lts.0 & (1 << 63)) != 0 {
+        if lts.is_complement() {
             write!(f, "!")?;
             lts = lts.complement();
         }

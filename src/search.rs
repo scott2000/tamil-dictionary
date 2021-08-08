@@ -32,6 +32,77 @@ pub trait Search: Clone {
     }
 
     fn end(self) -> Result<SearchResult, Self::Error>;
+
+    fn suggest(self, suggestions: &mut SuggestionList);
+}
+
+pub struct SuggestionList {
+    count_requested: u32,
+    seen_leaves: HashSet<&'static str>,
+    seen_branches: HashSet<&'static str>,
+    from_leaves: BTreeSet<EntryIndex>,
+    from_branches: BTreeSet<EntryIndex>,
+}
+
+impl SuggestionList {
+    pub fn new(count_requested: u32) -> Self {
+        Self {
+            count_requested,
+            seen_leaves: HashSet::new(),
+            seen_branches: HashSet::new(),
+            from_leaves: BTreeSet::new(),
+            from_branches: BTreeSet::new(),
+        }
+    }
+
+    pub fn suggestions(mut self) -> impl Iterator<Item = &'static Entry> {
+        // If there are fewer than requested suggestions, add the branch suggestions
+        let extend_count = (self.count_requested as usize).saturating_sub(self.from_leaves.len());
+        if extend_count > 0 {
+            self.from_leaves.extend(self.from_branches.into_iter().take(extend_count));
+        }
+
+        // Take the first suggestions alphabetically
+        self.from_leaves.into_iter()
+            .take(self.count_requested as usize)
+            .map(|index| &ENTRIES[index as usize])
+    }
+
+    pub fn ignore_branches(&self) -> bool {
+        self.from_leaves.len() >= self.count_requested as usize
+    }
+
+    pub fn add_suggestion(&mut self, index: EntryIndex, from_leaf: bool) -> bool {
+        // If this is a branch and there are enough leaves, return early
+        if !from_leaf && self.ignore_branches() {
+            return true;
+        }
+
+        // Pick which sets to use based on whether this is a leaf
+        let (seen, set) = if from_leaf {
+            (&mut self.seen_leaves, &mut self.from_leaves)
+        } else {
+            (&mut self.seen_branches, &mut self.from_branches)
+        };
+
+        // If the word was seen (even if it's a different entry), return early
+        let word = &ENTRIES[index as usize].word[..];
+        if seen.contains(&word) {
+            return false;
+        }
+
+        // Insert the word and index into the sets
+        seen.insert(word);
+        set.insert(index);
+
+        // If the number of leaf suggestions reaches the limit, clear the branch suggestions
+        if from_leaf && set.len() == self.count_requested as usize {
+            self.seen_branches = HashSet::new();
+            self.from_branches = BTreeSet::new();
+        }
+
+        false
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]

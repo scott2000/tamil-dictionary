@@ -47,6 +47,7 @@ async fn main() -> Result<(), rocket::Error> {
                 web::search,
                 web::search_empty_query,
                 web::search_no_query,
+                web::suggest,
             ])
             .mount("/", FileServer::from(relative!("static")))
             .attach(Template::fairing())

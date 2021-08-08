@@ -1,14 +1,15 @@
 use std::iter;
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use rand::seq::SliceRandom;
 
+use rocket::serde::json::Json;
 use rocket::response::Redirect;
 use rocket_dyn_templates::Template;
 
 use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind};
-use crate::search::{SearchResult, SearchRankingEntry};
+use crate::search::{SearchResult, SearchRankingEntry, SuggestionList};
 use crate::query::Query;
 
 const MAX_OTHER_SECTIONS: usize = 5;
@@ -368,4 +369,37 @@ fn search_query(q: &str, all: bool) -> Template {
     }
 
     Template::render("search", search)
+}
+
+#[derive(Deserialize)]
+pub struct SuggestRequest {
+    count: u32,
+    query: String,
+}
+
+#[derive(Serialize)]
+pub struct SuggestResponseEntry {
+    uri: String,
+    word: &'static str,
+}
+
+impl From<&'static Entry> for SuggestResponseEntry {
+    fn from(entry: &'static Entry) -> Self {
+        Self {
+            uri: link_alts(entry.words()),
+            word: &entry.word,
+        }
+    }
+}
+
+#[post("/api/suggest", data = "<request>")]
+pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
+    let mut suggestions = SuggestionList::new(request.0.count.min(100));
+    if let Ok(query) = Query::parse(&request.0.query) {
+        query.suggest(&mut suggestions);
+    }
+
+    Json(suggestions.suggestions()
+        .map(|entry| SuggestResponseEntry::from(entry))
+        .collect())
 }
