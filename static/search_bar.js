@@ -19,6 +19,24 @@ window.addEventListener('load', function() {
   var originalValue = null;
   var selected = null;
 
+  function display() {
+    if (focused && results.length) {
+      autocomplete.style.display = 'block';
+    } else {
+      autocomplete.style.display = 'none';
+    }
+  }
+
+  searchField.onfocus = function() {
+    focused = true;
+    display();
+  };
+
+  searchField.onblur = function() {
+    focused = false;
+    display();
+  };
+
   function setSelected(index) {
     if (selected === index) {
       return;
@@ -41,15 +59,8 @@ window.addEventListener('load', function() {
     }
   }
 
-  function display() {
-    if (focused && results.length) {
-      autocomplete.style.display = 'block';
-    } else {
-      autocomplete.style.display = 'none';
-    }
-  }
-
   function setResults(newResults) {
+    originalValue = null;
     setSelected(null);
     results = newResults;
 
@@ -147,15 +158,8 @@ window.addEventListener('load', function() {
     }));
   }
 
-  function setQuery(query, noDelay) {
-    query = generalizeQuery(query.trim());
-
-    if (query === currentQuery) {
-      return;
-    }
-
-    currentQuery = query;
-    originalValue = null;
+  function cancelQuery() {
+    currentQuery = '';
 
     if (updateTimeout !== null) {
       clearTimeout(updateTimeout);
@@ -166,6 +170,17 @@ window.addEventListener('load', function() {
       request.abort();
       request = null;
     }
+  }
+
+  function setQuery(query, noDelay) {
+    query = generalizeQuery(query.trim());
+
+    if (query === currentQuery) {
+      return;
+    }
+
+    cancelQuery();
+    currentQuery = query;
 
     if (query === '') {
       setResults([]);
@@ -183,47 +198,45 @@ window.addEventListener('load', function() {
     }, delay);
   }
 
-  searchField.onfocus = function() {
-    focused = true;
-    display();
-  };
+  function refreshQuery() {
+    setQuery(searchField.value, false);
+  }
 
-  searchField.onblur = function() {
-    focused = false;
-    display();
-  };
-
-  searchField.oninput = function() {
-    setQuery(searchField.value);
-  };
+  searchField.oninput = refreshQuery;
 
   searchField.addEventListener('compositionupdate', function(event) {
     composing = event.data;
-    setQuery(searchField.value);
+    refreshQuery();
   });
 
   searchField.addEventListener('compositionend', function(event) {
     composing = null;
-    setQuery(searchField.value);
+    refreshQuery();
   });
 
   function up() {
     if (selected === null) {
       setSelected(results.length - 1);
+      cancelQuery();
     } else if (selected === 0) {
       setSelected(null);
+      refreshQuery();
     } else {
       setSelected(selected - 1);
+      cancelQuery();
     }
   }
 
   function down() {
     if (selected === null) {
       setSelected(0);
+      cancelQuery();
     } else if (selected >= results.length - 1) {
       setSelected(null);
+      refreshQuery();
     } else {
       setSelected(selected + 1);
+      cancelQuery();
     }
   }
 
@@ -240,9 +253,14 @@ window.addEventListener('load', function() {
   }
 
   searchField.addEventListener('keydown', function(event) {
+    if (composing !== null) {
+      return;
+    }
+
     switch (event.code) {
       case 'Escape':
         setSelected(null);
+        refreshQuery();
         event.preventDefault();
         break;
       case 'ArrowUp':
@@ -272,5 +290,5 @@ window.addEventListener('load', function() {
     setQuery('');
   });
 
-  setQuery(searchField.value);
+  refreshQuery();
 });
