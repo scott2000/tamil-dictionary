@@ -392,7 +392,7 @@ impl From<&'static Entry> for SuggestResponseEntry {
     }
 }
 
-#[post("/api/suggest", data = "<request>")]
+#[post("/api/suggest", format = "json", data = "<request>")]
 pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
     let mut suggestions = SuggestionList::new(request.0.count.min(100));
     if let Ok(query) = Query::parse(&request.0.query) {

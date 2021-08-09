@@ -1,4 +1,9 @@
-<form id="search-form" autocomplete="off" method="get" action="/search">
-    <input type="text" name="q" id="search-field" size="10" value="{{query}}">
-    <input type="submit" value="Search">
-</form>
+<div id="search-bar">
+    <form id="search-form" autocomplete="off" method="get" action="/search">
+        <input type="text" name="q" id="search-field" size="10" value="{{query}}">
+        <input type="submit" value="Search">
+    </form>
+    <div id="autocomplete" style="display:none;">
+        <div style="margin: 10px;"></div>
+    </div>
+</div>

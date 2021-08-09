@@ -6,6 +6,7 @@
         <link rel="stylesheet" href="/main.css">
         <link rel="stylesheet" href="/search.css">
         <link rel="stylesheet" href="/search_bar.css">
+        <script src="/search_bar.js"></script>
         {{#if query~}}
             {{#if error~}}
                 <title>Search Error for '{{query}}'</title>
@@ -17,24 +18,7 @@
         {{~/if}}
         {{~#if other}}
             {{~#if hide_other~}}
-                <script>
-                    window.onload = function() {
-                        var link = document.getElementById('other-link');
-                        var msg = document.getElementById('other-msg');
-                        var div = document.getElementById('other');
-
-                        link.onclick = function() {
-                            msg.style.display = 'none';
-                            div.style.display = 'block';
-                            div.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'start',
-                                inline: 'start',
-                            });
-                            return false;
-                        };
-                    };
-                </script>
+                <script src="/search_other.js"></script>
             {{~/if}}
         {{~/if}}
     </head>

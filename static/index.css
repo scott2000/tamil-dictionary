@@ -1,5 +1,5 @@
 #title {
-    margin-top: 100px;
+    margin-top: 12vh;
     margin-bottom: 0px;
     text-align: center;
     font-size: 32px;
@@ -14,9 +14,7 @@
     margin-right: auto;
     width: 500px;
     max-width: 90%;
-    border-style: solid;
-    border-width: 1px;
-    border-color: #a0a0a0;
+    border: 1px solid #a0a0a0;
 }
 
 #search-tips h2 {
@@ -37,9 +35,7 @@
     padding: 1px 3px;
     margin: 0 1px;
     background-color: #f0f0f0;
-    border-style: solid;
-    border-width: 1px;
-    border-color: #d0d0d0;
+    border: 1px solid #d0d0d0;
     font-family: monospace;
     white-space: nowrap;
 }

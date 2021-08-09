@@ -27,17 +27,13 @@
     padding: 10px;
     margin: 15px auto;
     min-width: 200px;
-    border-style: solid;
-    border-width: 1px;
-    border-color: #a0a0a0;
+    border: 1px solid #a0a0a0;
     font-size: 18px;
     overflow-wrap: break-word;
 }
 
 .exact {
-    outline-style: solid;
-    outline-width: 3px;
-    outline-color: #d7e0f0;
+    outline: 3px solid #d7e0f0;
 }
 
 .word {
