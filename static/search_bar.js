@@ -43,7 +43,7 @@ window.addEventListener('load', function() {
     }
 
     if (selected !== null) {
-      results[selected].div.classList.remove('suggestion-selected');
+      results[selected].row.classList.remove('suggestion-selected');
     } else {
       originalValue = searchField.value;
     }
@@ -52,7 +52,7 @@ window.addEventListener('load', function() {
 
     if (selected !== null) {
       const result = results[selected];
-      result.div.classList.add('suggestion-selected');
+      result.row.classList.add('suggestion-selected');
       searchField.value = result.completion;
     } else if (originalValue !== null) {
       searchField.value = originalValue;
@@ -66,24 +66,13 @@ window.addEventListener('load', function() {
 
     autocomplete.innerHTML = '';
     for (const result of results) {
-      const div = document.createElement('div');
-      div.className = 'suggestion';
-
-      div.addEventListener('mousedown', function(event) {
-        autocomplete.classList.add('autocomplete-selected');
-        event.preventDefault();
-        event.stopPropagation();
-      });
-
-      div.onmouseup = function() {
-        window.location = result.uri;
-      };
+      const row = document.createElement('a');
+      row.href = result.uri;
+      row.className = 'suggestion';
 
       const innerDiv = document.createElement('div');
 
       if (result.word === ':') {
-        div.classList.add('suggestion-def');
-
         const querySpan = document.createElement('span');
         querySpan.className = 'suggestion-def-query';
         querySpan.innerText = result.completion + ' ';
@@ -97,10 +86,9 @@ window.addEventListener('load', function() {
         innerDiv.innerText = result.word;
       }
 
-      div.appendChild(innerDiv);
-
-      result.div = div;
-      autocomplete.appendChild(div);
+      row.appendChild(innerDiv);
+      autocomplete.appendChild(row);
+      result.row = row;
     }
 
     display();
@@ -210,8 +198,10 @@ window.addEventListener('load', function() {
   });
 
   searchField.addEventListener('compositionend', function(event) {
-    composing = null;
-    refreshQuery();
+    setTimeout(function() {
+      composing = null;
+      refreshQuery();
+    }, 0);
   });
 
   function up() {
@@ -279,6 +269,12 @@ window.addEventListener('load', function() {
         }
         break;
     }
+  });
+
+  autocomplete.addEventListener('mousedown', function(event) {
+    autocomplete.classList.add('autocomplete-selected');
+    event.preventDefault();
+    event.stopPropagation();
   });
 
   window.addEventListener('mouseup', function() {

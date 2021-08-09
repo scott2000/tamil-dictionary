@@ -324,20 +324,20 @@ impl Query {
         Some(list)
     }
 
-    pub fn escape(s: &str) -> String {
+    pub fn escape(s: &str, invalid: char) -> String {
         let mut buffer = String::new();
-        let mut has_space = true;
+        let mut has_invalid = true;
         for ch in s.chars() {
             if Letter::is_valid(ch) || ch == '-' {
                 buffer.push(ch);
-                has_space = false;
-            } else if !has_space {
-                buffer.push(' ');
-                has_space = true;
+                has_invalid = false;
+            } else if !has_invalid {
+                buffer.push(invalid);
+                has_invalid = true;
             }
         }
 
-        if has_space {
+        if has_invalid {
             buffer.pop();
         }
 

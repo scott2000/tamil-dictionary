@@ -46,7 +46,7 @@ fn link_alts<'a>(words: impl Iterator<Item = &'a str>) -> String {
             buffer.push_str(" | ");
         }
 
-        buffer.push_str(&Query::escape(word));
+        buffer.push_str(&Query::escape(word, ' '));
     }
 
     if buffer.starts_with('-') || buffer.contains(' ') {
@@ -386,7 +386,7 @@ pub struct SuggestResponseEntry {
 
 impl From<&'static Entry> for SuggestResponseEntry {
     fn from(entry: &'static Entry) -> Self {
-        let mut completion = Query::escape(entry.words().next().unwrap_or(""));
+        let mut completion = Query::escape(entry.words().next().unwrap_or(""), '-');
         let first_not_asterisk = completion.find(|ch: char| ch != '-').unwrap_or(0);
         completion.drain(..first_not_asterisk);
 
