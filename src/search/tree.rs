@@ -176,12 +176,12 @@ impl super::Search for Search {
         Ok(result)
     }
 
-    fn suggest(mut self, suggestions: &mut SuggestionList) {
+    fn suggest(mut self, list: &mut SuggestionList) {
         self.branches.retain(|branch| !branch.is_initial);
 
         let is_single_branch = self.branches.len() == 1;
         for branch in self.branches {
-            branch.append_suggestions(suggestions, true, is_single_branch && branch.prefix.is_empty());
+            branch.append_suggestions(list, true, is_single_branch && branch.prefix.is_empty());
         }
     }
 }
@@ -381,10 +381,10 @@ impl SearchBranch<Loc> {
         Ok(())
     }
 
-    fn append_suggestions(self, suggestions: &mut SuggestionList, mut from_leaf: bool, exact: bool) -> bool {
+    fn append_suggestions(self, list: &mut SuggestionList, mut from_leaf: bool, exact: bool) -> bool {
         // Add suggestions for all of the leaves, returning early if one fails
         for leaf in self.leaves {
-            if suggestions.add_suggestion(leaf.entry, from_leaf) {
+            if list.add_suggestion(leaf.entry, from_leaf) {
                 return true;
             }
         }
@@ -402,7 +402,7 @@ impl SearchBranch<Loc> {
 
                 // Otherwise, add the branch to the suggestion, returning early if it fails
                 _ => {
-                    if self.update(branch).append_suggestions(suggestions, from_leaf, false) {
+                    if self.update(branch).append_suggestions(list, from_leaf, false) {
                         break;
                     }
                 }

@@ -16,6 +16,31 @@ window.addEventListener('load', function() {
   var composing = null;
   var results = [];
 
+  var originalValue = null;
+  var selected = null;
+
+  function setSelected(index) {
+    if (selected === index) {
+      return;
+    }
+
+    if (selected !== null) {
+      results[selected].div.classList.remove('suggestion-selected');
+    } else {
+      originalValue = searchField.value;
+    }
+
+    selected = index;
+
+    if (selected !== null) {
+      const result = results[selected];
+      result.div.classList.add('suggestion-selected');
+      searchField.value = result.completion;
+    } else if (originalValue !== null) {
+      searchField.value = originalValue;
+    }
+  }
+
   function display() {
     if (focused && results.length) {
       autocomplete.style.display = 'block';
@@ -25,8 +50,8 @@ window.addEventListener('load', function() {
   }
 
   function setResults(newResults) {
+    setSelected(null);
     results = newResults;
-    request = null;
 
     autocomplete.innerHTML = '';
     for (const result of results) {
@@ -44,9 +69,26 @@ window.addEventListener('load', function() {
       };
 
       const innerDiv = document.createElement('div');
-      innerDiv.innerText = result.word;
+
+      if (result.word === ':') {
+        div.classList.add('suggestion-def');
+
+        const querySpan = document.createElement('span');
+        querySpan.className = 'suggestion-def-query';
+        querySpan.innerText = result.completion + ' ';
+        innerDiv.appendChild(querySpan);
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'suggestion-def-text';
+        textSpan.innerText = '(definition search)';
+        innerDiv.appendChild(textSpan);
+      } else {
+        innerDiv.innerText = result.word;
+      }
+
       div.appendChild(innerDiv);
 
+      result.div = div;
       autocomplete.appendChild(div);
     }
 
@@ -54,8 +96,8 @@ window.addEventListener('load', function() {
   }
 
   function generalizeQuery(query) {
-    if (composing && query.endsWith(composing)) {
-      var lastCharacter = query.slice(-1);
+    if (composing !== null && query.endsWith(composing)) {
+      const lastCharacter = query.slice(-1);
       if (consonants.indexOf(lastCharacter) !== -1) {
         return query + '\u0bcd';
       }
@@ -65,7 +107,7 @@ window.addEventListener('load', function() {
   }
 
   function startRequest(query) {
-    var cached = cache.get(query);
+    const cached = cache.get(query);
     if (cached) {
       setResults(cached);
       return;
@@ -78,6 +120,7 @@ window.addEventListener('load', function() {
     function error() {
       console.error(request.statusText);
       setResults([]);
+      request = null;
     }
 
     request.onload = function() {
@@ -90,9 +133,11 @@ window.addEventListener('load', function() {
         return;
       }
 
-      var response = JSON.parse(request.responseText);
+      const response = JSON.parse(request.responseText);
       cache.set(query, response);
       setResults(response);
+
+      request = null;
     };
 
     request.onerror = error;
@@ -102,7 +147,7 @@ window.addEventListener('load', function() {
     }));
   }
 
-  function setQuery(query) {
+  function setQuery(query, noDelay) {
     query = generalizeQuery(query.trim());
 
     if (query === currentQuery) {
@@ -110,6 +155,7 @@ window.addEventListener('load', function() {
     }
 
     currentQuery = query;
+    originalValue = null;
 
     if (updateTimeout !== null) {
       clearTimeout(updateTimeout);
@@ -123,6 +169,11 @@ window.addEventListener('load', function() {
 
     if (query === '') {
       setResults([]);
+      return;
+    }
+
+    if (noDelay) {
+      startRequest(query);
       return;
     }
 
@@ -154,6 +205,62 @@ window.addEventListener('load', function() {
   searchField.addEventListener('compositionend', function(event) {
     composing = null;
     setQuery(searchField.value);
+  });
+
+  function up() {
+    if (selected === null) {
+      setSelected(results.length - 1);
+    } else if (selected === 0) {
+      setSelected(null);
+    } else {
+      setSelected(selected - 1);
+    }
+  }
+
+  function down() {
+    if (selected === null) {
+      setSelected(0);
+    } else if (selected >= results.length - 1) {
+      setSelected(null);
+    } else {
+      setSelected(selected + 1);
+    }
+  }
+
+  function insert() {
+    if (selected === null) {
+      return false;
+    }
+
+    const completion = results[selected].completion;
+    searchField.value = completion;
+    setQuery(completion, true);
+
+    return true;
+  }
+
+  searchField.addEventListener('keydown', function(event) {
+    switch (event.code) {
+      case 'Escape':
+        setSelected(null);
+        event.preventDefault();
+        break;
+      case 'ArrowUp':
+        up();
+        event.preventDefault();
+        break;
+      case 'ArrowDown':
+        down();
+        event.preventDefault();
+        break;
+      case 'ArrowRight':
+      case 'Space':
+      case 'Tab':
+        if (insert()) {
+          event.preventDefault();
+        }
+        break;
+    }
   });
 
   window.addEventListener('mouseup', function() {

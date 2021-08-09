@@ -305,19 +305,23 @@ impl Query {
         Ok(result)
     }
 
-    pub fn suggest(self, suggestions: &mut SuggestionList) {
+    pub fn suggest(self, count: u32) -> Option<SuggestionList> {
         if self.word_patterns.len() != 1
             || !self.negative_word_patterns.is_empty()
             || !self.definition_patterns.is_empty()
             || !self.negative_definition_patterns.is_empty()
         {
-            return;
+            return None;
         }
+
+        let mut list = SuggestionList::new(count);
 
         let pat = &self.word_patterns[0];
         if let Ok(search) = pat.search(&tree::search_word_prefix(), true, true) {
-            search.suggest(suggestions);
+            search.suggest(&mut list);
         }
+
+        Some(list)
     }
 
     pub fn escape(s: &str) -> String {

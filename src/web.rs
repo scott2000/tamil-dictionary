@@ -9,7 +9,7 @@ use rocket::response::Redirect;
 use rocket_dyn_templates::Template;
 
 use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind};
-use crate::search::{SearchResult, SearchRankingEntry, SuggestionList};
+use crate::search::{SearchResult, SearchRankingEntry};
 use crate::query::Query;
 
 const MAX_OTHER_SECTIONS: usize = 5;
@@ -372,34 +372,60 @@ fn search_query(q: &str, all: bool) -> Template {
 }
 
 #[derive(Deserialize)]
-pub struct SuggestRequest {
+pub struct SuggestRequest<'a> {
     count: u32,
-    query: String,
+    query: &'a str,
 }
 
 #[derive(Serialize)]
 pub struct SuggestResponseEntry {
-    uri: String,
     word: &'static str,
+    completion: String,
+    uri: String,
 }
 
 impl From<&'static Entry> for SuggestResponseEntry {
     fn from(entry: &'static Entry) -> Self {
+        let mut completion = Query::escape(entry.words().next().unwrap_or(""));
+        let first_not_asterisk = completion.find(|ch: char| ch != '-').unwrap_or(0);
+        completion.drain(..first_not_asterisk);
+
         Self {
-            uri: link_alts(entry.words()),
             word: &entry.word,
+            completion,
+            uri: link_alts(entry.words()),
         }
     }
 }
 
 #[post("/api/suggest", format = "json", data = "<request>")]
 pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
-    let mut suggestions = SuggestionList::new(request.0.count.min(100));
-    if let Ok(query) = Query::parse(&request.0.query) {
-        query.suggest(&mut suggestions);
+    let query = request.0.query;
+    let mut count = request.0.count.min(100);
+
+    let add_definition = count > 3 && query.contains(|ch: char| ch.is_ascii_alphabetic());
+    if add_definition {
+        count -= 1;
     }
 
-    Json(suggestions.suggestions()
-        .map(|entry| SuggestResponseEntry::from(entry))
-        .collect())
+    if let Ok(parsed_query) = Query::parse(&query) {
+        if let Some(list) = parsed_query.suggest(count) {
+            let mut suggestions: Vec<_> = list.suggestions()
+                .map(|entry| SuggestResponseEntry::from(entry))
+                .collect();
+
+            if add_definition {
+                let completion = format!(":{}", query);
+                suggestions.push(SuggestResponseEntry {
+                    word: ":",
+                    uri: uri!(search(&completion)).to_string(),
+                    completion,
+                });
+            }
+
+            return Json(suggestions);
+        }
+    }
+
+    Json(Vec::new())
 }

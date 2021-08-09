@@ -33,7 +33,7 @@ pub trait Search: Clone {
 
     fn end(self) -> Result<SearchResult, Self::Error>;
 
-    fn suggest(self, suggestions: &mut SuggestionList);
+    fn suggest(self, list: &mut SuggestionList);
 }
 
 pub struct SuggestionList {
