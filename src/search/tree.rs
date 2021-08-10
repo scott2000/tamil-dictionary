@@ -164,6 +164,12 @@ impl super::Search for Search {
         Ok(())
     }
 
+    fn mark_expanded(&mut self) {
+        for branch in &mut self.branches {
+            branch.mark_expanded();
+        }
+    }
+
     fn suggest(mut self, count: u32) -> SuggestionList {
         let mut list = SuggestionList::new(count);
 
@@ -194,6 +200,7 @@ impl super::Search for Search {
 struct SearchBranch<T: Eq + 'static> {
     is_prefix_tree: bool,
     is_initial: bool,
+    is_expanded: bool,
     require: Option<LetterSet>,
     prefix: &'static Word,
     leaves: &'static [T],
@@ -205,6 +212,7 @@ impl<T: Eq> SearchBranch<T> {
         Self {
             is_prefix_tree,
             is_initial: true,
+            is_expanded: false,
             require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
@@ -216,6 +224,7 @@ impl<T: Eq> SearchBranch<T> {
         Self {
             is_prefix_tree: self.is_prefix_tree,
             is_initial: false,
+            is_expanded: self.is_expanded,
             require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
@@ -292,6 +301,10 @@ impl<T: Eq> SearchBranch<T> {
         }
     }
 
+    fn mark_expanded(&mut self) {
+        self.is_expanded = true;
+    }
+
     fn literal(mut self, word: &Word) -> Option<Self> {
         if word.is_empty() {
             return Some(self);
@@ -366,7 +379,7 @@ impl SearchBranch<Loc> {
 
         // Add all of the leaves to the result
         for &loc in self.leaves {
-            result.insert(loc, self.is_prefix_tree, suffix);
+            result.insert(loc, self.is_prefix_tree, suffix, self.is_expanded);
         }
 
         // Recursively add all of the matching branches to the result
@@ -388,7 +401,7 @@ impl SearchBranch<Loc> {
     fn append_suggestions(self, list: &mut SuggestionList, mut from_leaf: bool, exact: bool) -> bool {
         // Add suggestions for all of the leaves, returning early if one fails
         for leaf in self.leaves {
-            if list.add_suggestion(leaf.entry, from_leaf) {
+            if list.add_suggestion(leaf.entry, from_leaf, self.is_expanded) {
                 return true;
             }
         }

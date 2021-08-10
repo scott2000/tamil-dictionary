@@ -144,6 +144,10 @@ fn to_map(mut offset: u8, chars: &'static [char]) -> HashMap<char, Letter> {
     map
 }
 
+pub fn is_consonant(ch: char) -> bool {
+    TAMIL_CONSONANT_MAP.contains_key(&ch)
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Letter(u8);
 

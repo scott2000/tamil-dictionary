@@ -31,6 +31,13 @@ pub trait Search: Clone {
         Ok(self)
     }
 
+    fn mark_expanded(&mut self);
+
+    fn marking_expanded(mut self) -> Self {
+        self.mark_expanded();
+        self
+    }
+
     fn suggest(self, count: u32) -> SuggestionList;
 
     fn end(self) -> Result<SearchResult, Self::Error>;
@@ -40,8 +47,10 @@ pub struct SuggestionList {
     count_requested: u32,
     seen_leaves: HashSet<&'static str>,
     seen_branches: HashSet<&'static str>,
+    seen_expanded: HashSet<&'static str>,
     from_leaves: BTreeSet<EntryIndex>,
     from_branches: BTreeSet<EntryIndex>,
+    from_expanded: BTreeSet<EntryIndex>,
 }
 
 impl SuggestionList {
@@ -50,20 +59,40 @@ impl SuggestionList {
             count_requested,
             seen_leaves: HashSet::new(),
             seen_branches: HashSet::new(),
+            seen_expanded: HashSet::new(),
             from_leaves: BTreeSet::new(),
             from_branches: BTreeSet::new(),
+            from_expanded: BTreeSet::new(),
         }
     }
 
     pub fn suggestions(mut self) -> impl Iterator<Item = &'static Entry> {
-        // If there are fewer than requested suggestions, add the branch suggestions
-        let extend_count = (self.count_requested as usize).saturating_sub(self.from_leaves.len());
-        if extend_count > 0 {
-            self.from_leaves.extend(self.from_branches.into_iter().take(extend_count));
-        }
+        let mut extend_count = (self.count_requested as usize).saturating_sub(self.from_leaves.len());
+
+        let expanded = if extend_count == 0 {
+            Vec::new()
+        } else {
+            // Take some branches and add them to try to reach the requested count
+            let to_add: Vec<_> = self.from_branches
+                .difference(&self.from_leaves)
+                .take(extend_count)
+                .cloned()
+                .collect();
+
+            extend_count -= to_add.len();
+            self.from_leaves.extend(to_add);
+
+            // Add any left over expanded branches if there's room
+            self.from_expanded
+                .difference(&self.from_leaves)
+                .take(extend_count)
+                .cloned()
+                .collect()
+        };
 
         // Take the first suggestions alphabetically
         self.from_leaves.into_iter()
+            .chain(expanded)
             .take(self.count_requested as usize)
             .map(|index| &ENTRIES[index as usize])
     }
@@ -72,14 +101,19 @@ impl SuggestionList {
         self.from_leaves.len() >= self.count_requested as usize
     }
 
-    pub fn add_suggestion(&mut self, index: EntryIndex, from_leaf: bool) -> bool {
+    pub fn add_suggestion(&mut self, index: EntryIndex, from_leaf: bool, expanded: bool) -> bool {
+        // Treat all expanded leaves as branches
+        let from_leaf = from_leaf && !expanded;
+
         // If this is a branch and there are enough leaves, return early
         if !from_leaf && self.ignore_branches() {
             return true;
         }
 
         // Pick which sets to use based on whether this is a leaf
-        let (seen, set) = if from_leaf {
+        let (seen, set) = if expanded {
+            (&mut self.seen_expanded, &mut self.from_expanded)
+        } else if from_leaf {
             (&mut self.seen_leaves, &mut self.from_leaves)
         } else {
             (&mut self.seen_branches, &mut self.from_branches)
@@ -98,7 +132,9 @@ impl SuggestionList {
         // If the number of leaf suggestions reaches the limit, clear the branch suggestions
         if from_leaf && set.len() == self.count_requested as usize {
             self.seen_branches = HashSet::new();
+            self.seen_expanded = HashSet::new();
             self.from_branches = BTreeSet::new();
+            self.from_expanded = BTreeSet::new();
         }
 
         false
@@ -126,9 +162,9 @@ struct SearchResultEntry {
 }
 
 impl SearchResultEntry {
-    fn new(word: WordIndex, start: bool, end: bool) -> Self {
+    fn new(word: WordIndex, start: bool, end: bool, expanded: bool) -> Self {
         // Pick the precedence depending on if it is a definition
-        let precedence = if word == NO_WORD {
+        let precedence = if word == NO_WORD && !expanded {
             match (start, end) {
                 (true, true) => SearchPrecedence::Top,
                 (true, false) => SearchPrecedence::A,
@@ -188,8 +224,8 @@ impl SearchResult {
         self.map.is_empty()
     }
 
-    pub fn insert(&mut self, loc: Loc, start: bool, end: bool) {
-        self.insert_entry(loc.entry, SearchResultEntry::new(loc.word, start, end), false);
+    pub fn insert(&mut self, loc: Loc, start: bool, end: bool, expanded: bool) {
+        self.insert_entry(loc.entry, SearchResultEntry::new(loc.word, start, end, expanded), false);
     }
 
     fn insert_entry(&mut self, index: EntryIndex, entry: SearchResultEntry, intersect: bool) {

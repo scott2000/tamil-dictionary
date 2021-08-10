@@ -373,6 +373,7 @@ impl Query {
 #[derive(Debug)]
 pub enum Pattern {
     Empty,
+    MarkExpanded,
     AssertStart,
     AssertMiddle,
     AssertEnd,
@@ -390,6 +391,7 @@ impl Pattern {
     pub fn search<S: Search>(&self, search: &S, expand: bool, trans: bool) -> Result<S, S::Error> {
         match self {
             Self::Empty => Ok(search.clone()),
+            Self::MarkExpanded => Ok(search.clone().marking_expanded()),
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertMiddle => Ok(search.asserting_middle()),
             Self::AssertEnd => Ok(search.asserting_end()),
@@ -441,8 +443,13 @@ impl Pattern {
 
     pub fn implicit_transliteration(&self) -> bool {
         match self {
-            Self::Assert(lts) | Self::Set(lts) =>
-                !lts.intersect(LetterSet::latin()).is_empty(),
+            &Self::Assert(mut lts) | &Self::Set(mut lts) => {
+                if lts.is_complement() {
+                    lts = lts.complement();
+                }
+
+                !lts.intersect(LetterSet::latin()).is_empty()
+            },
 
             Self::Literal(word) =>
                 word.contains(LetterSet::latin()),
@@ -487,6 +494,10 @@ impl Pattern {
                 chars.next();
                 Self::Set(Self::parse_escape(chars)?)
             }
+            Some('@') => {
+                chars.next();
+                Self::MarkExpanded
+            },
             Some('<' | '^') => {
                 chars.next();
                 Self::AssertStart

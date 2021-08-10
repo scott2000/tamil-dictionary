@@ -1,5 +1,4 @@
 window.addEventListener('load', function() {
-  const consonants = 'கஙசஞடணதநபமயரலவழளறனஜஷஸஹஶ';
   const delay = 300;
   const count = 6;
 
@@ -13,7 +12,7 @@ window.addEventListener('load', function() {
   var request = null;
 
   var focused = false;
-  var composing = null;
+  var composing = false;
   var results = [];
 
   var originalValue = null;
@@ -94,17 +93,6 @@ window.addEventListener('load', function() {
     display();
   }
 
-  function generalizeQuery(query) {
-    if (composing !== null && query.endsWith(composing)) {
-      const lastCharacter = query.slice(-1);
-      if (consonants.indexOf(lastCharacter) !== -1) {
-        return query + '\u0bcd';
-      }
-    }
-
-    return query;
-  }
-
   function startRequest(query) {
     const cached = cache.get(query);
     if (cached) {
@@ -161,7 +149,7 @@ window.addEventListener('load', function() {
   }
 
   function setQuery(query, noDelay) {
-    query = generalizeQuery(query.trim());
+    query = query.trim();
 
     if (query === currentQuery) {
       return;
@@ -193,14 +181,12 @@ window.addEventListener('load', function() {
   searchField.oninput = refreshQuery;
 
   searchField.addEventListener('compositionupdate', function(event) {
-    composing = event.data;
-    refreshQuery();
+    composing = true;
   });
 
   searchField.addEventListener('compositionend', function(event) {
     setTimeout(function() {
-      composing = null;
-      refreshQuery();
+      composing = false;
     }, 0);
   });
 
@@ -243,7 +229,7 @@ window.addEventListener('load', function() {
   }
 
   searchField.addEventListener('keydown', function(event) {
-    if (composing !== null) {
+    if (composing) {
       return;
     }
 

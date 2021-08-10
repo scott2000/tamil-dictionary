@@ -11,7 +11,8 @@ use rocket_dyn_templates::Template;
 
 use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind};
 use crate::search::{SearchResult, SearchRankingEntry};
-use crate::query::Query;
+use crate::query::{Query, Pattern};
+use crate::tamil::{self, LetterSet};
 
 const MAX_OTHER_SECTIONS: usize = 5;
 
@@ -387,6 +388,7 @@ pub struct SuggestResponseEntry {
 
 impl From<&'static Entry> for SuggestResponseEntry {
     fn from(entry: &'static Entry) -> Self {
+        // Use the first word with spaces converted to hyphens for completion
         let mut completion = Query::escape(entry.words().next().unwrap_or(""), '-');
         let first_not_asterisk = completion.find(|ch: char| ch != '-').unwrap_or(0);
         completion.drain(..first_not_asterisk);
@@ -401,15 +403,36 @@ impl From<&'static Entry> for SuggestResponseEntry {
 
 #[post("/api/suggest", format = "json", data = "<request>")]
 pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
-    let query = &request.0.query;
+    let mut query = request.0.query;
 
-    if let Ok(parsed_query) = Query::parse(query) {
-        if let Some(pat) = parsed_query.into_pattern() {
+    // Check for trailing "a", and allow other letters as well
+    let mut append_a = false;
+    if let Some(last_character) = query.chars().next_back() {
+        if tamil::is_consonant(last_character) {
+            query += "\u{bcd}";
+            append_a =  true;
+        }
+    }
+
+    // Parse the query into a single pattern
+    if let Ok(parsed_query) = Query::parse(&query) {
+        if let Some(mut pat) = parsed_query.into_pattern() {
             let mut count = request.0.count.min(100);
 
+            // If there is implicit transliteration, reserve a row for definition search
             let add_definition = count > 3 && pat.implicit_transliteration();
             if add_definition {
                 count -= 1;
+            }
+
+            // Make the pattern more general if there was a trailing "a"
+            if append_a {
+                pat = Pattern::Concat(
+                    Box::new(pat),
+                    Box::new(Pattern::Exact(
+                        Box::new(Pattern::Alternative(
+                            Box::new(Pattern::Assert(LetterSet::vowel())),
+                            Box::new(Pattern::MarkExpanded))))));
             }
 
             if let Some(list) = pat.suggest(count) {
@@ -417,6 +440,7 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
                     .map(|entry| SuggestResponseEntry::from(entry))
                     .collect();
 
+                // Use ":" to indicate this last row should be used for definition search
                 if add_definition {
                     let completion = format!(":{}", query);
                     suggestions.push(SuggestResponseEntry {
