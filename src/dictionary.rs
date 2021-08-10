@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::cmp::Ordering;
 
 use serde::Deserialize;
 
@@ -19,7 +18,11 @@ lazy_static! {
         // Clear the interning metadata since it won't be used anymore
         intern::done();
 
-        entries.sort();
+        // Sort by the parsed word parts (no joining)
+        entries.sort_by(|a, b| {
+            a.parsed_parts().cmp(b.parsed_parts())
+                .then_with(|| a.subword.cmp(&b.subword))
+        });
 
         eprintln!(" => {} entries", entries.len());
         entries
@@ -68,10 +71,18 @@ impl RawEntry {
         word.split(&[',', ';'][..]).map(str::trim)
     }
 
+    fn parts(word: &str) -> impl Iterator<Item = &str> {
+        word.split(Self::skip_char)
+            .filter(|s| !s.is_empty())
+    }
+
+    fn skip_char(ch: char) -> bool {
+        ch.is_ascii() && !ch.is_ascii_alphabetic()
+    }
+
     fn joined_subwords(word: &str) -> Vec<&'static Word> {
         // Split the word into parts
-        let mut parts = word.split(Self::skip_char)
-            .filter(|s| !s.is_empty());
+        let mut parts = Self::parts(word);
 
         // Take the first part as the base word
         let first = parts.next().unwrap_or("");
@@ -90,10 +101,6 @@ impl RawEntry {
         parsed.into_iter()
             .map(|word| intern::word(word.into()))
             .collect()
-    }
-
-    fn skip_char(ch: char) -> bool {
-        ch.is_ascii() && !ch.is_ascii_alphabetic()
     }
 }
 
@@ -126,6 +133,15 @@ pub struct Entry {
 impl Entry {
     pub fn words(&self) -> impl Iterator<Item = &str> {
         RawEntry::words(&self.word)
+    }
+
+    pub fn parsed_parts<'a>(&'a self) -> impl Iterator<Item = Vec<Box<Word>>> + 'a {
+        self.words()
+            .map(|word| {
+                RawEntry::parts(word)
+                    .map(Word::parse)
+                    .collect()
+            })
     }
 }
 
@@ -196,27 +212,6 @@ impl From<RawEntry> for Entry {
             word_ranges: word_ranges.into_boxed_slice(),
             sections,
         }
-    }
-}
-
-impl PartialEq for Entry {
-    fn eq(&self, rhs: &Self) -> bool {
-        self.parsed_word == rhs.parsed_word && self.subword == rhs.subword
-    }
-}
-
-impl Eq for Entry {}
-
-impl Ord for Entry {
-    fn cmp(&self, rhs: &Self) -> Ordering {
-        self.parsed_word.cmp(&rhs.parsed_word)
-            .then_with(|| self.subword.cmp(&rhs.subword))
-    }
-}
-
-impl PartialOrd for Entry {
-    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
-        Some(self.cmp(rhs))
     }
 }
 
