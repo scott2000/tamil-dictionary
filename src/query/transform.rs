@@ -22,12 +22,11 @@ pub fn letter_set(mut lts: LetterSet, _expand: bool, trans: bool) -> LetterSet {
     lts
 }
 
-pub fn literal_search<S: Search>(search: &S, word: &Word, expand: bool, trans: bool) -> Result<S, S::Error> {
+pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans: bool) -> Result<S, S::Error> {
     if !trans {
         return Ok(search.literal(word));
     }
 
-    let mut search = search.clone();
     let mut letters = word.iter().peekable();
     while let Some(lt) = letters.next() {
         if let Some(result) = transliterate(&search, expand, &mut letters, lt)? {

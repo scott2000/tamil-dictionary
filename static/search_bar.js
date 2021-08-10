@@ -9,7 +9,6 @@ window.addEventListener('load', function() {
 
   var currentQuery = '';
   var updateTimeout = null;
-  var request = null;
 
   var focused = false;
   var composing = false;
@@ -95,23 +94,28 @@ window.addEventListener('load', function() {
 
   function startRequest(query) {
     const cached = cache.get(query);
-    if (cached) {
-      setResults(cached);
+    if (cached !== undefined) {
+      if (cached !== null) {
+        setResults(cached);
+      }
       return;
     }
 
-    request = new XMLHttpRequest();
+    cache.set(query, null);
+
+    const request = new XMLHttpRequest();
     request.open('POST', '/api/suggest', true);
     request.setRequestHeader('Content-Type', 'application/json');
 
     function error() {
       console.error(request.statusText);
-      setResults([]);
-      request = null;
+      if (currentQuery === query) {
+        setResults([]);
+      }
     }
 
     request.onload = function() {
-      if (request.readyState !== 4 || query !== currentQuery) {
+      if (request.readyState !== 4) {
         return;
       }
 
@@ -122,9 +126,10 @@ window.addEventListener('load', function() {
 
       const response = JSON.parse(request.responseText);
       cache.set(query, response);
-      setResults(response);
 
-      request = null;
+      if (currentQuery === query) {
+        setResults(response);
+      }
     };
 
     request.onerror = error;
@@ -140,11 +145,6 @@ window.addEventListener('load', function() {
     if (updateTimeout !== null) {
       clearTimeout(updateTimeout);
       updateTimeout = null;
-    }
-
-    if (request !== null) {
-      request.abort();
-      request = null;
     }
   }
 
@@ -229,7 +229,7 @@ window.addEventListener('load', function() {
   }
 
   searchField.addEventListener('keydown', function(event) {
-    if (composing) {
+    if (composing || !results.length) {
       return;
     }
 

@@ -242,23 +242,23 @@ impl Query {
 
         // Search using positive word patterns
         for pat in &self.word_patterns {
-            intersect.push(pat.search(&tree::search_word(), true, true)?.end()?);
+            intersect.push(pat.search(tree::search_word(), true, true)?.end()?);
         }
 
         // Search using positive definition patterns
         for pat in &self.definition_patterns {
-            intersect.push(pat.search(&tree::search_definition(), true, false)?.end()?);
+            intersect.push(pat.search(tree::search_definition(), true, false)?.end()?);
         }
 
         let mut process_negatives = || {
             // Search using negative word patterns
             for pat in &self.negative_word_patterns {
-                difference.push(pat.search(&tree::search_word(), false, true)?.end()?);
+                difference.push(pat.search(tree::search_word(), false, true)?.end()?);
             }
 
             // Search using negative definition patterns
             for pat in &self.negative_definition_patterns {
-                difference.push(pat.search(&tree::search_definition(), false, false)?.end()?);
+                difference.push(pat.search(tree::search_definition(), false, false)?.end()?);
             }
 
             Ok(())
@@ -285,12 +285,12 @@ impl Query {
             let mut process_definitions = || -> Result<(), tree::SearchError> {
                 // Search using positive word patterns as definition patterns
                 for pat in &self.word_patterns {
-                    intersect.push(pat.search(&tree::search_definition(), true, false)?.end()?);
+                    intersect.push(pat.search(tree::search_definition(), true, false)?.end()?);
                 }
 
                 // Search using negative words patterns as definition patterns
                 for pat in &self.negative_word_patterns {
-                    difference.push(pat.search(&tree::search_definition(), false, false)?.end()?);
+                    difference.push(pat.search(tree::search_definition(), false, false)?.end()?);
                 }
 
                 Ok(())
@@ -388,10 +388,14 @@ pub enum Pattern {
 }
 
 impl Pattern {
-    pub fn search<S: Search>(&self, search: &S, expand: bool, trans: bool) -> Result<S, S::Error> {
+    pub fn search<S: Search>(&self, search: S, expand: bool, trans: bool) -> Result<S, S::Error> {
+        if search.is_empty() {
+            return Ok(search);
+        }
+
         match self {
-            Self::Empty => Ok(search.clone()),
-            Self::MarkExpanded => Ok(search.clone().marking_expanded()),
+            Self::Empty => Ok(search),
+            Self::MarkExpanded => Ok(search.marking_expanded()),
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertMiddle => Ok(search.asserting_middle()),
             Self::AssertEnd => Ok(search.asserting_end()),
@@ -401,9 +405,9 @@ impl Pattern {
             Self::Exact(pat) => pat.search(search, false, false),
             Self::Trans(pat) => pat.search(search, expand, true),
             &Self::Repeat(ref pat, a, b) => {
-                let mut search = search.clone();
+                let mut search = search;
                 for _ in 0..a {
-                    search = pat.search(&search, expand, trans)?;
+                    search = pat.search(search, expand, trans)?;
                 }
 
                 let mut result = search.clone();
@@ -412,7 +416,7 @@ impl Pattern {
                         break;
                     }
 
-                    search = pat.search(&search, expand, trans)?;
+                    search = pat.search(search, expand, trans)?;
                     result.join(&search)?;
                 }
 
@@ -423,18 +427,18 @@ impl Pattern {
                 if search.is_empty() {
                     Ok(search)
                 } else {
-                    b.search(&search, expand, trans)
+                    b.search(search, expand, trans)
                 }
             },
             Self::Alternative(a, b) => {
-                a.search(search, expand, trans)?
+                a.search(search.clone(), expand, trans)?
                     .joining(&b.search(search, expand, trans)?)
             },
         }
     }
 
     pub fn suggest(&self, count: u32) -> Option<SuggestionList> {
-        if let Ok(search) = self.search(&tree::search_word_prefix(), true, true) {
+        if let Ok(search) = self.search(tree::search_word_prefix(), true, true) {
             Some(search.suggest(count))
         } else {
             None

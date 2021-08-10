@@ -55,13 +55,8 @@ async fn main() -> Result<(), rocket::Error> {
             .await
     });
 
-    let word_handle = task::spawn_blocking(|| {
-        tree::search_word();
-    });
-
-    let definition_handle = task::spawn_blocking(|| {
-        tree::search_definition();
-    });
+    let word_handle = task::spawn_blocking(tree::search_word);
+    let definition_handle = task::spawn_blocking(tree::search_definition);
 
     word_handle.await.unwrap();
     definition_handle.await.unwrap();
