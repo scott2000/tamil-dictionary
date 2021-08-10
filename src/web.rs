@@ -1,4 +1,5 @@
 use std::iter;
+use std::borrow::Cow;
 
 use serde::{Serialize, Deserialize};
 
@@ -374,7 +375,7 @@ fn search_query(q: &str, all: bool) -> Template {
 #[derive(Deserialize)]
 pub struct SuggestRequest<'a> {
     count: u32,
-    query: &'a str,
+    query: Cow<'a, str>,
 }
 
 #[derive(Serialize)]
@@ -400,30 +401,33 @@ impl From<&'static Entry> for SuggestResponseEntry {
 
 #[post("/api/suggest", format = "json", data = "<request>")]
 pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
-    let query = request.0.query;
-    let mut count = request.0.count.min(100);
+    let query = &request.0.query;
 
-    let add_definition = count > 3 && query.contains(|ch: char| ch.is_ascii_alphabetic());
-    if add_definition {
-        count -= 1;
-    }
+    if let Ok(parsed_query) = Query::parse(query) {
+        if let Some(pat) = parsed_query.into_pattern() {
+            let mut count = request.0.count.min(100);
 
-    if let Ok(parsed_query) = Query::parse(&query) {
-        if let Some(list) = parsed_query.suggest(count) {
-            let mut suggestions: Vec<_> = list.suggestions()
-                .map(|entry| SuggestResponseEntry::from(entry))
-                .collect();
-
+            let add_definition = count > 3 && pat.implicit_transliteration();
             if add_definition {
-                let completion = format!(":{}", query);
-                suggestions.push(SuggestResponseEntry {
-                    word: ":",
-                    uri: uri!(search(&completion)).to_string(),
-                    completion,
-                });
+                count -= 1;
             }
 
-            return Json(suggestions);
+            if let Some(list) = pat.suggest(count) {
+                let mut suggestions: Vec<_> = list.suggestions()
+                    .map(|entry| SuggestResponseEntry::from(entry))
+                    .collect();
+
+                if add_definition {
+                    let completion = format!(":{}", query);
+                    suggestions.push(SuggestResponseEntry {
+                        word: ":",
+                        uri: uri!(search(&completion)).to_string(),
+                        completion,
+                    });
+                }
+
+                return Json(suggestions);
+            }
         }
     }
 

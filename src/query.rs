@@ -305,23 +305,17 @@ impl Query {
         Ok(result)
     }
 
-    pub fn suggest(self, count: u32) -> Option<SuggestionList> {
-        if self.word_patterns.len() != 1
-            || !self.negative_word_patterns.is_empty()
-            || !self.definition_patterns.is_empty()
-            || !self.negative_definition_patterns.is_empty()
+    pub fn into_pattern(self) -> Option<Pattern> {
+        if self.word_patterns.len() == 1
+            && self.negative_word_patterns.is_empty()
+            && self.definition_patterns.is_empty()
+            && self.negative_definition_patterns.is_empty()
         {
-            return None;
+            self.word_patterns.into_iter().next()
+        } else {
+            None
         }
 
-        let mut list = SuggestionList::new(count);
-
-        let pat = &self.word_patterns[0];
-        if let Ok(search) = pat.search(&tree::search_word_prefix(), true, true) {
-            search.suggest(&mut list);
-        }
-
-        Some(list)
     }
 
     pub fn escape(s: &str, invalid: char) -> String {
@@ -434,6 +428,32 @@ impl Pattern {
                 a.search(search, expand, trans)?
                     .joining(&b.search(search, expand, trans)?)
             },
+        }
+    }
+
+    pub fn suggest(&self, count: u32) -> Option<SuggestionList> {
+        if let Ok(search) = self.search(&tree::search_word_prefix(), true, true) {
+            Some(search.suggest(count))
+        } else {
+            None
+        }
+    }
+
+    pub fn implicit_transliteration(&self) -> bool {
+        match self {
+            Self::Assert(lts) | Self::Set(lts) =>
+                !lts.intersect(LetterSet::latin()).is_empty(),
+
+            Self::Literal(word) =>
+                word.contains(LetterSet::latin()),
+
+            Self::Repeat(pat, _, _) =>
+                pat.implicit_transliteration(),
+
+            Self::Concat(a, b) | Self::Alternative(a, b) =>
+                a.implicit_transliteration() || b.implicit_transliteration(),
+
+            _ => false,
         }
     }
 

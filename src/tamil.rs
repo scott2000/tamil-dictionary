@@ -450,8 +450,7 @@ impl LetterSet {
     }
 
     pub const fn vowel() -> Self {
-        Self::kuril()
-            .union(Self::nedil())
+        Self::range(num::VOWEL_START, num::VOWEL_END)
     }
 
     pub const fn kuril() -> Self {
@@ -477,10 +476,7 @@ impl LetterSet {
     }
 
     pub const fn consonant() -> Self {
-        Self::vallinam()
-            .union(Self::idaiyinam())
-            .union(Self::mellinam())
-            .union(Self::grantha())
+        Self::range(num::CONSONANT_START, num::CONSONANT_END)
     }
 
     pub const fn vallinam() -> Self {
@@ -516,10 +512,7 @@ impl LetterSet {
     }
 
     pub const fn latin() -> Self {
-        Self::vowel()
-            .union(Self::single(Letter::AAYDHAM))
-            .union(Self::consonant())
-            .complement()
+        Self::range(num::LATIN_A, num::LATIN_Z)
     }
 
     pub const fn glide() -> Self {
@@ -655,6 +648,10 @@ impl Word {
 
     pub fn iter(&self) -> WordIter {
         self.0.iter().copied()
+    }
+
+    pub fn contains(&self, lts: LetterSet) -> bool {
+        self.iter().any(|lt| lts.matches(lt))
     }
 
     pub fn take_prefix<'a, 'b>(&'a self, prefix: &'b Self) -> Option<&'a Self> {

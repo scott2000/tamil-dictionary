@@ -31,9 +31,9 @@ pub trait Search: Clone {
         Ok(self)
     }
 
-    fn end(self) -> Result<SearchResult, Self::Error>;
+    fn suggest(self, count: u32) -> SuggestionList;
 
-    fn suggest(self, list: &mut SuggestionList);
+    fn end(self) -> Result<SearchResult, Self::Error>;
 }
 
 pub struct SuggestionList {

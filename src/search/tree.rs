@@ -164,6 +164,19 @@ impl super::Search for Search {
         Ok(())
     }
 
+    fn suggest(mut self, count: u32) -> SuggestionList {
+        let mut list = SuggestionList::new(count);
+
+        self.branches.retain(|branch| !branch.is_initial);
+
+        let is_single_branch = self.branches.len() == 1;
+        for branch in self.branches {
+            branch.append_suggestions(&mut list, true, is_single_branch && branch.prefix.is_empty());
+        }
+
+        list
+    }
+
     fn end(mut self) -> Result<SearchResult, Self::Error> {
         self.branches.retain(|branch| !branch.is_initial);
 
@@ -174,15 +187,6 @@ impl super::Search for Search {
         }
 
         Ok(result)
-    }
-
-    fn suggest(mut self, list: &mut SuggestionList) {
-        self.branches.retain(|branch| !branch.is_initial);
-
-        let is_single_branch = self.branches.len() == 1;
-        for branch in self.branches {
-            branch.append_suggestions(list, true, is_single_branch && branch.prefix.is_empty());
-        }
     }
 }
 
