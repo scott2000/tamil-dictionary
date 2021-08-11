@@ -92,12 +92,25 @@ window.addEventListener('load', function() {
     display();
   }
 
+  function isInvalidRequest(query) {
+    if (query[0] === ':') {
+      return true;
+    }
+
+    return query.indexOf(' ') != -1 && query.search(/[\[\](){}]/) == -1;
+  }
+
   function startRequest(query) {
     const cached = cache.get(query);
     if (cached !== undefined) {
       if (cached !== null) {
         setResults(cached);
       }
+      return;
+    }
+
+    if (isInvalidRequest(query)) {
+      setResults([]);
       return;
     }
 
