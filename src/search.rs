@@ -172,7 +172,7 @@ impl SearchResultEntry {
                 (false, false) => SearchPrecedence::Bottom,
             }
         } else {
-            match (start, end) {
+            match (start, end && !expanded) {
                 (true, true) => SearchPrecedence::A,
                 (true, false) => SearchPrecedence::B,
                 (false, true) => SearchPrecedence::C,
