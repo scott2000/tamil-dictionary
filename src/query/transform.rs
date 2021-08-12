@@ -355,27 +355,30 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                             search.literal(word![next])
                                 .joining(&search
                                     .literal(word![Letter::TAMIL_RETRO_T])
-                                    .asserting(KCP.union(letterset![TAMIL_RETRO_T])))?
-                                .joining(&search
-                                    .literal(word![Letter::TAMIL_RETRO_N])
-                                    .asserting(KCP.union(letterset![TAMIL_RETRO_N])))?,
+                                    .asserting(KCP.union(letterset![TAMIL_RETRO_T]))
+                                    .joining(&search
+                                        .literal(word![Letter::TAMIL_RETRO_N])
+                                        .asserting(KCP.union(letterset![TAMIL_RETRO_N])))?
+                                    .marking_expanded())?,
 
                         // Final alveolar "l"
                         Letter::TAMIL_ALVEOLAR_L =>
                             search.literal(word![next])
                                 .joining(&search
                                     .literal(word![Letter::TAMIL_ALVEOLAR_TR])
-                                    .asserting(KCP.union(letterset![TAMIL_ALVEOLAR_TR])))?
-                                .joining(&search
-                                    .literal(word![Letter::TAMIL_ALVEOLAR_N])
-                                    .asserting(KCP.union(letterset![TAMIL_ALVEOLAR_N])))?,
+                                    .asserting(KCP.union(letterset![TAMIL_ALVEOLAR_TR]))
+                                    .joining(&search
+                                        .literal(word![Letter::TAMIL_ALVEOLAR_N])
+                                        .asserting(KCP.union(letterset![TAMIL_ALVEOLAR_N])))?
+                                    .marking_expanded())?,
 
                         // Final alveolar "n"
                         Letter::TAMIL_ALVEOLAR_N =>
                             search.literal(word![next])
                                 .joining(&search
                                     .literal(word![Letter::TAMIL_ALVEOLAR_TR])
-                                    .asserting(KCP))?,
+                                    .asserting(KCP)
+                                    .marking_expanded())?,
 
                         _ => unreachable!(),
                     };
