@@ -62,7 +62,7 @@ pub struct Loc {
 #[derive(Deserialize)]
 struct RawEntry {
     word: String,
-    sub: Option<String>,
+    sub: Option<u8>,
     secs: Vec<Vec<Vec<(SegmentKind, String)>>>,
 }
 
@@ -153,8 +153,6 @@ impl From<RawEntry> for Entry {
 
         assert!(!parsed_word.is_empty());
 
-        let subword = raw.sub.and_then(|sub| sub.parse().ok());
-
         // Load all of the text of the sections, and set the segments to refer to indices
         let mut text = String::new();
         let sections = raw.secs.into_iter()
@@ -206,7 +204,7 @@ impl From<RawEntry> for Entry {
         Self {
             word: raw.word.into_boxed_str(),
             parsed_word,
-            subword,
+            subword: raw.sub,
             text: text.into_boxed_str(),
             parsed_text: parsed_text.into_boxed_slice(),
             word_ranges: word_ranges.into_boxed_slice(),
