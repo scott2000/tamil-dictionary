@@ -412,10 +412,37 @@ fn transliterate<S: Search>(
     let search = match lt {
         L::LATIN_A => {
             match letters.peek() {
+                // Check for "aa"
+                Some(L::LATIN_A) => {
+                    letters.adv();
+                    search.literal(word![Letter::LONG_A])
+                }
+
+                // Check for "ae"
+                Some(L::LATIN_E) => {
+                    letters.adv();
+                    search.literal(word![Letter::LONG_E])
+                }
+
                 // Check for "ai"
                 Some(L::LATIN_I) => {
                     letters.adv();
                     search.literal(word![Letter::AI])
+                }
+
+                // Check for "ay"
+                Some(L::LATIN_Y) => {
+                    letters.adv();
+
+                    let mut base = search.literal(word![Letter::AI])
+                        .joining(&search.literal(word![Letter::SHORT_A, Letter::TAMIL_Y]))?;
+
+                    if expand {
+                        base = base.joining(&search.literal(word![Letter::LONG_A, Letter::TAMIL_Y]))?;
+                    }
+
+                    base.literal(word![Letter::TAMIL_Y])
+                        .joining(&base)?
                 }
 
                 // Check for "au" or "aw"
@@ -427,23 +454,15 @@ fn transliterate<S: Search>(
                         .joining(&av.literal(word![Letter::SHORT_U]))?
                 }
 
-                // Check for "aa"
-                Some(L::LATIN_A) => {
-                    letters.adv();
-                    search.literal(word![Letter::LONG_A])
-                }
-
-                _ => if expand {
-                    search.matching(letterset![SHORT_A, LONG_A, AI])?
-                } else {
-                    search.literal(word![Letter::SHORT_A])
+                _ => {
+                    if expand {
+                        search.matching(letterset![SHORT_A, LONG_A, AI])?
+                    } else {
+                        search.literal(word![Letter::SHORT_A])
+                    }
                 }
             }
         }
-
-        // If not expanding, treat these more strictly
-        L::LATIN_I if !expand => search.literal(word![Letter::SHORT_I]),
-        L::LATIN_U if !expand => search.literal(word![Letter::SHORT_U]),
 
         L::LATIN_E => {
             match letters.peek() {
@@ -453,7 +472,13 @@ fn transliterate<S: Search>(
                     search.literal(word![Letter::LONG_I])
                 }
 
-                _ => search.matching(letterset![SHORT_E, LONG_E, AI])?,
+                _ => {
+                    if expand {
+                        search.matching(letterset![SHORT_E, LONG_E, AI])?
+                    } else {
+                        search.matching(letterset![SHORT_E, LONG_E])?
+                    }
+                }
             }
         }
 
@@ -465,7 +490,13 @@ fn transliterate<S: Search>(
                     search.literal(word![Letter::LONG_U])
                 }
 
-                _ => search.matching(letterset![SHORT_O, LONG_O, AU])?,
+                _ => {
+                    if expand {
+                        search.matching(letterset![SHORT_O, LONG_O, AU])?
+                    } else {
+                        search.matching(letterset![SHORT_O, LONG_O])?
+                    }
+                }
             }
         }
 
@@ -499,6 +530,11 @@ fn transliterate<S: Search>(
                 .literal(word![Letter::TAMIL_R])
                 .joining(&optional_double(search, Letter::TAMIL_ALVEOLAR_TR)?)?
         }
+
+        // If not expanding, treat these more strictly
+        L::LATIN_I if !expand => search.literal(word![Letter::SHORT_I]),
+        L::LATIN_L if !expand => search.matching(letterset![TAMIL_ALVEOLAR_L, TAMIL_RETRO_L])?,
+        L::LATIN_U if !expand => search.literal(word![Letter::SHORT_U]),
 
         _ => {
             if let Some((kind, lts)) = transliterate_letter(lt) {
