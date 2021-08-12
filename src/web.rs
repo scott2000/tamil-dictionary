@@ -429,10 +429,9 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
             if append_a {
                 pat = Pattern::Concat(
                     Box::new(pat),
-                    Box::new(Pattern::Exact(
-                        Box::new(Pattern::Alternative(
-                            Box::new(Pattern::Assert(LetterSet::vowel())),
-                            Box::new(Pattern::MarkExpanded))))));
+                    Box::new(Pattern::Alternative(
+                        Box::new(Pattern::Assert(LetterSet::vowel())),
+                        Box::new(Pattern::MarkExpanded))));
             }
 
             if let Some(list) = pat.suggest(count) {

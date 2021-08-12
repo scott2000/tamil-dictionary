@@ -41,6 +41,7 @@ macro_rules! letters {
 }
 
 letters! {
+    [LETTER_START]
     [VOWEL_START]
     SHORT_A, LONG_A,
     SHORT_I, LONG_I,
@@ -73,6 +74,9 @@ letters! {
     LATIN_G, LATIN_H, LATIN_I, LATIN_J, LATIN_K, LATIN_L,
     LATIN_M, LATIN_N, LATIN_O, LATIN_P, LATIN_Q, LATIN_R, LATIN_S,
     LATIN_T, LATIN_U, LATIN_V, LATIN_W, LATIN_X, LATIN_Y, LATIN_Z,
+    [..LETTER_END]
+
+    [LETTER_COUNT]
 }
 
 pub const PULLI: char = '\u{bcd}';
@@ -171,7 +175,7 @@ impl Letter {
         }
     }
 
-    pub fn join(mut prefix: Vec<Self>, mut suffix: &Word) -> Vec<Vec<Self>> {
+    pub fn join(mut prefix: Vec<Self>, suffix: &Word) -> Vec<Vec<Self>> {
         use Category::*;
 
         if suffix.is_empty() {
@@ -179,11 +183,6 @@ impl Letter {
         } else if prefix.is_empty() {
             return vec![Vec::from(suffix.as_ref())];
         }
-
-        let just_extend = |mut prefix: Vec<Self>, suffix: &Word| {
-            prefix.extend_from_slice(suffix.as_ref());
-            vec![prefix]
-        };
 
         let left = *prefix.last().unwrap();
         let right = suffix.first().unwrap();
@@ -211,97 +210,11 @@ impl Letter {
                 vec![vec![], vec![left]]
             },
 
-            // Joining two consonants
-            (TamilConsonant, TamilConsonant) => {
-                if LetterSet::vallinam().matches(right) {
-                    match left {
-                        // Retroflex assimilation
-                        Self::TAMIL_RETRO_T | Self::TAMIL_RETRO_N | Self::TAMIL_RETRO_L => {
-                            prefix.pop();
-                            suffix = &suffix[1..];
-                            vec![
-                                vec![Self::TAMIL_RETRO_T, right],
-                                vec![Self::TAMIL_RETRO_N, right],
-                                vec![Self::TAMIL_RETRO_L, right],
-                                vec![Self::TAMIL_RETRO_T, Self::TAMIL_T],
-                                vec![Self::TAMIL_RETRO_N, Self::TAMIL_T],
-                                vec![Self::TAMIL_RETRO_L, Self::TAMIL_T],
-                            ]
-                        },
-
-                        // Alveolar assimilation
-                        Self::TAMIL_ALVEOLAR_TR | Self::TAMIL_ALVEOLAR_N | Self::TAMIL_ALVEOLAR_L => {
-                            prefix.pop();
-                            suffix = &suffix[1..];
-                            vec![
-                                vec![Self::TAMIL_ALVEOLAR_TR, right],
-                                vec![Self::TAMIL_ALVEOLAR_N, right],
-                                vec![Self::TAMIL_ALVEOLAR_L, right],
-                                vec![Self::TAMIL_ALVEOLAR_TR, Self::TAMIL_T],
-                                vec![Self::TAMIL_ALVEOLAR_N, Self::TAMIL_T],
-                                vec![Self::TAMIL_ALVEOLAR_L, Self::TAMIL_T],
-                            ]
-                        },
-
-                        // Nasal assimilation of "m"
-                        Self::TAMIL_M => {
-                            prefix.pop();
-                            let paired = Letter(right.0 + 1);
-                            vec![vec![paired], vec![Letter::TAMIL_M]]
-                        },
-
-                        _ => {
-                            // Nasal assimilation of "m" (reversed)
-                            if LetterSet::mellinam().matches(left) {
-                                prefix.pop();
-                                vec![vec![left], vec![Letter::TAMIL_M]]
-                            } else {
-                                return just_extend(prefix, suffix)
-                            }
-                        },
-                    }
-                } else if LetterSet::mellinam().matches(right) {
-                    prefix.pop();
-                    suffix = &suffix[1..];
-                    match (left, right) {
-                        // Nasal assimilation of "n" or "m" with "n"
-                        (Letter::TAMIL_N | Letter::TAMIL_M, Letter::TAMIL_N) => vec![
-                            vec![Letter::TAMIL_N, right],
-                            vec![Letter::TAMIL_M, right],
-                        ],
-
-                        // Dropping of doubled "m"
-                        (Letter::TAMIL_M, Letter::TAMIL_M) => vec![
-                            vec![left, right],
-                            vec![left],
-                        ],
-
-                        // Nasal assimilation of "n"
-                        (_, Letter::TAMIL_N) => vec![
-                            vec![left, right],
-                            vec![left, left],
-                        ],
-
-                        // Nasal assimilation of "m"
-                        (Letter::TAMIL_M, _) => vec![
-                            vec![left, right],
-                            vec![right, right],
-                        ],
-
-                        // Nasal assimilation of "m" or "n" (reversed)
-                        _ => vec![
-                            vec![left, right],
-                            vec![left, Letter::TAMIL_N],
-                            vec![Letter::TAMIL_M, right],
-                        ],
-                    }
-                } else {
-                    return just_extend(prefix, suffix)
-                }
-            },
-
             // Natural joining
-            _ => return just_extend(prefix, suffix),
+            _ => {
+                prefix.extend_from_slice(suffix.as_ref());
+                return vec![prefix]
+            },
         };
 
         let mut result = Vec::new();
@@ -326,6 +239,28 @@ impl Letter {
         match self.0 {
             num::CONSONANT_START..=num::CONSONANT_END => true,
             _ => false,
+        }
+    }
+
+    pub fn pairs_with(self, rhs: Self) -> bool {
+        if !LetterSet::vallinam().matches(rhs) {
+            return false;
+        }
+
+        if self == rhs {
+            return true;
+        }
+
+        rhs.0 + 1 == self.0
+    }
+
+    pub fn paired(self) -> Option<Letter> {
+        if LetterSet::vallinam().matches(self) {
+            Some(Self(self.0 + 1))
+        } else if LetterSet::mellinam().matches(self) {
+            Some(Self(self.0 - 1))
+        } else {
+            None
         }
     }
 
@@ -409,7 +344,7 @@ impl Display for Category {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct LetterSet(pub u64);
 
 impl LetterSet {
@@ -427,11 +362,29 @@ impl LetterSet {
     }
 
     pub const fn is_empty(self) -> bool {
-        (self.0 & ((1 << 62) - 1)) == 0
+        (self.0 & ((1 << num::LETTER_COUNT) - 1)) == 0
     }
 
     pub const fn is_any(self) -> bool {
         self.complement().is_empty()
+    }
+
+    pub const fn to_single(mut self) -> Option<Letter> {
+        let mut n = 0;
+        while (self.0 & 1) == 0 {
+            self.0 >>= 1;
+            n += 1;
+
+            if n > num::LETTER_END {
+                return None;
+            }
+        }
+
+        if (self.0 ^ 1) == 0 {
+            Some(Letter(n))
+        } else {
+            None
+        }
     }
 
     pub const fn complement(self) -> Self {
@@ -517,7 +470,10 @@ impl LetterSet {
     }
 
     pub const fn latin() -> Self {
-        Self::range(num::LATIN_A, num::LATIN_Z)
+        Self::vowel()
+            .union(Self::single(Letter::AAYDHAM))
+            .union(Self::consonant())
+            .complement()
     }
 
     pub const fn glide() -> Self {
@@ -568,7 +524,7 @@ impl LetterSet {
     }
 
     pub fn is_complement(self) -> bool {
-        (self.0 & (1 << 63)) != 0
+        (self.0 & (1 << num::LETTER_COUNT)) != 0
     }
 
     pub fn matches(self, lt: Letter) -> bool {
@@ -601,7 +557,9 @@ impl LetterSet {
     }
 
     pub fn iter(self) -> impl Iterator<Item = Letter> {
-        (0..62).map(Letter).filter(move |&lt| self.matches(lt))
+        (num::LETTER_START..=num::LETTER_END)
+            .map(Letter)
+            .filter(move |&lt| self.matches(lt))
     }
 }
 
@@ -612,17 +570,23 @@ impl Display for LetterSet {
         write!(f, "[")?;
 
         if lts.is_complement() {
-            write!(f, "!")?;
+            write!(f, "^")?;
             lts = lts.complement();
         }
 
-        for i in 0..62 {
+        for i in num::LETTER_START..=num::LETTER_END {
             if lts.matches(Letter(i)) {
                 write!(f, "{}", Letter(i))?;
             }
         }
 
         write!(f, "]")
+    }
+}
+
+impl Debug for LetterSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
