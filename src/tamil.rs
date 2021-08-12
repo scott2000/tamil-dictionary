@@ -149,6 +149,7 @@ pub fn is_consonant(ch: char) -> bool {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
 pub struct Letter(u8);
 
 impl Letter {
@@ -650,8 +651,12 @@ impl Word {
         self.0.last().cloned()
     }
 
+    pub fn get(&self, index: usize) -> Option<Letter> {
+        self.0.get(index).copied()
+    }
+
     pub fn iter(&self) -> WordIter {
-        self.0.iter().copied()
+        WordIter::new(self)
     }
 
     pub fn contains(&self, lts: LetterSet) -> bool {
@@ -831,6 +836,53 @@ impl Debug for Word {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct WordIter<'a> {
+    pub word: &'a Word,
+    pub index: usize,
+}
+
+impl<'a> WordIter<'a> {
+    pub fn new(word: &'a Word) -> Self {
+        Self {
+            word,
+            index: 0,
+        }
+    }
+
+    pub fn peek(&self) -> Option<Letter> {
+        self.word.get(self.index)
+    }
+
+    pub fn adv(&mut self) {
+        self.index += 1;
+        debug_assert!(self.index <= self.word.len());
+    }
+
+    pub fn remaining(&self) -> &'a Word {
+        &self.word[self.index..]
+    }
+
+    pub fn remaining_count(&self) -> usize {
+        self.word.len() - self.index
+    }
+}
+
+impl<'a> Iterator for WordIter<'a> {
+    type Item = Letter;
+
+    fn next(&mut self) -> Option<Letter> {
+        let letter = self.word.get(self.index)?;
+        self.index += 1;
+        Some(letter)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.remaining_count();
+        (remaining, Some(remaining))
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LetterBase {
     Single(Letter),
@@ -961,8 +1013,6 @@ impl AsRef<[Letter]> for Word {
         &self.0
     }
 }
-
-pub type WordIter<'a> = std::iter::Copied<std::slice::Iter<'a, Letter>>;
 
 impl<'a> IntoIterator for &'a Word {
     type Item = Letter;

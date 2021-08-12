@@ -1,8 +1,6 @@
 use crate::tamil::{Word, WordIter, Letter, LetterSet};
 use crate::search::Search;
 
-type Letters<'a> = std::iter::Peekable<WordIter<'a>>;
-
 pub fn letter_set(mut lts: LetterSet, _expand: bool, trans: bool) -> LetterSet {
     if trans {
         // If the letter set is negated, transliterate the non-negated version
@@ -27,7 +25,7 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
         return Ok(search.literal(word));
     }
 
-    let mut letters = word.iter().peekable();
+    let mut letters = word.iter();
     while let Some(lt) = letters.next() {
         if let Some(result) = transliterate(&search, expand, &mut letters, lt)? {
             search = result;
@@ -43,7 +41,7 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
 fn transliterate<S: Search>(
     search: &S,
     expand: bool,
-    letters: &mut Letters,
+    letters: &mut WordIter,
     lt: Letter) -> Result<Option<S>, S::Error>
 {
     use Letter as L;
@@ -52,14 +50,14 @@ fn transliterate<S: Search>(
         L::LATIN_A => {
             match letters.peek() {
                 // Check for "ai"
-                Some(&L::LATIN_I) => {
-                    letters.next();
+                Some(L::LATIN_I) => {
+                    letters.adv();
                     search.literal(word![Letter::AI])
                 }
 
                 // Check for "au" or "aw"
-                Some(&(L::LATIN_U | L::LATIN_W)) => {
-                    letters.next();
+                Some(L::LATIN_U | L::LATIN_W) => {
+                    letters.adv();
                     let av = search.literal(word![Letter::SHORT_A, Letter::TAMIL_V]);
                     search.literal(word![Letter::AU])
                         .joining(&av)?
@@ -67,8 +65,8 @@ fn transliterate<S: Search>(
                 }
 
                 // Check for "aa"
-                Some(&L::LATIN_A) => {
-                    letters.next();
+                Some(L::LATIN_A) => {
+                    letters.adv();
                     search.literal(word![Letter::LONG_A])
                 }
 
@@ -87,8 +85,8 @@ fn transliterate<S: Search>(
         L::LATIN_E => {
             match letters.peek() {
                 // Check for "ee"
-                Some(&L::LATIN_E) => {
-                    letters.next();
+                Some(L::LATIN_E) => {
+                    letters.adv();
                     search.literal(word![Letter::LONG_I])
                 }
 
@@ -99,8 +97,8 @@ fn transliterate<S: Search>(
         L::LATIN_O => {
             match letters.peek() {
                 // Check for "oo"
-                Some(&L::LATIN_O) => {
-                    letters.next();
+                Some(L::LATIN_O) => {
+                    letters.adv();
                     search.literal(word![Letter::LONG_U])
                 }
 
@@ -112,16 +110,16 @@ fn transliterate<S: Search>(
             let n_set = letterset![TAMIL_NG, TAMIL_NY, TAMIL_N, TAMIL_ALVEOLAR_N, TAMIL_RETRO_N];
             match letters.peek() {
                 // Check for "ny"
-                Some(&L::LATIN_Y) => {
-                    letters.next();
+                Some(L::LATIN_Y) => {
+                    letters.adv();
                     search.matching(n_set)?
                         .literal(word![Letter::TAMIL_Y])
                         .joining(&optional_double(search, Letter::TAMIL_NY)?)?
                 }
 
                 // Check for "ng"
-                Some(&L::LATIN_G) => {
-                    letters.next();
+                Some(L::LATIN_G) => {
+                    letters.adv();
                     search.matching(n_set)?
                         .literal(word![Letter::TAMIL_K])
                         .joining(&optional_double(search, Letter::TAMIL_NG)?)?
@@ -132,8 +130,8 @@ fn transliterate<S: Search>(
         }
 
         // Check for "dr"
-        L::LATIN_D if letters.peek() == Some(&L::LATIN_R) => {
-            letters.next();
+        L::LATIN_D if letters.peek() == Some(L::LATIN_R) => {
+            letters.adv();
             search.matching(letterset![TAMIL_T, TAMIL_RETRO_T])?
                 .literal(word![Letter::TAMIL_R])
                 .joining(&optional_double(search, Letter::TAMIL_ALVEOLAR_TR)?)?
@@ -148,8 +146,8 @@ fn transliterate<S: Search>(
                 };
 
                 if kind.follow_by_h {
-                    if let Some(&L::LATIN_H) = letters.peek() {
-                        letters.next();
+                    if let Some(L::LATIN_H) = letters.peek() {
+                        letters.adv();
 
                         let with_h = search.matching(letterset![TAMIL_K, GRANTHA_H, AAYDHAM])?;
                         search.join(&with_h)?;
