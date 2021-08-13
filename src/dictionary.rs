@@ -18,9 +18,9 @@ lazy_static! {
         // Clear the interning metadata since it won't be used anymore
         intern::done();
 
-        // Sort by the parsed word parts (no joining)
+        // Sort by the parsed words (using natural joining only)
         entries.sort_by(|a, b| {
-            a.parsed_parts().cmp(b.parsed_parts())
+            a.parsed_words().cmp(b.parsed_words())
                 .then_with(|| a.subword.cmp(&b.subword))
         });
 
@@ -131,17 +131,12 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn words(&self) -> impl Iterator<Item = &str> {
+    pub fn words<'a>(&'a self) -> impl Iterator<Item = &'a str> {
         RawEntry::words(&self.word)
     }
 
-    pub fn parsed_parts<'a>(&'a self) -> impl Iterator<Item = Vec<Box<Word>>> + 'a {
-        self.words()
-            .map(|word| {
-                RawEntry::parts(word)
-                    .map(Word::parse)
-                    .collect()
-            })
+    pub fn parsed_words<'a>(&'a self) -> impl Iterator<Item = Box<Word>> + 'a {
+        self.words().map(Word::parse)
     }
 }
 
