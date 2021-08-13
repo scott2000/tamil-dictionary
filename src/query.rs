@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::tamil::{PULLI, Word, Letter, LetterSet, Category};
+use crate::tamil::{PULLI, Letter, LetterSet, Category, Word};
 use crate::search::{Search, SearchResult, SuggestionList, tree};
 
 mod transform;
@@ -394,16 +394,16 @@ impl Pattern {
         }
 
         match self {
-            Self::Empty => Ok(search),
-            Self::MarkExpanded => Ok(search.marking_expanded()),
-            Self::AssertStart => Ok(search.asserting_start()),
-            Self::AssertMiddle => Ok(search.asserting_middle()),
-            Self::AssertEnd => Ok(search.asserting_end()),
-            &Self::Assert(lts) => Ok(search.asserting(transform::letter_set(lts, trans))),
-            &Self::Set(lts) => search.matching(transform::letter_set(lts, trans)),
+            Self::Empty         => Ok(search),
+            Self::MarkExpanded  => Ok(search.marking_expanded()),
+            Self::AssertStart   => Ok(search.asserting_start()),
+            Self::AssertMiddle  => Ok(search.asserting_middle()),
+            Self::AssertEnd     => Ok(search.asserting_end()),
+            &Self::Assert(lts)  => Ok(search.asserting_next(transform::letter_set(lts, trans))),
+            &Self::Set(lts)     => search.matching(transform::letter_set(lts, trans)),
             Self::Literal(word) => transform::literal_search(search, word, expand, trans),
-            Self::Exact(pat) => pat.search(search, false, false),
-            Self::Trans(pat) => pat.search(search, expand, true),
+            Self::Exact(pat)    => pat.search(search, false, false),
+            Self::Trans(pat)    => pat.search(search, expand, true),
             &Self::Repeat(ref pat, a, b) => {
                 let mut search = search;
                 for _ in 0..a {

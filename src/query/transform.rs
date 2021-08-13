@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::tamil::{Word, WordIter, Letter, LetterSet};
+use crate::tamil::{Letter, LetterSet, Word, WordIter};
 use crate::search::Search;
 
 #[derive(Default, Debug)]
@@ -251,7 +251,7 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
 
                 if prev_vowel {
                     search = search.literal(word![alt])
-                        .asserting(LetterSet::vowel())
+                        .asserting_next(LetterSet::vowel())
                         .marking_expanded()
                         .joining(&search.literal(word![lt]))?;
 
@@ -282,22 +282,28 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                     match lt {
                         // Initial "t"
                         Letter::TAMIL_T => {
-                            search = search.matching(letterset![
-                                TAMIL_T,
-                                TAMIL_RETRO_T,
-                                TAMIL_ALVEOLAR_TR,
-                            ])?;
+                            search = search.literal(word![lt])
+                                .joining(&search
+                                    .asserting_prev(Letter::TAMIL_RETRO_T)
+                                    .literal(word![Letter::TAMIL_RETRO_T])
+                                    .joining(&search
+                                        .asserting_prev(Letter::TAMIL_ALVEOLAR_TR)
+                                        .literal(word![Letter::TAMIL_ALVEOLAR_TR]))?
+                                    .marking_expanded())?;
 
                             continue;
                         }
 
                         // Initial "n"
                         Letter::TAMIL_N => {
-                            search = search.matching(letterset![
-                                TAMIL_N,
-                                TAMIL_RETRO_N,
-                                TAMIL_ALVEOLAR_N,
-                            ])?;
+                            search = search.literal(word![lt])
+                                .joining(&search
+                                    .asserting_prev(Letter::TAMIL_RETRO_N)
+                                    .literal(word![Letter::TAMIL_RETRO_N])
+                                    .joining(&search
+                                        .asserting_prev(Letter::TAMIL_ALVEOLAR_N)
+                                        .literal(word![Letter::TAMIL_ALVEOLAR_N]))?
+                                    .marking_expanded())?;
 
                             continue;
                         }
@@ -337,7 +343,7 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                             search = search.literal(word![lt]);
 
                             search = search
-                                .asserting(LetterSet::tamil_initial())
+                                .asserting_next(LetterSet::tamil_initial())
                                 .marking_expanded()
                                 .joining(&search.literal(word![next]))?;
 
@@ -371,10 +377,10 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                             search.literal(word![next])
                                 .joining(&search
                                     .literal(word![Letter::TAMIL_RETRO_T])
-                                    .asserting(KCP.union(letterset![TAMIL_RETRO_T]))
+                                    .asserting_next(KCP.union(letterset![TAMIL_RETRO_T]))
                                     .joining(&search
                                         .literal(word![Letter::TAMIL_RETRO_N])
-                                        .asserting(KCP.union(letterset![TAMIL_RETRO_N])))?
+                                        .asserting_next(KCP.union(letterset![TAMIL_RETRO_N])))?
                                     .marking_expanded())?,
 
                         // Final alveolar "l"
@@ -382,10 +388,10 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                             search.literal(word![next])
                                 .joining(&search
                                     .literal(word![Letter::TAMIL_ALVEOLAR_TR])
-                                    .asserting(KCP.union(letterset![TAMIL_ALVEOLAR_TR]))
+                                    .asserting_next(KCP.union(letterset![TAMIL_ALVEOLAR_TR]))
                                     .joining(&search
                                         .literal(word![Letter::TAMIL_ALVEOLAR_N])
-                                        .asserting(KCP.union(letterset![TAMIL_ALVEOLAR_N])))?
+                                        .asserting_next(KCP.union(letterset![TAMIL_ALVEOLAR_N])))?
                                     .marking_expanded())?,
 
                         // Final alveolar "n"
@@ -393,7 +399,7 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                             search.literal(word![next])
                                 .joining(&search
                                     .literal(word![Letter::TAMIL_ALVEOLAR_TR])
-                                    .asserting(KCP)
+                                    .asserting_next(KCP)
                                     .marking_expanded())?,
 
                         _ => unreachable!(),
@@ -406,7 +412,7 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                 if let Letter::SHORT_U = lt {
                     search = search.literal(word![lt])
                         .joining(&search
-                            .asserting(LetterSet::vowel())
+                            .asserting_next(LetterSet::vowel())
                             .marking_expanded())?;
 
                     continue;

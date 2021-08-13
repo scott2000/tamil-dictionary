@@ -1,6 +1,6 @@
 use std::collections::{HashSet, BTreeMap, BTreeSet};
 
-use crate::tamil::{Word, LetterSet};
+use crate::tamil::{Letter, LetterSet, Word};
 use crate::dictionary::{ENTRIES, NO_WORD, Entry, Loc, EntryIndex, WordIndex, WordData};
 
 pub mod tree;
@@ -18,7 +18,9 @@ pub trait Search: Clone {
 
     fn asserting_end(&self) -> Self;
 
-    fn asserting(&self, lts: LetterSet) -> Self;
+    fn asserting_prev(&self, lt: Letter) -> Self;
+
+    fn asserting_next(&self, lts: LetterSet) -> Self;
 
     fn literal(&self, word: &Word) -> Self;
 

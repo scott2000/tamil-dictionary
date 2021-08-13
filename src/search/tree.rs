@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use crate::tamil::{Word, Letter, LetterSet};
+use crate::tamil::{Letter, LetterSet, Word};
 use crate::dictionary::{self, ENTRIES, Loc};
 
 use super::{SearchResult, SuggestionList};
@@ -105,7 +105,7 @@ impl super::Search for Search {
     fn asserting_start(&self) -> Self {
         let branches = self.branches.iter()
             .filter(|branch| branch.is_start())
-            .cloned()
+            .copied()
             .collect();
 
         Self { branches }
@@ -129,9 +129,26 @@ impl super::Search for Search {
         Self { branches }
     }
 
-    fn asserting(&self, lts: LetterSet) -> Self {
+    fn asserting_prev(&self, lt: Letter) -> Self {
         let branches = self.branches.iter()
-            .filter_map(|branch| branch.assert(lts))
+            .filter_map(|branch| {
+                match branch.prev_letter {
+                    // The branch isn't initial, so keep it if it matches
+                    Some(prev) if prev == lt => Some(*branch),
+                    Some(_) => None,
+
+                    // The branch is initial, so consume the letter directly
+                    None => branch.ignore_prefix().literal(word![lt]),
+                }
+            })
+            .collect();
+
+        Self { branches }
+    }
+
+    fn asserting_next(&self, lts: LetterSet) -> Self {
+        let branches = self.branches.iter()
+            .filter_map(|branch| branch.assert_next(lts))
             .collect();
 
         Self { branches }
@@ -139,17 +156,16 @@ impl super::Search for Search {
 
     fn literal(&self, word: &Word) -> Self {
         let branches = self.branches.iter()
-            .cloned()
             .filter_map(|branch| branch.literal(word))
             .collect();
 
         Self { branches }
     }
 
-    fn matching(&self, lts: LetterSet) -> Result<Search, Self::Error> {
+    fn matching(&self, lts: LetterSet) -> Result<Self, Self::Error> {
         let mut branches = Vec::new();
         for branch in &self.branches {
-            branch.append_match(&mut branches, lts)?;
+            branch.append_matches(&mut branches, lts)?;
         }
 
         Ok(Self { branches })
@@ -173,7 +189,7 @@ impl super::Search for Search {
     fn suggest(mut self, count: u32) -> SuggestionList {
         let mut list = SuggestionList::new(count);
 
-        self.branches.retain(|branch| !branch.is_initial);
+        self.branches.retain(|branch| branch.prev_letter.is_some());
 
         let is_single_branch = self.branches.len() == 1;
         for branch in self.branches {
@@ -184,7 +200,7 @@ impl super::Search for Search {
     }
 
     fn end(mut self) -> Result<SearchResult, Self::Error> {
-        self.branches.retain(|branch| !branch.is_initial);
+        self.branches.retain(|branch| branch.prev_letter.is_some());
 
         let mut result = SearchResult::default();
         let mut total_count = 0;
@@ -199,20 +215,20 @@ impl super::Search for Search {
 #[derive(Copy, Clone, Debug)]
 struct SearchBranch<T: Eq + 'static> {
     is_prefix_tree: bool,
-    is_initial: bool,
     is_expanded: bool,
+    prev_letter: Option<Letter>,
     require: Option<LetterSet>,
     prefix: &'static Word,
     leaves: &'static [T],
     branches: &'static BTreeMap<Letter, Tree<T>>,
 }
 
-impl<T: Eq> SearchBranch<T> {
+impl<T: Eq + Copy> SearchBranch<T> {
     fn new(tree: &'static Tree<T>, is_prefix_tree: bool) -> Self {
         Self {
             is_prefix_tree,
-            is_initial: true,
             is_expanded: false,
+            prev_letter: None,
             require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
@@ -220,11 +236,11 @@ impl<T: Eq> SearchBranch<T> {
         }
     }
 
-    fn update(&self, tree: &'static Tree<T>) -> Self {
+    fn update(&self, lt: Letter, tree: &'static Tree<T>) -> Self {
         Self {
             is_prefix_tree: self.is_prefix_tree,
-            is_initial: false,
             is_expanded: self.is_expanded,
+            prev_letter: Some(lt),
             require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
@@ -234,28 +250,40 @@ impl<T: Eq> SearchBranch<T> {
 
     fn step(&self) -> Self {
         Self {
-            is_initial: false,
+            prev_letter: Some(self.prefix[0]),
             require: None,
             prefix: &self.prefix[1..],
             ..*self
         }
     }
 
-    fn assert(&self, mut lts: LetterSet) -> Option<Self> {
+    fn ignore_prefix(mut self) -> Self {
+        self.is_prefix_tree = false;
+        self
+    }
+
+    fn assert_next(&self, mut lts: LetterSet) -> Option<Self> {
+        // If the assertion always succeeds, ignore it
         if lts.is_any() {
-            return Some(Self { ..*self });
-        } else if let Some(require) = self.require {
+            return Some(*self);
+        }
+
+        // Intersect the assertion with any existing assertion
+        if let Some(require) = self.require {
             lts = lts.intersect(require);
         }
 
+        // If the assertion always fails, fail immediately
         if lts.is_empty() {
             return None;
         }
 
         if self.prefix.is_empty() {
             if self.branches.is_empty() {
+                // There are no branches, so the assertion can be ignored
                 None
             } else {
+                // Remember the assertion for when the search advances
                 Some(Self {
                     require: Some(lts),
                     leaves: &[],
@@ -263,8 +291,9 @@ impl<T: Eq> SearchBranch<T> {
                 })
             }
         } else {
+            // There is a prefix, so just check if it matches the prefix
             if lts.matches(self.prefix[0]) {
-                Some(Self { ..*self })
+                Some(*self)
             } else {
                 None
             }
@@ -272,14 +301,14 @@ impl<T: Eq> SearchBranch<T> {
     }
 
     fn is_start(&self) -> bool {
-        self.is_initial && self.is_prefix_tree
+        self.is_prefix_tree && self.prev_letter.is_none()
     }
 
     fn middle(&self) -> Option<Self> {
         if self.is_start() {
             None
         } else if !self.prefix.is_empty() {
-            Some(Self { ..*self })
+            Some(*self)
         }  else if !self.branches.is_empty() {
             Some(Self {
                 leaves: &[],
@@ -310,7 +339,7 @@ impl<T: Eq> SearchBranch<T> {
             return Some(self);
         }
 
-        // Check for a requirement on the next letter
+        // Check for a requirement on the first letter
         if let Some(require) = self.require {
             if !require.matches(word[0]) {
                 return None;
@@ -319,9 +348,10 @@ impl<T: Eq> SearchBranch<T> {
             self.require = None;
         }
 
+        // Advance one letter at a time through the word
         for lt in word {
             if self.prefix.is_empty() {
-                self = self.update(self.branches.get(&lt)?);
+                self = self.update(lt, self.branches.get(&lt)?);
             } else if self.prefix[0] == lt {
                 self = self.step();
             } else {
@@ -332,7 +362,7 @@ impl<T: Eq> SearchBranch<T> {
         Some(self)
     }
 
-    fn append_match(&self, output: &mut Vec<Self>, mut lts: LetterSet) -> Result<(), SearchError> {
+    fn append_matches(&self, output: &mut Vec<Self>, mut lts: LetterSet) -> Result<(), SearchError> {
         // Check for a requirement on the next letter
         if let Some(require) = self.require {
             lts = lts.intersect(require);
@@ -343,9 +373,10 @@ impl<T: Eq> SearchBranch<T> {
         }
 
         if self.prefix.is_empty() {
+            // Iterate through the branches, keeping those that match
             for (&lt, tree) in self.branches {
                 if lts.matches(lt) {
-                    output.push(self.update(tree));
+                    output.push(self.update(lt, tree));
 
                     if output.len() > SEARCH_MAX_BRANCHES {
                         return Err(SearchError::TooComplex);
@@ -353,6 +384,7 @@ impl<T: Eq> SearchBranch<T> {
                 }
             }
         } else if lts.matches(self.prefix[0]) {
+            // There is a prefix, so drop the first letter
             output.push(self.step());
 
             if output.len() > SEARCH_MAX_BRANCHES {
@@ -390,7 +422,7 @@ impl SearchBranch<Loc> {
 
                 // Otherwise, add the branch to the result
                 _ => {
-                    self.update(branch).add_to_result(result, total_count, false)?;
+                    self.update(lt, branch).add_to_result(result, total_count, false)?;
                 }
             }
         }
@@ -419,7 +451,7 @@ impl SearchBranch<Loc> {
 
                 // Otherwise, add the branch to the suggestion, returning early if it fails
                 _ => {
-                    if self.update(branch).append_suggestions(list, from_leaf, false) {
+                    if self.update(lt, branch).append_suggestions(list, from_leaf, false) {
                         break;
                     }
                 }
