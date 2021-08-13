@@ -23,7 +23,7 @@
     font-size: 16px;
 }
 
-.entry {
+.en {
     padding: 10px;
     margin: 15px auto;
     min-width: 200px;
@@ -32,21 +32,21 @@
     overflow-wrap: break-word;
 }
 
-.exact {
+.ex {
     outline: 3px solid #0030a027;
 }
 
-.word {
+.wrd {
     color: black;
     font-weight: bold;
 }
 
-.section-header {
+.sec {
     margin-top: 10px;
     margin-bottom: 15px;
 }
 
-.definition-list {
+.en ol {
     padding-left: 2em;
     margin-top: 10px;
     margin-bottom: 0;

@@ -1,24 +1,23 @@
-<div class="entry {{~#if exact}} exact {{~/if}}">
-    <a class="word" href="{{uri}}">{{word}}</a>
+<div class="en {{~#if exact}} ex {{~/if}}"><a class="wrd" href="{{uri}}">{{word}}</a>
     {{~#if subword~}}
         <sup>{{subword}}</sup>
     {{~/if}}
-    {{#each sections~}}
+    {{#each sections}}
         {{~#if is_header}}
             {{~#with section~}}
                 {{> common/definition_paragraph}}
             {{~/with}}
         {{~else}}
             {{~#with section~}}
-                <p class="section-header">{{~> common/definition_paragraph~}}</p>
+                <p class="sec">{{~> common/definition_paragraph~}}</p>
             {{~/with}}
         {{~/if}}
         {{~#if paragraphs~}}
-            <ol class="definition-list" start="{{definition_start}}">
-                {{~#each paragraphs}}
-                    <li class="definition">{{~> common/definition_paragraph~}}</li>
-                {{~/each}}
+            <ol start="{{definition_start}}">
+                {{~#each paragraphs~}}
+                    <li>{{~> common/definition_paragraph~}}</li>
+                {{~/each~}}
             </ol>
         {{~/if}}
-    {{~/each}}
+    {{~/each~}}
 </div>
