@@ -129,6 +129,14 @@ impl super::Search for Search {
         Self { branches }
     }
 
+    fn asserting_next(&self, lts: LetterSet) -> Self {
+        let branches = self.branches.iter()
+            .filter_map(|branch| branch.assert_next(lts))
+            .collect();
+
+        Self { branches }
+    }
+
     fn asserting_prev(&self, lt: Letter) -> Self {
         let branches = self.branches.iter()
             .filter_map(|branch| {
@@ -146,12 +154,21 @@ impl super::Search for Search {
         Self { branches }
     }
 
-    fn asserting_next(&self, lts: LetterSet) -> Self {
-        let branches = self.branches.iter()
-            .filter_map(|branch| branch.assert_next(lts))
-            .collect();
+    fn asserting_prev_matching(&self, lts: LetterSet) -> Result<Self, Self::Error> {
+        let mut branches = Vec::with_capacity(self.branches.len());
 
-        Self { branches }
+        for branch in &self.branches {
+            match branch.prev_letter {
+                // The branch isn't initial, so keep it if it matches
+                Some(prev) if lts.matches(prev) => branches.push(*branch),
+                Some(_) => {},
+
+                // The branch is initial, so consume the letter directly
+                None => branch.ignore_prefix().append_matches(&mut branches, lts)?,
+            }
+        }
+
+        Ok(Self { branches })
     }
 
     fn literal(&self, word: &Word) -> Self {

@@ -284,10 +284,10 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                         Letter::TAMIL_T => {
                             search = search.literal(word![lt])
                                 .joining(&search
-                                    .asserting_prev(Letter::TAMIL_RETRO_T)
+                                    .asserting_prev_matching(letterset![TAMIL_RETRO_T, TAMIL_RETRO_N])?
                                     .literal(word![Letter::TAMIL_RETRO_T])
                                     .joining(&search
-                                        .asserting_prev(Letter::TAMIL_ALVEOLAR_TR)
+                                        .asserting_prev_matching(letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N])?
                                         .literal(word![Letter::TAMIL_ALVEOLAR_TR]))?
                                     .marking_expanded())?;
 

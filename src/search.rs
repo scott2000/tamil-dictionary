@@ -18,9 +18,11 @@ pub trait Search: Clone {
 
     fn asserting_end(&self) -> Self;
 
+    fn asserting_next(&self, lts: LetterSet) -> Self;
+
     fn asserting_prev(&self, lt: Letter) -> Self;
 
-    fn asserting_next(&self, lts: LetterSet) -> Self;
+    fn asserting_prev_matching(&self, lts: LetterSet) -> Result<Self, Self::Error>;
 
     fn literal(&self, word: &Word) -> Self;
 
