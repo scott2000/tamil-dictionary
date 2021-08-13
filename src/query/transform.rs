@@ -49,32 +49,36 @@ lazy_static! {
     pub static ref JOINS: Joins = {
         let mut joins = Joins::new();
 
-        let retro = letterset![TAMIL_RETRO_T, TAMIL_RETRO_N, TAMIL_RETRO_L];
-        let alveolar = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N, TAMIL_ALVEOLAR_L];
-
         for right in letterset![TAMIL_K, TAMIL_CH, TAMIL_P].iter() {
-            // (TAMIL_RETRO_T, Vallinam)
-            joins.insert(
-                (Letter::TAMIL_RETRO_T, right),
-                (letterset![TAMIL_RETRO_T, TAMIL_RETRO_L], LetterSet::single(right)),
-            );
-
             // (TAMIL_RETRO_L, Vallinam)
-            joins.insert(
+            joins.insert_pair(
                 (Letter::TAMIL_RETRO_L, right),
-                (retro, LetterSet::single(right)),
+                (Letter::TAMIL_RETRO_T, right),
             );
 
-            // (TAMIL_RETRO_N, Vallinam)
+            let options = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N, TAMIL_ALVEOLAR_L];
+
+            // (TAMIL_ALVEOLAR_TR, Vallinam)
             joins.insert(
-                (Letter::TAMIL_RETRO_N, right),
-                (letterset![TAMIL_RETRO_N, TAMIL_RETRO_L], LetterSet::single(right)),
+                (Letter::TAMIL_ALVEOLAR_TR, right),
+                (options, LetterSet::single(right)),
             );
 
-            // (Alveolar, Vallinam)
-            for left in alveolar.iter() {
-                joins.insert((left, right), (alveolar, LetterSet::single(right)));
-            }
+            let options = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_L];
+
+            // (TAMIL_ALVEOLAR_L, Vallinam)
+            joins.insert(
+                (Letter::TAMIL_ALVEOLAR_L, right),
+                (options, LetterSet::single(right)),
+            );
+
+            let options = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N];
+
+            // (TAMIL_ALVEOLAR_N, Vallinam)
+            joins.insert(
+                (Letter::TAMIL_ALVEOLAR_N, right),
+                (options, LetterSet::single(right)),
+            );
         }
 
         // (TAMIL_RETRO_L, TAMIL_T) - Strong
