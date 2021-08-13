@@ -317,13 +317,25 @@ pub fn literal_search<S: Search>(mut search: S, word: &Word, expand: bool, trans
                 {
                     letters.adv();
 
-                    if letters.index > 3 {
-                        // Check for final "am"
-                        if let (Letter::SHORT_A, Letter::TAMIL_M) = (lt, next) {
+                    // Check for final "am"
+                    if let (Letter::SHORT_A, Letter::TAMIL_M) = (lt, next) {
+                        if letters.index > 5 {
+                            // Allow entire "am" to be removed since the word is long
                             let with_am = search.literal(word![lt, next]);
 
-                            search = search.marking_expanded()
+                            search = search
+                                .marking_expanded()
                                 .joining(&with_am)?;
+
+                            continue;
+                        } else if letters.index > 2 {
+                            // Only allow final "m" to be dropped, and only before another word
+                            search = search.literal(word![lt]);
+
+                            search = search
+                                .asserting(LetterSet::tamil_initial())
+                                .marking_expanded()
+                                .joining(&search.literal(word![next]))?;
 
                             continue;
                         }
