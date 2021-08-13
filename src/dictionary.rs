@@ -34,7 +34,10 @@ pub fn words() -> impl Iterator<Item = (&'static Word, Loc)> {
         .enumerate()
         .flat_map(|(a, entry)|
             entry.parsed_word.iter()
-                .map(move |&word| (word, Loc { entry: a as u16, word: NO_WORD })))
+                .map(move |&word| (word, Loc {
+                    entry: a as u16,
+                    word: WordData::new(NO_WORD, false),
+                })))
 }
 
 pub fn definition_words() -> impl Iterator<Item = (&'static Word, Loc)> {
@@ -42,21 +45,49 @@ pub fn definition_words() -> impl Iterator<Item = (&'static Word, Loc)> {
         .enumerate()
         .flat_map(|(a, entry)|
             entry.parsed_text.iter()
+                .zip(entry.word_ranges.iter())
                 .enumerate()
-                .map(move |(b, &word)| (word, Loc { entry: a as u16, word: b as u16 })))
+                .map(move |(b, (&word, range))| (word, Loc {
+                    entry: a as u16,
+                    word: WordData::new(b as u16, range.in_paren()),
+                })))
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Loc {
+    pub entry: EntryIndex,
+    pub word: WordData,
 }
 
 pub type EntryIndex = u16;
 pub type WordIndex = u16;
 
-pub const NO_WORD: WordIndex = u16::MAX;
+pub const NO_WORD: WordIndex = WordData::PAREN_MASK - 1;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Loc {
-    // The index of the Entry in ENTRIES
-    pub entry: EntryIndex,
-    // The index of the word in the Entry (0 = word match)
-    pub word: WordIndex,
+#[repr(transparent)]
+pub struct WordData(u16);
+
+impl WordData {
+    const PAREN_MASK: u16 = 1 << 15;
+
+    pub fn new(index: WordIndex, in_paren: bool) -> Self {
+        debug_assert!(index < Self::PAREN_MASK);
+
+        if in_paren {
+            Self(index | Self::PAREN_MASK)
+        } else {
+            Self(index)
+        }
+    }
+
+    pub fn index(&self) -> WordIndex {
+        self.0 & !Self::PAREN_MASK
+    }
+
+    pub fn in_paren(&self) -> bool {
+        (self.0 & Self::PAREN_MASK) != 0
+    }
 }
 
 #[derive(Deserialize)]
@@ -128,7 +159,7 @@ pub struct Entry {
     pub subword: Option<u8>,
     pub text: Box<str>,
     pub parsed_text: Box<[&'static Word]>,
-    pub word_ranges: Box<[(u32, u32)]>,
+    pub word_ranges: Box<[WordRange]>,
     pub sections: Box<[Section]>,
 }
 
@@ -161,15 +192,11 @@ impl From<RawEntry> for Entry {
                     .map(|para| {
                         para.into_iter()
                             .map(|(kind, s)| {
-                                let start = text.len() as u32;
+                                let start = text.len();
                                 text.push_str(&s);
-                                let end = text.len() as u32;
+                                let end = text.len();
                                 text.push('\0');
-                                Segment {
-                                    kind,
-                                    start,
-                                    end,
-                                }
+                                Segment::new(kind, start, end)
                             })
                             .collect()
                     })
@@ -180,25 +207,42 @@ impl From<RawEntry> for Entry {
         // Parse the words in the text, recording their start and end indices
         let mut parsed_text = Vec::new();
         let mut word_ranges = Vec::new();
+        let mut paren_depth = 0;
         let mut chars = text.char_indices().peekable();
         loop {
             // Skip non-word characters
-            while let Some(_) = chars.next_if(|&(_, ch)| RawEntry::skip_char(ch)) {}
+            while let Some((_, ch)) = chars.next_if(|&(_, ch)| RawEntry::skip_char(ch)) {
+                match ch {
+                    '(' => paren_depth += 1,
+                    ')' => {
+                        if paren_depth == 0 {
+                            eprintln!("Warning: unmatched closing parenthesis in {}", raw.word);
+                        } else {
+                            paren_depth -= 1;
+                        }
+                    },
+                    _ => {},
+                }
+            }
 
             if let Some((start, _)) = chars.next() {
                 // Skip word characters
                 while let Some(_) = chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)) {}
 
-                let end = chars.next()
-                    .map(|(i, _)| i)
+                let end = chars.peek()
+                    .map(|&(i, _)| i)
                     .unwrap_or(text.len());
 
                 // Push the parsed word and the indices
                 parsed_text.push(intern::word(Word::parse(&text[start..end])));
-                word_ranges.push((start as u32, end as u32));
+                word_ranges.push(WordRange::new(start, end, paren_depth > 0));
             } else {
                 break;
             }
+        }
+
+        if paren_depth != 0 {
+            eprintln!("Warning: unmatched opening parenthesis in {}", raw.word);
         }
 
         Self {
@@ -219,7 +263,69 @@ pub type Paragraph = Box<[Segment]>;
 
 #[derive(Debug)]
 pub struct Segment {
-    pub kind: SegmentKind,
-    pub start: u32,
-    pub end: u32,
+    kind: SegmentKind,
+    start: u32,
+    end: u32,
+}
+
+impl Segment {
+    pub fn new(kind: SegmentKind, start: usize, end: usize) -> Self {
+        debug_assert!(start < end);
+        debug_assert!(end <= u32::MAX as usize);
+
+        Self {
+            kind,
+            start: start as u32,
+            end: end as u32,
+        }
+    }
+
+    pub fn kind(&self) -> SegmentKind {
+        self.kind
+    }
+
+    pub fn start(&self) -> usize {
+        self.start as usize
+    }
+
+    pub fn end(&self) -> usize {
+        self.end as usize
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct WordRange {
+    start: u32,
+    end: u32,
+}
+
+impl WordRange {
+    const PAREN_MASK: u32 = 1 << 31;
+
+    pub fn new(start: usize, end: usize, in_paren: bool) -> Self {
+        debug_assert!(start < end);
+        debug_assert!(end < Self::PAREN_MASK as usize);
+
+        let mut end = end as u32;
+        if in_paren {
+            end |= Self::PAREN_MASK;
+        }
+
+        Self {
+            start: start as u32,
+            end,
+        }
+    }
+
+    pub fn start(&self) -> usize {
+        self.start as usize
+    }
+
+    pub fn end(&self) -> usize {
+        (self.end & !Self::PAREN_MASK) as usize
+    }
+
+    pub fn in_paren(&self) -> bool {
+        (self.end & Self::PAREN_MASK) != 0
+    }
 }

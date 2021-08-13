@@ -1,7 +1,7 @@
 use std::collections::{HashSet, BTreeMap, BTreeSet};
 
 use crate::tamil::{Word, LetterSet};
-use crate::dictionary::{ENTRIES, NO_WORD, Entry, EntryIndex, WordIndex, Loc};
+use crate::dictionary::{ENTRIES, NO_WORD, Entry, Loc, EntryIndex, WordIndex, WordData};
 
 pub mod tree;
 
@@ -162,26 +162,30 @@ struct SearchResultEntry {
 }
 
 impl SearchResultEntry {
-    fn new(word: WordIndex, start: bool, end: bool, expanded: bool) -> Self {
+    fn new(word: WordData, start: bool, end: bool, expanded: bool) -> Self {
         // Pick the precedence depending on if it is a definition
-        let precedence = if word == NO_WORD && !expanded {
+        let precedence = if word.index() == NO_WORD && !expanded {
             match (start, end) {
                 (true, true) => SearchPrecedence::Top,
                 (true, false) => SearchPrecedence::A,
                 (false, true) => SearchPrecedence::B,
                 (false, false) => SearchPrecedence::Bottom,
             }
-        } else {
+        } else if !word.in_paren() {
             match (start, end && !expanded) {
                 (true, true) => SearchPrecedence::A,
                 (true, false) => SearchPrecedence::B,
                 (false, true) => SearchPrecedence::C,
                 (false, false) => SearchPrecedence::Bottom,
             }
+        } else if start {
+            SearchPrecedence::C
+        } else {
+            SearchPrecedence::Bottom
         };
 
         let mut words = BTreeSet::new();
-        words.insert(word);
+        words.insert(word.index());
 
         Self {
             precedence,

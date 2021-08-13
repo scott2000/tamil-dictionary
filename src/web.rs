@@ -8,7 +8,7 @@ use rocket::serde::json::Json;
 use rocket::response::Redirect;
 use rocket_dyn_templates::Template;
 
-use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind};
+use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind, WordRange};
 use crate::search::{SearchResult, SearchRankingEntry};
 use crate::query::{Query, Pattern};
 use crate::tamil::{self, LetterSet};
@@ -24,7 +24,7 @@ const EXAMPLES: &'static [&'static str] = &[
     "utkaar",
     "konduvaa",
     "sandhosham",
-    "puttaham",
+    "puthaham",
     "koottam",
 ];
 
@@ -52,7 +52,7 @@ fn link_no_escape(escaped: &str) -> String {
 struct RenderState {
     entry: &'static Entry,
     definition_count: usize,
-    highlight_ranges: Vec<(u32, u32)>,
+    highlight_ranges: Vec<WordRange>,
 }
 
 #[derive(Serialize, Debug)]
@@ -92,11 +92,11 @@ impl ResultSegment {
         };
 
         // Highlight any words which appear in this segment
-        let mut start = seg.start as usize;
-        let end = seg.end as usize;
-        while let Some(&(range_start, range_end)) = state.highlight_ranges.last() {
-            let range_start = range_start as usize;
-            let range_end = range_end as usize;
+        let mut start = seg.start();
+        let end = seg.end();
+        while let Some(range) = state.highlight_ranges.last() {
+            let range_start = range.start();
+            let range_end = range.end();
 
             if range_end > end {
                 break;
@@ -104,13 +104,13 @@ impl ResultSegment {
 
             // Split the segment into parts to add a bold segment
             state.highlight_ranges.pop();
-            push(seg.kind, start, range_start);
+            push(seg.kind(), start, range_start);
             push(SegmentKind::Bold, range_start, range_end);
             start = range_end;
         }
 
         // Push any remaining text in the segment
-        push(seg.kind, start, end);
+        push(seg.kind(), start, end);
         segments
     }
 }
