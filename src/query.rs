@@ -318,15 +318,15 @@ impl Query {
 
     }
 
-    pub fn escape(s: &str, invalid: char) -> String {
+    pub fn escape(s: &str) -> String {
         let mut buffer = String::new();
         let mut has_invalid = true;
         for ch in s.chars() {
-            if Letter::is_valid(ch) || ch == '-' {
+            if Letter::is_valid(ch) {
                 buffer.push(ch);
                 has_invalid = false;
             } else if !has_invalid {
-                buffer.push(invalid);
+                buffer.push('-');
                 has_invalid = true;
             }
         }

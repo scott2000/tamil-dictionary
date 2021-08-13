@@ -68,7 +68,9 @@ struct RawEntry {
 
 impl RawEntry {
     fn words(word: &str) -> impl Iterator<Item = &str> {
-        word.split(&[',', ';'][..]).map(str::trim)
+        word.split(&[',', ';'][..])
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
     }
 
     fn parts(word: &str) -> impl Iterator<Item = &str> {
@@ -85,7 +87,7 @@ impl RawEntry {
         let mut parts = Self::parts(word);
 
         // Take the first part as the base word
-        let first = parts.next().unwrap_or("");
+        let first = parts.next().expect("word has no parts");
         let mut parsed = vec![Word::parse_unboxed(first)];
 
         // Add on all suffixes as necessary
@@ -131,12 +133,15 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn words<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+    pub fn primary_word(&self) -> &str {
         RawEntry::words(&self.word)
+            .next()
+            .unwrap()
     }
 
-    pub fn parsed_words<'a>(&'a self) -> impl Iterator<Item = Box<Word>> + 'a {
-        self.words().map(Word::parse)
+    fn parsed_words<'a>(&'a self) -> impl Iterator<Item = Box<Word>> + 'a {
+        RawEntry::words(&self.word)
+            .map(Word::parse)
     }
 }
 

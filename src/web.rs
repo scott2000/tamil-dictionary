@@ -1,4 +1,3 @@
-use std::iter;
 use std::borrow::Cow;
 
 use serde::{Serialize, Deserialize};
@@ -41,26 +40,12 @@ pub fn index() -> Template {
     })
 }
 
-fn link_alts<'a>(words: impl Iterator<Item = &'a str>) -> String {
-    let mut buffer = String::new();
-    for word in words {
-        if !buffer.is_empty() {
-            buffer.push_str(" | ");
-        }
-
-        buffer.push_str(&Query::escape(word, ' '));
-    }
-
-    if buffer.starts_with('-') || buffer.contains(' ') {
-        buffer.insert(0, '(');
-        buffer.push(')');
-    }
-
-    uri!(search(buffer)).to_string()
+fn link(word: &str) -> String {
+    link_no_escape(&Query::escape(word))
 }
 
-fn link(word: &str) -> String {
-    link_alts(iter::once(word))
+fn link_no_escape(escaped: &str) -> String {
+    uri!(search(escaped)).to_string()
 }
 
 #[derive(Debug)]
@@ -234,7 +219,7 @@ impl ResultEntry {
         }
 
         Self {
-            uri: link_alts(entry.words()),
+            uri: link(entry.primary_word()),
             word: &entry.word,
             exact,
             subword: entry.subword,
@@ -388,15 +373,13 @@ pub struct SuggestResponseEntry {
 
 impl From<&'static Entry> for SuggestResponseEntry {
     fn from(entry: &'static Entry) -> Self {
-        // Use the first word with spaces converted to hyphens for completion
-        let mut completion = Query::escape(entry.words().next().unwrap_or(""), '-');
-        let first_not_asterisk = completion.find(|ch: char| ch != '-').unwrap_or(0);
-        completion.drain(..first_not_asterisk);
+        let completion = Query::escape(entry.primary_word());
+        let uri = link_no_escape(&completion);
 
         Self {
             word: &entry.word,
             completion,
-            uri: link_alts(entry.words()),
+            uri,
         }
     }
 }
