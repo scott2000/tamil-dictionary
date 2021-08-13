@@ -49,7 +49,7 @@ async fn main() -> Result<(), rocket::Error> {
                 web::search_no_query,
                 web::suggest,
             ])
-            .mount("/", FileServer::from(relative!("static")))
+            .mount("/resources", FileServer::from(relative!("resources")))
             .attach(Template::fairing())
             .launch()
             .await
@@ -58,7 +58,7 @@ async fn main() -> Result<(), rocket::Error> {
     let word_handle = task::spawn_blocking(tree::search_word);
     let definition_handle = task::spawn_blocking(tree::search_definition);
 
-    word_handle.await.unwrap();
-    definition_handle.await.unwrap();
-    rocket_handle.await.unwrap()
+    word_handle.await.expect("failed to build word trees");
+    definition_handle.await.expect("failed to build definition trees");
+    rocket_handle.await.expect("rocket panicked")
 }

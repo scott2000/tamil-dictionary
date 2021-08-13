@@ -1,4 +1,5 @@
-/target
-/convert
+target/
+convert/
+resources/fonts/
 *.txt
 *.json
