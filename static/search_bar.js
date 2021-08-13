@@ -7,7 +7,7 @@ window.addEventListener('load', function() {
   const autocomplete = document.getElementById('autocomplete');
   const cache = new Map();
 
-  var currentQuery = '';
+  var currentQuery = null;
   var updateTimeout = null;
 
   var focused = false;
@@ -24,16 +24,6 @@ window.addEventListener('load', function() {
       autocomplete.style.display = 'none';
     }
   }
-
-  searchField.onfocus = function() {
-    focused = true;
-    display();
-  };
-
-  searchField.onblur = function() {
-    focused = false;
-    display();
-  };
 
   function setSelected(index) {
     if (selected === index) {
@@ -122,7 +112,7 @@ window.addEventListener('load', function() {
 
     function error() {
       console.error(request.statusText);
-      if (currentQuery === query) {
+      if (query === currentQuery) {
         setResults([]);
       }
     }
@@ -140,7 +130,7 @@ window.addEventListener('load', function() {
       const response = JSON.parse(request.responseText);
       cache.set(query, response);
 
-      if (currentQuery === query) {
+      if (query === currentQuery) {
         setResults(response);
       }
     };
@@ -153,7 +143,7 @@ window.addEventListener('load', function() {
   }
 
   function cancelQuery() {
-    currentQuery = '';
+    currentQuery = null;
 
     if (updateTimeout !== null) {
       clearTimeout(updateTimeout);
@@ -190,6 +180,20 @@ window.addEventListener('load', function() {
   function refreshQuery() {
     setQuery(searchField.value, false);
   }
+
+  searchField.onfocus = function() {
+    focused = true;
+    if (currentQuery === null) {
+      refreshQuery();
+    } else {
+      display();
+    }
+  };
+
+  searchField.onblur = function() {
+    focused = false;
+    display();
+  };
 
   searchField.oninput = refreshQuery;
 
@@ -284,6 +288,4 @@ window.addEventListener('load', function() {
     searchField.value = '';
     setQuery('');
   });
-
-  refreshQuery();
 });
