@@ -1,16 +1,17 @@
-use std::mem;
 use std::collections::BTreeMap;
+use std::mem;
 
 use thiserror::Error;
 
+use crate::dictionary::{self, Loc, ENTRIES};
 use crate::tamil::{Letter, LetterSet, Word};
-use crate::dictionary::{self, ENTRIES, Loc};
 
 use super::{SearchResult, SuggestionList};
 
 lazy_static! {
     static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
-    static ref DEFINITION_TREES: SearchTrees = build_trees("definition", dictionary::definition_words());
+    static ref DEFINITION_TREES: SearchTrees =
+        build_trees("definition", dictionary::definition_words());
     static ref EMPTY_MAP: BTreeMap<Letter, Tree<Loc>> = BTreeMap::new();
 }
 
@@ -51,8 +52,18 @@ fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> 
     prefix_tree.shrink();
     suffix_tree.shrink();
 
-    eprintln!(" => {} {} prefix nodes (depth = {})", prefix_tree.size(), kind, prefix_tree.depth());
-    eprintln!(" => {} {} suffix nodes (depth = {})", suffix_tree.size(), kind, suffix_tree.depth());
+    eprintln!(
+        " => {} {} prefix nodes (depth = {})",
+        prefix_tree.size(),
+        kind,
+        prefix_tree.depth()
+    );
+    eprintln!(
+        " => {} {} suffix nodes (depth = {})",
+        suffix_tree.size(),
+        kind,
+        suffix_tree.depth()
+    );
 
     SearchTrees {
         prefix_tree,
@@ -80,11 +91,14 @@ pub struct Search {
 
 impl Search {
     fn new(trees: &[&'static SearchTrees]) -> Self {
-        let branches = trees.iter()
-            .flat_map(|trees| [
-                SearchBranch::new(&trees.prefix_tree, true),
-                SearchBranch::new(&trees.suffix_tree, false),
-            ])
+        let branches = trees
+            .iter()
+            .flat_map(|trees| {
+                [
+                    SearchBranch::new(&trees.prefix_tree, true),
+                    SearchBranch::new(&trees.suffix_tree, false),
+                ]
+            })
             .collect();
 
         Self { branches }
@@ -95,7 +109,9 @@ impl super::Search for Search {
     type Error = SearchError;
 
     fn empty() -> Self {
-        Self { branches: Vec::new() }
+        Self {
+            branches: Vec::new(),
+        }
     }
 
     fn is_empty(&self) -> bool {
@@ -103,7 +119,9 @@ impl super::Search for Search {
     }
 
     fn asserting_start(&self) -> Self {
-        let branches = self.branches.iter()
+        let branches = self
+            .branches
+            .iter()
             .filter(|branch| branch.is_start())
             .copied()
             .collect();
@@ -112,7 +130,9 @@ impl super::Search for Search {
     }
 
     fn asserting_middle(&self) -> Self {
-        let branches = self.branches.iter()
+        let branches = self
+            .branches
+            .iter()
             .filter_map(|branch| branch.middle())
             .collect();
 
@@ -122,7 +142,9 @@ impl super::Search for Search {
     fn asserting_end(&self) -> Self {
         let empty_map = &EMPTY_MAP;
 
-        let branches = self.branches.iter()
+        let branches = self
+            .branches
+            .iter()
             .filter_map(|branch| branch.suffix(empty_map))
             .collect();
 
@@ -130,7 +152,9 @@ impl super::Search for Search {
     }
 
     fn asserting_next(&self, lts: LetterSet) -> Self {
-        let branches = self.branches.iter()
+        let branches = self
+            .branches
+            .iter()
             .filter_map(|branch| branch.assert_next(lts))
             .collect();
 
@@ -138,7 +162,9 @@ impl super::Search for Search {
     }
 
     fn asserting_prev(&self, lt: Letter) -> Self {
-        let branches = self.branches.iter()
+        let branches = self
+            .branches
+            .iter()
             .filter_map(|branch| {
                 match branch.prev_letter {
                     // The branch isn't initial, so keep it if it matches
@@ -161,7 +187,7 @@ impl super::Search for Search {
             match branch.prev_letter {
                 // The branch isn't initial, so keep it if it matches
                 Some(prev) if lts.matches(prev) => branches.push(*branch),
-                Some(_) => {},
+                Some(_) => {}
 
                 // The branch is initial, so consume the letter directly
                 None => branch.ignore_prefix().append_matches(&mut branches, lts)?,
@@ -172,7 +198,9 @@ impl super::Search for Search {
     }
 
     fn literal(&self, word: &Word) -> Self {
-        let branches = self.branches.iter()
+        let branches = self
+            .branches
+            .iter()
             .filter_map(|branch| branch.literal(word))
             .collect();
 
@@ -210,7 +238,11 @@ impl super::Search for Search {
 
         let is_single_branch = self.branches.len() == 1;
         for branch in self.branches {
-            branch.append_suggestions(&mut list, true, is_single_branch && branch.prefix.is_empty());
+            branch.append_suggestions(
+                &mut list,
+                true,
+                is_single_branch && branch.prefix.is_empty(),
+            );
         }
 
         list
@@ -326,7 +358,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
             None
         } else if !self.prefix.is_empty() {
             Some(*self)
-        }  else if !self.branches.is_empty() {
+        } else if !self.branches.is_empty() {
             Some(Self {
                 leaves: &[],
                 ..*self
@@ -379,7 +411,11 @@ impl<T: Eq + Copy> SearchBranch<T> {
         Some(self)
     }
 
-    fn append_matches(&self, output: &mut Vec<Self>, mut lts: LetterSet) -> Result<(), SearchError> {
+    fn append_matches(
+        &self,
+        output: &mut Vec<Self>,
+        mut lts: LetterSet,
+    ) -> Result<(), SearchError> {
         // Check for a requirement on the next letter
         if let Some(require) = self.require {
             lts = lts.intersect(require);
@@ -418,8 +454,8 @@ impl SearchBranch<Loc> {
         self,
         result: &mut SearchResult,
         total_count: &mut usize,
-        suffix: bool) -> Result<(), SearchError>
-    {
+        suffix: bool,
+    ) -> Result<(), SearchError> {
         // Make sure the total count doesn't exceed the limit
         *total_count += self.leaves.len();
         if *total_count > SEARCH_MAX_RESULTS {
@@ -435,11 +471,12 @@ impl SearchBranch<Loc> {
         for (&lt, branch) in self.branches {
             match &self.require {
                 // If there is a requirement and it fails, then skip this branch
-                Some(require) if !require.matches(lt) => {},
+                Some(require) if !require.matches(lt) => {}
 
                 // Otherwise, add the branch to the result
                 _ => {
-                    self.update(lt, branch).add_to_result(result, total_count, false)?;
+                    self.update(lt, branch)
+                        .add_to_result(result, total_count, false)?;
                 }
             }
         }
@@ -447,7 +484,12 @@ impl SearchBranch<Loc> {
         Ok(())
     }
 
-    fn append_suggestions(self, list: &mut SuggestionList, mut from_leaf: bool, exact: bool) -> bool {
+    fn append_suggestions(
+        self,
+        list: &mut SuggestionList,
+        mut from_leaf: bool,
+        exact: bool,
+    ) -> bool {
         // Add suggestions for all of the leaves, returning early if one fails
         for leaf in self.leaves {
             if list.add_suggestion(leaf.entry, from_leaf, self.is_expanded) {
@@ -464,11 +506,14 @@ impl SearchBranch<Loc> {
         for (&lt, branch) in self.branches {
             match &self.require {
                 // If there is a requirement and it fails, then skip this branch
-                Some(require) if !require.matches(lt) => {},
+                Some(require) if !require.matches(lt) => {}
 
                 // Otherwise, add the branch to the suggestion, returning early if it fails
                 _ => {
-                    if self.update(lt, branch).append_suggestions(list, from_leaf, false) {
+                    if self
+                        .update(lt, branch)
+                        .append_suggestions(list, from_leaf, false)
+                    {
                         break;
                     }
                 }
@@ -562,7 +607,8 @@ impl<T: Eq> Tree<T> {
             // The first key is a prefix, so add the other as a branch
             self.append_branch(
                 rhs.prefix[self.prefix.len()],
-                rhs.strip_to(self.prefix.len()));
+                rhs.strip_to(self.prefix.len()),
+            );
         }
 
         self

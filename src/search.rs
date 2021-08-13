@@ -1,7 +1,7 @@
-use std::collections::{HashSet, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use crate::dictionary::{Entry, EntryIndex, Loc, WordData, WordIndex, ENTRIES, NO_WORD};
 use crate::tamil::{Letter, LetterSet, Word};
-use crate::dictionary::{ENTRIES, NO_WORD, Entry, Loc, EntryIndex, WordIndex, WordData};
 
 pub mod tree;
 
@@ -71,13 +71,15 @@ impl SuggestionList {
     }
 
     pub fn suggestions(mut self) -> impl Iterator<Item = &'static Entry> {
-        let mut extend_count = (self.count_requested as usize).saturating_sub(self.from_leaves.len());
+        let mut extend_count =
+            (self.count_requested as usize).saturating_sub(self.from_leaves.len());
 
         let expanded = if extend_count == 0 {
             Vec::new()
         } else {
             // Take some branches and add them to try to reach the requested count
-            let to_add: Vec<_> = self.from_branches
+            let to_add: Vec<_> = self
+                .from_branches
                 .difference(&self.from_leaves)
                 .take(extend_count)
                 .cloned()
@@ -95,7 +97,8 @@ impl SuggestionList {
         };
 
         // Take the first suggestions alphabetically
-        self.from_leaves.into_iter()
+        self.from_leaves
+            .into_iter()
             .chain(expanded)
             .take(self.count_requested as usize)
             .map(|index| &ENTRIES[index as usize])
@@ -191,10 +194,7 @@ impl SearchResultEntry {
         let mut words = BTreeSet::new();
         words.insert(word.index());
 
-        Self {
-            precedence,
-            words,
-        }
+        Self { precedence, words }
     }
 
     fn word_match(&self) -> bool {
@@ -233,7 +233,11 @@ impl SearchResult {
     }
 
     pub fn insert(&mut self, loc: Loc, start: bool, end: bool, expanded: bool) {
-        self.insert_entry(loc.entry, SearchResultEntry::new(loc.word, start, end, expanded), false);
+        self.insert_entry(
+            loc.entry,
+            SearchResultEntry::new(loc.word, start, end, expanded),
+            false,
+        );
     }
 
     fn insert_entry(&mut self, index: EntryIndex, entry: SearchResultEntry, intersect: bool) {
@@ -253,7 +257,7 @@ impl SearchResult {
 
         // If the search is exactly one result, return it
         if intersect.len() == 1 && difference.is_empty() {
-            return intersect.into_iter().next().unwrap()
+            return intersect.into_iter().next().unwrap();
         }
 
         // Find the intersection of the positive results
@@ -263,7 +267,8 @@ impl SearchResult {
         }
 
         // Find the union of the negative results
-        let difference_set: HashSet<_> = difference.into_iter()
+        let difference_set: HashSet<_> = difference
+            .into_iter()
             .flat_map(|result| result.map.into_keys())
             .collect();
 
@@ -281,8 +286,8 @@ impl SearchResult {
     }
 
     pub fn rank(self) -> SearchRanking {
-        use SearchRank::*;
         use SearchPrecedence::*;
+        use SearchRank::*;
 
         // Check for which precedence levels are present
         let mut a_count = 0;
@@ -372,9 +377,7 @@ pub struct SearchRanking {
 
 impl SearchRanking {
     pub fn is_empty(&self) -> bool {
-        self.best.is_empty()
-            && self.related.is_empty()
-            && self.other.is_empty()
+        self.best.is_empty() && self.related.is_empty() && self.other.is_empty()
     }
 
     fn insert(&mut self, rank: SearchRank, index: EntryIndex, words: BTreeSet<WordIndex>) {
@@ -390,7 +393,7 @@ impl SearchRanking {
             Exact | Best => self.best.push(entry),
             Related => self.related.push(entry),
             Other => self.other.push(entry),
-            Ignore => {},
+            Ignore => {}
         }
     }
 }

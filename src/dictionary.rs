@@ -30,27 +30,36 @@ lazy_static! {
 }
 
 pub fn words() -> impl Iterator<Item = (&'static Word, Loc)> {
-    ENTRIES.iter()
-        .enumerate()
-        .flat_map(|(a, entry)|
-            entry.parsed_word.iter()
-                .map(move |&word| (word, Loc {
+    ENTRIES.iter().enumerate().flat_map(|(a, entry)| {
+        entry.parsed_word.iter().map(move |&word| {
+            (
+                word,
+                Loc {
                     entry: a as u16,
                     word: WordData::new(NO_WORD, false),
-                })))
+                },
+            )
+        })
+    })
 }
 
 pub fn definition_words() -> impl Iterator<Item = (&'static Word, Loc)> {
-    ENTRIES.iter()
-        .enumerate()
-        .flat_map(|(a, entry)|
-            entry.parsed_text.iter()
-                .zip(entry.word_ranges.iter())
-                .enumerate()
-                .map(move |(b, (&word, range))| (word, Loc {
-                    entry: a as u16,
-                    word: WordData::new(b as u16, range.in_paren()),
-                })))
+    ENTRIES.iter().enumerate().flat_map(|(a, entry)| {
+        entry
+            .parsed_text
+            .iter()
+            .zip(entry.word_ranges.iter())
+            .enumerate()
+            .map(move |(b, (&word, range))| {
+                (
+                    word,
+                    Loc {
+                        entry: a as u16,
+                        word: WordData::new(b as u16, range.in_paren()),
+                    },
+                )
+            })
+    })
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -105,8 +114,7 @@ impl RawEntry {
     }
 
     fn parts(word: &str) -> impl Iterator<Item = &str> {
-        word.split(Self::skip_char)
-            .filter(|s| !s.is_empty())
+        word.split(Self::skip_char).filter(|s| !s.is_empty())
     }
 
     fn skip_char(ch: char) -> bool {
@@ -131,7 +139,8 @@ impl RawEntry {
         }
 
         // Intern the resulting words
-        parsed.into_iter()
+        parsed
+            .into_iter()
             .map(|word| intern::word(word.into()))
             .collect()
     }
@@ -165,14 +174,11 @@ pub struct Entry {
 
 impl Entry {
     pub fn primary_word(&self) -> &str {
-        RawEntry::words(&self.word)
-            .next()
-            .unwrap()
+        RawEntry::words(&self.word).next().unwrap()
     }
 
     fn parsed_words<'a>(&'a self) -> impl Iterator<Item = Box<Word>> + 'a {
-        RawEntry::words(&self.word)
-            .map(Word::parse)
+        RawEntry::words(&self.word).map(Word::parse)
     }
 }
 
@@ -186,7 +192,9 @@ impl From<RawEntry> for Entry {
 
         // Load all of the text of the sections, and set the segments to refer to indices
         let mut text = String::new();
-        let sections = raw.secs.into_iter()
+        let sections = raw
+            .secs
+            .into_iter()
             .map(|sec| {
                 sec.into_iter()
                     .map(|para| {
@@ -220,8 +228,8 @@ impl From<RawEntry> for Entry {
                         } else {
                             paren_depth -= 1;
                         }
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
 
@@ -229,9 +237,7 @@ impl From<RawEntry> for Entry {
                 // Skip word characters
                 while let Some(_) = chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)) {}
 
-                let end = chars.peek()
-                    .map(|&(i, _)| i)
-                    .unwrap_or(text.len());
+                let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
 
                 // Push the parsed word and the indices
                 parsed_text.push(intern::word(Word::parse(&text[start..end])));

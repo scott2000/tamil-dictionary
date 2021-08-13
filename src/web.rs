@@ -1,16 +1,16 @@
 use std::borrow::Cow;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use rand::seq::SliceRandom;
 
-use rocket::serde::json::Json;
 use rocket::response::Redirect;
+use rocket::serde::json::Json;
 use rocket_dyn_templates::Template;
 
-use crate::dictionary::{NO_WORD, Entry, Section, Paragraph, Segment, SegmentKind, WordRange};
-use crate::search::{SearchResult, SearchRankingEntry};
-use crate::query::{Query, Pattern};
+use crate::dictionary::{Entry, Paragraph, Section, Segment, SegmentKind, WordRange, NO_WORD};
+use crate::query::{Pattern, Query};
+use crate::search::{SearchRankingEntry, SearchResult};
 use crate::tamil::{self, LetterSet};
 
 const MAX_OTHER_SECTIONS: usize = 5;
@@ -35,9 +35,12 @@ struct Index {
 
 #[get("/")]
 pub fn index() -> Template {
-    Template::render("index", &Index {
-        example: EXAMPLES.choose(&mut rand::thread_rng()).unwrap(),
-    })
+    Template::render(
+        "index",
+        &Index {
+            example: EXAMPLES.choose(&mut rand::thread_rng()).unwrap(),
+        },
+    )
 }
 
 fn link(word: &str) -> String {
@@ -122,13 +125,12 @@ struct ResultParagraph {
 
 impl ResultParagraph {
     fn render(state: &mut RenderState, para: &'static Paragraph) -> Self {
-        let segments = para.iter()
+        let segments = para
+            .iter()
             .flat_map(|seg| ResultSegment::render(state, seg))
             .collect();
 
-        Self {
-            segments,
-        }
+        Self { segments }
     }
 }
 
@@ -144,8 +146,7 @@ impl ResultSection {
     fn render(state: &mut RenderState, is_header: bool, sec: &'static Section) -> Self {
         let definition_start = state.definition_count;
 
-        let mut iter = sec.iter()
-            .map(|para| ResultParagraph::render(state, para));
+        let mut iter = sec.iter().map(|para| ResultParagraph::render(state, para));
 
         let section = iter.next().unwrap_or_default();
         let paragraphs: Vec<_> = iter.collect();
@@ -171,12 +172,16 @@ struct ResultEntry {
 
 impl ResultEntry {
     fn render_all(results: Vec<SearchRankingEntry>) -> Vec<Self> {
-        results.into_iter()
-            .map(Self::render)
-            .collect()
+        results.into_iter().map(Self::render).collect()
     }
 
-    fn render(SearchRankingEntry { entry, words, exact }: SearchRankingEntry) -> Self {
+    fn render(
+        SearchRankingEntry {
+            entry,
+            words,
+            exact,
+        }: SearchRankingEntry,
+    ) -> Self {
         // Create a stack of highlighted word ranges
         let mut highlight_ranges = Vec::new();
         for &index in words.iter().rev() {
@@ -194,7 +199,9 @@ impl ResultEntry {
         };
 
         // Render all of the sections for the entry
-        let mut sections: Vec<_> = entry.sections.iter()
+        let mut sections: Vec<_> = entry
+            .sections
+            .iter()
             .enumerate()
             .map(|(i, sec)| ResultSection::render(&mut state, i == 0, sec))
             .collect();
@@ -235,7 +242,7 @@ struct NumWithPlural {
 }
 
 impl From<usize> for NumWithPlural {
-    fn from(num: usize) -> Self  {
+    fn from(num: usize) -> Self {
         Self {
             num,
             is_plural: num != 1,
@@ -315,7 +322,9 @@ impl Search {
                 // Only hide the other results if they are too long
                 if self.other_count.num <= MAX_OTHER_SECTIONS {
                     // Count the number of sections in the other section
-                    let other_section_count = self.other.iter()
+                    let other_section_count = self
+                        .other
+                        .iter()
                         .map(|entry| entry.sections.len())
                         .sum::<usize>();
 
@@ -323,7 +332,7 @@ impl Search {
                         self.hide_other = false;
                     }
                 }
-            },
+            }
         }
     }
 }
@@ -393,7 +402,7 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
     if let Some(last_character) = query.chars().next_back() {
         if tamil::is_consonant(last_character) {
             query += "\u{bcd}";
-            append_a =  true;
+            append_a = true;
         }
     }
 
@@ -414,11 +423,14 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
                     Box::new(pat),
                     Box::new(Pattern::Alternative(
                         Box::new(Pattern::Assert(LetterSet::vowel())),
-                        Box::new(Pattern::MarkExpanded))));
+                        Box::new(Pattern::MarkExpanded),
+                    )),
+                );
             }
 
             if let Some(list) = pat.suggest(count) {
-                let mut suggestions: Vec<_> = list.suggestions()
+                let mut suggestions: Vec<_> = list
+                    .suggestions()
                     .map(|entry| SuggestResponseEntry::from(entry))
                     .collect();
 

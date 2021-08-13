@@ -1,5 +1,7 @@
-#[macro_use] extern crate rocket;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate rocket;
+#[macro_use]
+extern crate lazy_static;
 
 #[doc(hidden)]
 macro_rules! letterset_impl {
@@ -23,32 +25,36 @@ macro_rules! word {
     };
 }
 
-use rocket::fs::{FileServer, relative};
+use rocket::fs::{relative, FileServer};
 use rocket_dyn_templates::Template;
 
 use tokio::task;
 
-pub mod tamil;
-pub mod intern;
 pub mod dictionary;
-pub mod search;
+pub mod intern;
 pub mod query;
+pub mod search;
+pub mod tamil;
 pub mod web;
 
 use search::tree;
 
 #[rocket::main]
+#[rustfmt::skip]
 async fn main() -> Result<(), rocket::Error> {
     let rocket_handle = tokio::spawn(async {
         rocket::build()
-            .mount("/", routes![
-                web::index,
-                web::search_all,
-                web::search,
-                web::search_empty_query,
-                web::search_no_query,
-                web::suggest,
-            ])
+            .mount(
+                "/",
+                routes![
+                    web::index,
+                    web::search_all,
+                    web::search,
+                    web::search_empty_query,
+                    web::search_no_query,
+                    web::suggest,
+                ],
+            )
             .mount("/resources", FileServer::from(relative!("resources")))
             .attach(Template::fairing())
             .launch()

@@ -4,8 +4,8 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::tamil::{PULLI, Letter, LetterSet, Category, Word};
-use crate::search::{Search, SearchResult, SuggestionList, tree};
+use crate::search::{tree, Search, SearchResult, SuggestionList};
+use crate::tamil::{Category, Letter, LetterSet, Word, PULLI};
 
 mod transform;
 
@@ -61,10 +61,7 @@ pub enum ParseError {
     #[error("Invalid syntax: extra {0}.")]
     Extra(SurroundKind),
     #[error("Invalid syntax: expected {expected} but found '{found}'.")]
-    ExpectedCharacter {
-        expected: SurroundKind,
-        found: char,
-    },
+    ExpectedCharacter { expected: SurroundKind, found: char },
 }
 
 #[derive(Debug)]
@@ -139,13 +136,14 @@ impl Query {
                     if negative {
                         return Err(ParseError::EmptyNegative);
                     }
-                },
+                }
                 mut pat => {
                     if quoted {
                         // Replace "X" with #(<X>)
                         pat = Pattern::Exact(Box::new(Pattern::Concat(
                             Box::new(Pattern::AssertStart),
-                            Box::new(Pattern::Concat(Box::new(pat), Box::new(Pattern::AssertEnd))))));
+                            Box::new(Pattern::Concat(Box::new(pat), Box::new(Pattern::AssertEnd))),
+                        )));
                     }
 
                     if negative {
@@ -155,7 +153,7 @@ impl Query {
                         positive_empty = false;
                         positives.push(pat);
                     }
-                },
+                }
             }
 
             // Check for closing quotes if there were opening quotes
@@ -227,8 +225,9 @@ impl Query {
 
                 // If only negative, push a pattern which will match anything
                 query.word_patterns.push(Pattern::Concat(
-                        Box::new(Pattern::AssertStart),
-                        Box::new(Pattern::Set(LetterSet::any()))));
+                    Box::new(Pattern::AssertStart),
+                    Box::new(Pattern::Set(LetterSet::any())),
+                ));
             }
             _ => {}
         }
@@ -315,7 +314,6 @@ impl Query {
         } else {
             None
         }
-
     }
 
     pub fn escape(s: &str) -> String {
@@ -360,10 +358,7 @@ impl Query {
 
     fn expected_character(expected: SurroundKind, found: char) -> ParseError {
         if found.is_ascii_graphic() || found == ' ' {
-            ParseError::ExpectedCharacter {
-                expected,
-                found,
-            }
+            ParseError::ExpectedCharacter { expected, found }
         } else {
             Self::invalid_unicode(found)
         }
@@ -394,16 +389,16 @@ impl Pattern {
         }
 
         match self {
-            Self::Empty         => Ok(search),
-            Self::MarkExpanded  => Ok(search.marking_expanded()),
-            Self::AssertStart   => Ok(search.asserting_start()),
-            Self::AssertMiddle  => Ok(search.asserting_middle()),
-            Self::AssertEnd     => Ok(search.asserting_end()),
-            &Self::Assert(lts)  => Ok(search.asserting_next(transform::letter_set(lts, trans))),
-            &Self::Set(lts)     => search.matching(transform::letter_set(lts, trans)),
+            Self::Empty => Ok(search),
+            Self::MarkExpanded => Ok(search.marking_expanded()),
+            Self::AssertStart => Ok(search.asserting_start()),
+            Self::AssertMiddle => Ok(search.asserting_middle()),
+            Self::AssertEnd => Ok(search.asserting_end()),
+            &Self::Assert(lts) => Ok(search.asserting_next(transform::letter_set(lts, trans))),
+            &Self::Set(lts) => search.matching(transform::letter_set(lts, trans)),
             Self::Literal(word) => transform::literal_search(search, word, expand, trans),
-            Self::Exact(pat)    => pat.search(search, false, false),
-            Self::Trans(pat)    => pat.search(search, expand, true),
+            Self::Exact(pat) => pat.search(search, false, false),
+            Self::Trans(pat) => pat.search(search, expand, true),
             &Self::Repeat(ref pat, a, b) => {
                 let mut search = search;
                 for _ in 0..a {
@@ -411,7 +406,7 @@ impl Pattern {
                 }
 
                 let mut result = search.clone();
-                for _ in 0..(b-a) {
+                for _ in 0..(b - a) {
                     if search.is_empty() {
                         break;
                     }
@@ -421,7 +416,7 @@ impl Pattern {
                 }
 
                 Ok(result)
-            },
+            }
             Self::Concat(a, b) => {
                 let search = a.search(search, expand, trans)?;
                 if search.is_empty() {
@@ -429,11 +424,10 @@ impl Pattern {
                 } else {
                     b.search(search, expand, trans)
                 }
-            },
-            Self::Alternative(a, b) => {
-                a.search(search.clone(), expand, trans)?
-                    .joining(&b.search(search, expand, trans)?)
-            },
+            }
+            Self::Alternative(a, b) => a
+                .search(search.clone(), expand, trans)?
+                .joining(&b.search(search, expand, trans)?),
         }
     }
 
@@ -453,16 +447,15 @@ impl Pattern {
                 }
 
                 !lts.intersect(LetterSet::latin()).is_empty()
-            },
+            }
 
-            Self::Literal(word) =>
-                word.contains(LetterSet::latin()),
+            Self::Literal(word) => word.contains(LetterSet::latin()),
 
-            Self::Repeat(pat, _, _) =>
-                pat.implicit_transliteration(),
+            Self::Repeat(pat, _, _) => pat.implicit_transliteration(),
 
-            Self::Concat(a, b) | Self::Alternative(a, b) =>
-                a.implicit_transliteration() || b.implicit_transliteration(),
+            Self::Concat(a, b) | Self::Alternative(a, b) => {
+                a.implicit_transliteration() || b.implicit_transliteration()
+            }
 
             _ => false,
         }
@@ -501,27 +494,27 @@ impl Pattern {
             Some('@') => {
                 chars.next();
                 Self::MarkExpanded
-            },
+            }
             Some('<' | '^') => {
                 chars.next();
                 Self::AssertStart
-            },
+            }
             Some('~') => {
                 chars.next();
                 Self::AssertMiddle
-            },
+            }
             Some('>' | '$') => {
                 chars.next();
                 Self::AssertEnd
-            },
+            }
             Some('_') => {
                 chars.next();
                 Self::Set(LetterSet::any())
-            },
+            }
             Some(_) => {
                 split_text = true;
                 Self::parse_text(chars, in_group)
-            },
+            }
         };
 
         if let Self::Empty = pat {
@@ -539,11 +532,16 @@ impl Pattern {
                         let split = text.len() - 1;
                         Self::Concat(
                             Box::new(Self::Literal(Box::from(&text[..split]))),
-                            Box::new(Self::Repeat(Box::from(Self::Literal(Box::from(&text[split..]))), a, b)))
-                    },
+                            Box::new(Self::Repeat(
+                                Box::from(Self::Literal(Box::from(&text[split..]))),
+                                a,
+                                b,
+                            )),
+                        )
+                    }
                     _ => Self::Repeat(Box::new(pat), a, b),
                 }
-            },
+            }
         };
 
         // Continue parsing if possible, and concatenate the result
@@ -609,7 +607,7 @@ impl Pattern {
             Some(')') => {
                 chars.next();
                 Ok(pat)
-            },
+            }
             Some(&found) => Err(Query::expected_character(SurroundKind::Paren, found)),
         }
     }
@@ -661,7 +659,9 @@ impl Pattern {
                     if let Some(end) = Letter::parse(ch) {
                         Self::parse_pulli(chars, end)?;
 
-                        start.range(end).map_err(|(a, b)| ParseError::InvalidRange(a, b))
+                        start
+                            .range(end)
+                            .map_err(|(a, b)| ParseError::InvalidRange(a, b))
                     } else {
                         Err(ParseError::PartialRange)
                     }
@@ -717,15 +717,15 @@ impl Pattern {
             Some('?') => {
                 chars.next();
                 Ok((0, 1))
-            },
+            }
             Some('*') => {
                 chars.next();
                 Ok((0, u8::MAX))
-            },
+            }
             Some('+') => {
                 chars.next();
                 Ok((1, u8::MAX))
-            },
+            }
             Some('{') => {
                 chars.next();
 
@@ -743,13 +743,15 @@ impl Pattern {
                         match chars.next() {
                             None => Err(ParseError::Missing(SurroundKind::Brace)),
                             Some('}') => Ok((a, b)),
-                            Some(found) => Err(Query::expected_character(SurroundKind::Brace, found)),
+                            Some(found) => {
+                                Err(Query::expected_character(SurroundKind::Brace, found))
+                            }
                         }
                     }
                     Some(ch) => Err(Query::invalid_character(ch, ParseError::InvalidRepetition)),
                 }
-            },
-            _ => Ok((1, 1))
+            }
+            _ => Ok((1, 1)),
         }
     }
 
@@ -767,7 +769,9 @@ impl Pattern {
         if buffer.is_empty() {
             Ok(default)
         } else {
-            buffer.parse().map_err(|_| ParseError::InvalidRepetitionIndex)
+            buffer
+                .parse()
+                .map_err(|_| ParseError::InvalidRepetitionIndex)
         }
     }
 

@@ -1,7 +1,7 @@
-use std::ops::*;
 use std::cmp::Ordering;
-use std::fmt::{self, Display, Debug};
 use std::collections::{HashMap, HashSet};
+use std::fmt::{self, Debug, Display};
+use std::ops::*;
 
 #[doc(hidden)]
 macro_rules! letters_impl {
@@ -83,6 +83,7 @@ pub const PULLI: char = '\u{bcd}';
 pub const COMBINING_LA: char = '\u{bd7}';
 pub const OM: char = '\u{bd0}';
 
+#[rustfmt::skip]
 const TAMIL_VOWELS: &'static [char] = &[
     'அ', 'ஆ',
     'இ', 'ஈ',
@@ -91,6 +92,7 @@ const TAMIL_VOWELS: &'static [char] = &[
     'ஒ', 'ஓ', 'ஔ',
 ];
 
+#[rustfmt::skip]
 const TAMIL_VOWEL_SIGNS: &'static [char] = &[
     '\u{bbe}',
     '\u{bbf}', '\u{bc0}',
@@ -102,6 +104,7 @@ const TAMIL_VOWEL_SIGNS: &'static [char] = &[
 const AAYDHAM: char = 'ஃ';
 const GRANTHA_SSH: char = 'ஶ';
 
+#[rustfmt::skip]
 const TAMIL_CONSONANTS: &'static [char] = &[
     'க', 'ங',
     'ச', 'ஞ',
@@ -116,20 +119,28 @@ const TAMIL_CONSONANTS: &'static [char] = &[
 lazy_static! {
     static ref TAMIL_VOWEL_MAP: HashMap<char, Letter> = to_map(num::VOWEL_START, TAMIL_VOWELS);
     static ref TAMIL_VOWEL_SIGN_MAP: HashMap<char, Letter> = to_map(num::LONG_A, TAMIL_VOWEL_SIGNS);
-
     static ref TAMIL_CONSONANT_MAP: HashMap<char, Letter> = {
         let mut map = to_map(num::CONSONANT_START, TAMIL_CONSONANTS);
         map.insert(GRANTHA_SSH, Letter::GRANTHA_S);
         map
     };
-
     static ref VALID_LETTERS: HashSet<char> = {
         let mut set = HashSet::new();
-        for ch in TAMIL_VOWELS.iter()
+        for ch in TAMIL_VOWELS
+            .iter()
             .chain(TAMIL_VOWEL_SIGNS)
             .chain(TAMIL_CONSONANTS)
             .cloned()
-            .chain([AAYDHAM, GRANTHA_SSH, PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
+            .chain([
+                AAYDHAM,
+                GRANTHA_SSH,
+                PULLI,
+                COMBINING_LA,
+                OM,
+                '\u{200b}',
+                '\u{200c}',
+                '\u{200d}',
+            ])
             .chain('a'..='z')
             .chain('A'..='Z')
         {
@@ -168,7 +179,8 @@ impl Letter {
             AAYDHAM => Some(Self::AAYDHAM),
             _ => {
                 // Don't include vowel signs as they can't stand on their own
-                TAMIL_VOWEL_MAP.get(&ch)
+                TAMIL_VOWEL_MAP
+                    .get(&ch)
                     .or_else(|| TAMIL_CONSONANT_MAP.get(&ch))
                     .copied()
             }
@@ -193,28 +205,36 @@ impl Letter {
                     // Kutriyal ugaram
                     Self::SHORT_U => {
                         prefix.pop();
-                        vec![vec![], vec![Letter::SHORT_U], vec![Letter::SHORT_U, Letter::TAMIL_V]]
-                    },
+                        vec![
+                            vec![],
+                            vec![Letter::SHORT_U],
+                            vec![Letter::SHORT_U, Letter::TAMIL_V],
+                        ]
+                    }
 
                     // Joining with "v"
-                    Self::SHORT_A | Self::LONG_A | Self::LONG_U | Self::SHORT_O | Self::LONG_O | Self::AU =>
-                        vec![vec![], vec![Letter::TAMIL_V]],
+                    Self::SHORT_A
+                    | Self::LONG_A
+                    | Self::LONG_U
+                    | Self::SHORT_O
+                    | Self::LONG_O
+                    | Self::AU => vec![vec![], vec![Letter::TAMIL_V]],
 
                     // Joining with "y"
                     _ => vec![vec![], vec![Letter::TAMIL_Y]],
                 }
-            },
+            }
 
             // Joining a consonant with a vowel (could double)
             (TamilConsonant | TamilGrantha, TamilVowel) => {
                 vec![vec![], vec![left]]
-            },
+            }
 
             // Natural joining
             _ => {
                 prefix.extend_from_slice(suffix.as_ref());
-                return vec![prefix]
-            },
+                return vec![prefix];
+            }
         };
 
         let mut result = Vec::new();
@@ -266,20 +286,15 @@ impl Letter {
 
     pub fn category(self) -> Category {
         match self.0 {
-            num::VOWEL_START..=num::VOWEL_END =>
-                Category::TamilVowel,
+            num::VOWEL_START..=num::VOWEL_END => Category::TamilVowel,
 
-            num::AAYDHAM =>
-                Category::TamilAaydham,
+            num::AAYDHAM => Category::TamilAaydham,
 
-            num::CONSONANT_START..=num::TAMIL_CONSONANT_END =>
-                Category::TamilConsonant,
+            num::CONSONANT_START..=num::TAMIL_CONSONANT_END => Category::TamilConsonant,
 
-            num::GRANTHA_START..=num::GRANTHA_END =>
-                Category::TamilGrantha,
+            num::GRANTHA_START..=num::GRANTHA_END => Category::TamilGrantha,
 
-            num::LATIN_A..=num::LATIN_Z =>
-                Category::LatinAlpha,
+            num::LATIN_A..=num::LATIN_Z => Category::LatinAlpha,
 
             ch => unreachable!("invalid character: {}", ch),
         }
@@ -300,17 +315,18 @@ impl Display for Letter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ch = self.0;
         match ch {
-            num::VOWEL_START..=num::VOWEL_END =>
-                write!(f, "{}", TAMIL_VOWELS[ch as usize]),
+            num::VOWEL_START..=num::VOWEL_END => write!(f, "{}", TAMIL_VOWELS[ch as usize]),
 
-            num::AAYDHAM =>
-                write!(f, "{}", AAYDHAM),
+            num::AAYDHAM => write!(f, "{}", AAYDHAM),
 
-            num::CONSONANT_START..=num::CONSONANT_END =>
-                write!(f, "{}{}", TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize], PULLI),
+            num::CONSONANT_START..=num::CONSONANT_END => write!(
+                f,
+                "{}{}",
+                TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize],
+                PULLI
+            ),
 
-            num::LATIN_A..=num::LATIN_Z =>
-                write!(f, "{}", (ch - num::LATIN_A + b'a') as char),
+            num::LATIN_A..=num::LATIN_Z => write!(f, "{}", (ch - num::LATIN_A + b'a') as char),
 
             _ => unreachable!("invalid character: {}", ch),
         }
@@ -353,8 +369,7 @@ impl LetterSet {
     }
 
     pub const fn any() -> Self {
-        Self::empty()
-            .complement()
+        Self::empty().complement()
     }
 
     pub const fn single(lt: Letter) -> Self {
@@ -412,25 +427,11 @@ impl LetterSet {
     }
 
     pub const fn kuril() -> Self {
-        letterset![
-            SHORT_A,
-            SHORT_I,
-            SHORT_U,
-            SHORT_E,
-            SHORT_O,
-        ]
+        letterset![SHORT_A, SHORT_I, SHORT_U, SHORT_E, SHORT_O]
     }
 
     pub const fn nedil() -> Self {
-        letterset![
-            LONG_A,
-            LONG_I,
-            LONG_U,
-            LONG_E,
-            AI,
-            LONG_O,
-            AU,
-        ]
+        letterset![LONG_A, LONG_I, LONG_U, LONG_E, AI, LONG_O, AU]
     }
 
     pub const fn consonant() -> Self {
@@ -449,9 +450,7 @@ impl LetterSet {
     }
 
     pub const fn idaiyinam() -> Self {
-        Self::glide()
-            .union(Self::rhotic())
-            .union(Self::lateral())
+        Self::glide().union(Self::rhotic()).union(Self::lateral())
     }
 
     pub const fn mellinam() -> Self {
@@ -477,38 +476,21 @@ impl LetterSet {
     }
 
     pub const fn glide() -> Self {
-        letterset![
-            TAMIL_Y,
-            TAMIL_V,
-        ]
+        letterset![TAMIL_Y, TAMIL_V]
     }
 
     pub const fn rhotic() -> Self {
-        letterset![
-            TAMIL_R,
-            TAMIL_ZH,
-        ]
+        letterset![TAMIL_R, TAMIL_ZH]
     }
 
     pub const fn lateral() -> Self {
-        letterset![
-            TAMIL_ALVEOLAR_L,
-            TAMIL_RETRO_L,
-        ]
+        letterset![TAMIL_ALVEOLAR_L, TAMIL_RETRO_L]
     }
 
     pub const fn tamil_initial() -> Self {
-        Self::vowel()
-            .union(Self::glide())
-            .union(letterset![
-                TAMIL_K,
-                TAMIL_CH,
-                TAMIL_NY,
-                TAMIL_T,
-                TAMIL_N,
-                TAMIL_P,
-                TAMIL_M,
-            ])
+        Self::vowel().union(Self::glide()).union(letterset![
+            TAMIL_K, TAMIL_CH, TAMIL_NY, TAMIL_T, TAMIL_N, TAMIL_P, TAMIL_M,
+        ])
     }
 
     pub const fn tamil_final() -> Self {
@@ -760,7 +742,7 @@ impl Display for Word {
             match ch {
                 num::VOWEL_START..=num::VOWEL_END => {
                     match s.pop() {
-                        None => {},
+                        None => {}
 
                         // Remove pulli before adding vowel
                         Some(PULLI) => {
@@ -768,23 +750,23 @@ impl Display for Word {
                                 s.push(TAMIL_VOWEL_SIGNS[(ch - num::LONG_A) as usize]);
                             }
                             continue;
-                        },
+                        }
 
                         Some(x) => s.push(x),
                     }
                     s.push(TAMIL_VOWELS[ch as usize]);
-                },
+                }
 
                 num::AAYDHAM => s.push(AAYDHAM),
 
                 num::CONSONANT_START..=num::CONSONANT_END => {
                     s.push(TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize]);
                     s.push(PULLI);
-                },
+                }
 
                 num::LATIN_A..=num::LATIN_Z => {
                     s.push((ch - num::LATIN_A + b'a') as char);
-                },
+                }
 
                 _ => unreachable!("invalid character: {}", ch),
             }
@@ -808,10 +790,7 @@ pub struct WordIter<'a> {
 
 impl<'a> WordIter<'a> {
     pub fn new(word: &'a Word) -> Self {
-        Self {
-            word,
-            index: 0,
-        }
+        Self { word, index: 0 }
     }
 
     pub fn peek(&self) -> Option<Letter> {
@@ -860,7 +839,9 @@ pub struct LetterCombination {
 }
 
 impl LetterCombination {
-    pub fn take(iter: &mut std::iter::Peekable<impl Iterator<Item = Letter>>) -> Option<LetterCombination> {
+    pub fn take(
+        iter: &mut std::iter::Peekable<impl Iterator<Item = Letter>>,
+    ) -> Option<LetterCombination> {
         if let Some(letter) = iter.next() {
             let mut base = LetterBase::Single(letter);
 
@@ -898,13 +879,14 @@ impl Ord for Word {
         let mut a = self.iter().peekable();
         let mut b = rhs.iter().peekable();
         loop {
-            match (LetterCombination::take(&mut a), LetterCombination::take(&mut b)) {
-                (Some(a), Some(b)) => {
-                    match a.cmp(&b) {
-                        Ordering::Equal => {},
-                        other => return other,
-                    }
-                }
+            match (
+                LetterCombination::take(&mut a),
+                LetterCombination::take(&mut b),
+            ) {
+                (Some(a), Some(b)) => match a.cmp(&b) {
+                    Ordering::Equal => {}
+                    other => return other,
+                },
                 (Some(_), None) => return Ordering::Greater,
                 (None, Some(_)) => return Ordering::Less,
                 (None, None) => return Ordering::Equal,
@@ -922,18 +904,14 @@ impl PartialOrd for Word {
 impl<'a> From<&'a [Letter]> for &'a Word {
     fn from(lts: &'a [Letter]) -> Self {
         let ptr = lts as *const [Letter] as *const Word;
-        unsafe {
-            &*ptr
-        }
+        unsafe { &*ptr }
     }
 }
 
 impl<'a> From<&'a mut [Letter]> for &'a mut Word {
     fn from(lts: &'a mut [Letter]) -> Self {
         let ptr = lts as *mut [Letter] as *mut Word;
-        unsafe {
-            &mut *ptr
-        }
+        unsafe { &mut *ptr }
     }
 }
 
@@ -960,9 +938,7 @@ impl From<Vec<Letter>> for Box<Word> {
 impl From<Box<[Letter]>> for Box<Word> {
     fn from(boxed: Box<[Letter]>) -> Self {
         let ptr = Box::into_raw(boxed) as *mut Word;
-        unsafe {
-            Box::from_raw(ptr)
-        }
+        unsafe { Box::from_raw(ptr) }
     }
 }
 

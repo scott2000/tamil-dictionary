@@ -1,5 +1,5 @@
-use std::sync::Mutex;
 use std::collections::BTreeSet;
+use std::sync::Mutex;
 
 use crate::tamil::Word;
 
@@ -15,7 +15,8 @@ pub fn word(word: Box<Word>) -> &'static Word {
     let mut words = WORDS.lock().expect("cannot lock mutex");
     let existing = unsafe {
         let word: &'static Word = &(&*ptr);
-        words.range(word..)
+        words
+            .range(word..)
             .next()
             .and_then(|&full_word| full_word.take_prefix(word))
     };
