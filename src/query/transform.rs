@@ -186,17 +186,17 @@ lazy_static! {
         joins
     };
 
-    pub static ref GRANTHA_TRANSFORM: HashMap<Letter, Letter> = {
+    pub static ref GRANTHA_TRANSFORM: HashMap<Letter, (Letter, bool)> = {
         let pairs = &[
-            (Letter::J, Letter::Ch),
-            (Letter::Sh, Letter::RetroT),
-            (Letter::H, Letter::K),
+            (Letter::J, Letter::Ch, true),
+            (Letter::Sh, Letter::RetroT, false),
+            (Letter::H, Letter::K, false),
         ];
 
         let mut map = HashMap::new();
-        for &(a, b) in pairs {
-            map.insert(a, b);
-            map.insert(b, a);
+        for &(a, b, allow_start) in pairs {
+            map.insert(a, (b, allow_start));
+            map.insert(b, (a, allow_start));
         }
 
         map
@@ -249,8 +249,8 @@ pub fn literal_search<S: Search>(
 
         if expand {
             // Check for intervocalic grantha transformations
-            if let Some(&alt) = GRANTHA_TRANSFORM.get(&lt) {
-                let prev_vowel = letters.prev().map(Letter::is_vowel).unwrap_or(true);
+            if let Some(&(alt, allow_start)) = GRANTHA_TRANSFORM.get(&lt) {
+                let prev_vowel = letters.prev().map(Letter::is_vowel).unwrap_or(allow_start);
 
                 if prev_vowel {
                     search = search
