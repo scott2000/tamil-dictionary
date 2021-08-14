@@ -192,7 +192,7 @@ impl From<RawEntry> for Entry {
 
         // Load all of the text of the sections, and set the segments to refer to indices
         let mut text = String::new();
-        let sections = raw
+        let sections: Box<[_]> = raw
             .secs
             .into_iter()
             .map(|sec| {
@@ -210,7 +210,10 @@ impl From<RawEntry> for Entry {
                     })
                     .collect()
             })
+            .inspect(|sec: &Box<[_]>| assert!(!sec.is_empty()))
             .collect();
+
+        assert!(!sections.is_empty());
 
         // Parse the words in the text, recording their start and end indices
         let mut parsed_text = Vec::new();

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
@@ -8,12 +9,15 @@ use rocket::response::Redirect;
 use rocket::serde::json::Json;
 use rocket_dyn_templates::Template;
 
-use crate::dictionary::{Entry, Paragraph, Section, Segment, SegmentKind, WordRange, NO_WORD};
+use crate::dictionary::{
+    Entry, Paragraph, Section, Segment, SegmentKind, WordIndex, WordRange, NO_WORD,
+};
 use crate::query::{Pattern, Query};
 use crate::search::{SearchRankingEntry, SearchResult};
 use crate::tamil::{self, LetterSet};
 
 const MAX_OTHER_SECTIONS: usize = 5;
+const MAX_EXPAND: usize = 250;
 
 const EXAMPLES: &'static [&'static str] = &[
     "tamil",
@@ -143,6 +147,76 @@ struct ResultSection {
 }
 
 impl ResultSection {
+    fn render_all(entry: &'static Entry, words: BTreeSet<WordIndex>) -> Vec<Self> {
+        // Create a stack of highlighted word ranges
+        let mut highlight_ranges = Vec::new();
+        for &index in words.iter().rev() {
+            if index == NO_WORD {
+                continue;
+            }
+
+            highlight_ranges.push(entry.word_ranges[index as usize]);
+        }
+
+        let mut state = RenderState {
+            entry,
+            definition_count: 1,
+            highlight_ranges,
+        };
+
+        // Render all of the sections for the entry
+        let mut sections: Vec<_> = entry
+            .sections
+            .iter()
+            .enumerate()
+            .map(|(i, sec)| Self::render(&mut state, i == 0, sec))
+            .collect();
+
+        // Check for single-segment, single-definition sections to join with the header
+        if sections.len() == 1 {
+            let only = &mut sections[0];
+            if only.paragraphs.len() == 1 {
+                let segments = &mut only.section.segments;
+
+                // Pick the joining string based on the last character of the header
+                let joiner = match segments.last().and_then(|seg| seg.text.chars().last()) {
+                    None | Some('.' | ',' | ':' | ';') => " ",
+                    _ => ": ",
+                };
+
+                // Push a joining segment before appending the definition
+                segments.push(ResultSegment::new(SegmentKind::Text, joiner));
+                segments.append(&mut only.paragraphs[0].segments);
+                only.paragraphs = Vec::new();
+            }
+        }
+
+        sections
+    }
+
+    fn collapsed(entry: &'static Entry) -> Self {
+        let mut state = RenderState {
+            entry,
+            definition_count: 1,
+            highlight_ranges: Vec::new(),
+        };
+
+        let mut section = ResultParagraph::render(&mut state, &entry.sections[0][0]);
+
+        if entry.sections.len() > 1 || entry.sections[0].len() > 1 {
+            section
+                .segments
+                .push(ResultSegment::new(SegmentKind::Text, " [...]"));
+        }
+
+        Self {
+            is_header: true,
+            definition_start: 0,
+            section,
+            paragraphs: Vec::new(),
+        }
+    }
+
     fn render(state: &mut RenderState, is_header: bool, sec: &'static Section) -> Self {
         let definition_start = state.definition_count;
 
@@ -171,59 +245,22 @@ struct ResultEntry {
 }
 
 impl ResultEntry {
-    fn render_all(results: Vec<SearchRankingEntry>) -> Vec<Self> {
-        results.into_iter().map(Self::render).collect()
+    fn render_all(entries: Vec<SearchRankingEntry>, expanded: bool) -> Vec<Self> {
+        entries
+            .into_iter()
+            .map(|entry| Self::render(entry, expanded))
+            .collect()
     }
 
-    fn render(
-        SearchRankingEntry {
-            entry,
-            words,
-            exact,
-        }: SearchRankingEntry,
-    ) -> Self {
-        // Create a stack of highlighted word ranges
-        let mut highlight_ranges = Vec::new();
-        for &index in words.iter().rev() {
-            if index == NO_WORD {
-                continue;
-            }
+    #[rustfmt::skip]
+    fn render(entry: SearchRankingEntry, expanded: bool) -> Self {
+        let SearchRankingEntry { entry, words, exact } = entry;
 
-            highlight_ranges.push(entry.word_ranges[index as usize]);
-        }
-
-        let mut state = RenderState {
-            entry,
-            definition_count: 1,
-            highlight_ranges,
+        let sections = if expanded || exact || words.len() != 1 || !words.contains(&NO_WORD) {
+            ResultSection::render_all(entry, words)
+        } else {
+            vec![ResultSection::collapsed(entry)]
         };
-
-        // Render all of the sections for the entry
-        let mut sections: Vec<_> = entry
-            .sections
-            .iter()
-            .enumerate()
-            .map(|(i, sec)| ResultSection::render(&mut state, i == 0, sec))
-            .collect();
-
-        // Check for single-segment, single-definition sections to join with the header
-        if sections.len() == 1 {
-            let only = &mut sections[0];
-            if only.paragraphs.len() == 1 {
-                let segments = &mut only.section.segments;
-
-                // Pick the joining string based on the last character of the header
-                let joiner = match segments.last().and_then(|seg| seg.text.chars().last()) {
-                    None | Some('.' | ',' | ':' | ';') => " ",
-                    _ => ": ",
-                };
-
-                // Push a joining segment before appending the definition
-                segments.push(ResultSegment::new(SegmentKind::Text, joiner));
-                segments.append(&mut only.paragraphs[0].segments);
-                only.paragraphs = Vec::new();
-            }
-        }
 
         Self {
             uri: link(entry.primary_word()),
@@ -310,13 +347,18 @@ impl Search {
                     self.no_results();
                 } else {
                     // Render the search results so they can be displayed
-                    self.best = ResultEntry::render_all(ranking.best);
-                    self.related = ResultEntry::render_all(ranking.related);
-                    self.other = ResultEntry::render_all(ranking.other);
+                    self.best_count = ranking.best.len().into();
+                    self.related_count = ranking.related.len().into();
+                    self.other_count = ranking.other.len().into();
 
-                    self.best_count = self.best.len().into();
-                    self.related_count = self.related.len().into();
-                    self.other_count = self.other.len().into();
+                    let mut total = self.best_count.num;
+                    self.best = ResultEntry::render_all(ranking.best, total <= MAX_EXPAND);
+
+                    total += self.related_count.num;
+                    self.related = ResultEntry::render_all(ranking.related, total <= MAX_EXPAND);
+
+                    total += self.other_count.num;
+                    self.other = ResultEntry::render_all(ranking.other, total <= MAX_EXPAND);
                 }
 
                 // Only hide the other results if they are too long
