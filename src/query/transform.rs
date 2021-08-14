@@ -237,6 +237,11 @@ pub fn literal_search<S: Search>(
 
     let mut letters = word.iter();
     'outer: while let Some(lt) = letters.next() {
+        // Exit early if the search is empty
+        if search.is_empty() {
+            break;
+        }
+
         if trans {
             // Check for transliteration
             if let Some(result) = transliterate(&search, expand, &mut letters, lt)? {
@@ -263,7 +268,7 @@ pub fn literal_search<S: Search>(
 
             if let Some(next) = letters.peek() {
                 // Check for various common suffixes to make optional
-                if letters.index > 3 && check_suffix(&mut search, &mut letters)? {
+                if letters.index > 1 && check_suffix(&mut search, &mut letters)? {
                     break;
                 }
 
@@ -291,11 +296,14 @@ pub fn literal_search<S: Search>(
     Ok(search)
 }
 
+const KCP: LetterSet = letterset![TAMIL_K, TAMIL_CH, TAMIL_P];
+
 #[rustfmt::skip]
 fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<bool, S::Error> {
     match letters.remaining_with_offset(-2).as_ref() {
         // Check for "aaga" and "aana"
-        [_, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A] => {}
+        [_, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
+            if letters.index > 2 => {}
 
         // Check for "aaga" and "aana"  with "y" joiner
         &[lt, Letter::TAMIL_Y, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
@@ -334,18 +342,77 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
             Letter::SHORT_U | Letter::SHORT_A,
         ] if LetterSet::vowel_with_v().matches(lt) => {}
 
+        // Check for "padu", "paadu", or "paduthu"
+        &[prev, lt, Letter::TAMIL_P, Letter::SHORT_A | Letter::LONG_A, Letter::TAMIL_RETRO_T, Letter::SHORT_U]
+        | &[
+            prev,
+            lt,
+            Letter::TAMIL_P,
+            Letter::SHORT_A,
+            Letter::TAMIL_RETRO_T,
+            Letter::SHORT_U,
+            Letter::TAMIL_T,
+            Letter::TAMIL_T,
+            Letter::SHORT_U,
+        ] => {
+            match lt {
+                // Handle doubling of "p"
+                Letter::TAMIL_P => {
+                    if letters.index > 3 {
+                        // Handle final "am"
+                        if prev == Letter::SHORT_A {
+                            letters.adv();
+                            *search = search
+                                .literal(word![Letter::TAMIL_P])
+                                .asserting_next(KCP)
+                                .joining(&search.literal(word![Letter::TAMIL_M]))?;
+                        }
+                    } else {
+                        return Ok(false);
+                    }
+                }
+
+                // Handle final retroflex "l"
+                Letter::TAMIL_RETRO_L | Letter::TAMIL_RETRO_T => {
+                    letters.adv();
+                    *search = search
+                        .literal(word![Letter::TAMIL_RETRO_T])
+                        .asserting_next(KCP)
+                        .joining(&search.literal(word![Letter::TAMIL_RETRO_L]))?;
+                }
+
+                // Handle final alveolar "l"
+                Letter::TAMIL_ALVEOLAR_L | Letter::TAMIL_ALVEOLAR_TR => {
+                    letters.adv();
+                    *search = search
+                        .literal(word![Letter::TAMIL_ALVEOLAR_TR])
+                        .asserting_next(KCP)
+                        .joining(&search.literal(word![Letter::TAMIL_ALVEOLAR_L]))?;
+                }
+
+                _ => {
+                    if letters.index > 2 && LetterSet::tamil_final().matches(lt) {
+                        letters.adv();
+                        *search = search.literal(word![lt]);
+                    } else {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+
         // Check for "thal"
         &[lt, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
         | &[lt, Letter::TAMIL_T, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
         | &[lt, Letter::SHORT_U, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
         | &[lt, Letter::SHORT_U, Letter::TAMIL_T, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
-            if LetterSet::tamil_final().matches(lt) => {}
+            if letters.index > 3 && LetterSet::tamil_final().matches(lt) => {}
 
         _ => return Ok(false),
     }
 
     let without_suffix = mem::replace(search, search.literal(letters.remaining_with_offset(-1)));
-    search.join(&without_suffix.marking_expanded())?;
+    search.join(&without_suffix.marking_expanded().freezing())?;
 
     Ok(true)
 }
@@ -426,59 +493,53 @@ fn check_final<S: Search>(
     const FINAL_TRANSFORM: LetterSet =
         letterset![TAMIL_M, TAMIL_RETRO_L, TAMIL_ALVEOLAR_L, TAMIL_ALVEOLAR_N];
 
-    if letters.index == 1
-        || letters.remaining_count() != 1
-        || !lt.is_vowel()
-        || !FINAL_TRANSFORM.matches(next)
-    {
+    if letters.remaining_count() != 1 || !lt.is_vowel() || !FINAL_TRANSFORM.matches(next) {
         return Ok(false);
     }
 
     letters.adv();
+    let with_vowel = search.literal(word![lt]);
+    let final_m = || -> Result<S, S::Error> {
+        Ok(with_vowel
+            .matching(letterset![TAMIL_NG, TAMIL_NY, TAMIL_N])?
+            .marking_expanded()
+            .joining(&with_vowel.literal(word![Letter::TAMIL_M]))?)
+    };
 
     // Check for final "am"
     if let (Letter::SHORT_A, Letter::TAMIL_M) = (lt, next) {
         if letters.index > 5 {
             // Allow entire "am" to be removed since the word is long
-            let without_am = mem::replace(search, search.literal(word![lt, next]));
-            search.join(&without_am.marking_expanded())?;
+            *search = search
+                .asserting_next(LetterSet::vowel())
+                .marking_expanded()
+                .freezing()
+                .joining(&final_m()?)?;
 
             return Ok(true);
         } else if letters.index > 2 {
             // Only allow final "m" to be dropped, and only before another word
-            *search = search.literal(word![lt]);
-
-            *search = search
+            *search = with_vowel
                 .asserting_next(LetterSet::tamil_initial())
                 .marking_expanded()
-                .joining(&search.literal(word![next]))?;
+                .freezing()
+                .joining(&final_m()?)?;
 
             return Ok(true);
         }
     }
 
-    // All patterns will ignore this vowel
-    *search = search.literal(word![lt]);
-
-    const KCP: LetterSet = letterset![TAMIL_K, TAMIL_CH, TAMIL_P];
-
     *search = match next {
         // Final "m"
-        Letter::TAMIL_M => search
-            .matching(letterset![TAMIL_M, TAMIL_NG, TAMIL_NY, TAMIL_N])?
-            .joining(
-                &search
-                    .matching(letterset![TAMIL_RETRO_N, TAMIL_ALVEOLAR_N])?
-                    .marking_expanded(),
-            )?,
+        Letter::TAMIL_M => final_m()?,
 
         // Final retroflex "l"
-        Letter::TAMIL_RETRO_L => search.literal(word![next]).joining(
-            &search
+        Letter::TAMIL_RETRO_L => with_vowel.literal(word![next]).joining(
+            &with_vowel
                 .literal(word![Letter::TAMIL_RETRO_T])
                 .asserting_next(KCP.union(letterset![TAMIL_RETRO_T]))
                 .joining(
-                    &search
+                    &with_vowel
                         .literal(word![Letter::TAMIL_RETRO_N])
                         .asserting_next(KCP.union(letterset![TAMIL_RETRO_N])),
                 )?
@@ -486,12 +547,12 @@ fn check_final<S: Search>(
         )?,
 
         // Final alveolar "l"
-        Letter::TAMIL_ALVEOLAR_L => search.literal(word![next]).joining(
-            &search
+        Letter::TAMIL_ALVEOLAR_L => with_vowel.literal(word![next]).joining(
+            &with_vowel
                 .literal(word![Letter::TAMIL_ALVEOLAR_TR])
                 .asserting_next(KCP.union(letterset![TAMIL_ALVEOLAR_TR]))
                 .joining(
-                    &search
+                    &with_vowel
                         .literal(word![Letter::TAMIL_ALVEOLAR_N])
                         .asserting_next(KCP.union(letterset![TAMIL_ALVEOLAR_N])),
                 )?
@@ -499,8 +560,8 @@ fn check_final<S: Search>(
         )?,
 
         // Final alveolar "n"
-        Letter::TAMIL_ALVEOLAR_N => search.literal(word![next]).joining(
-            &search
+        Letter::TAMIL_ALVEOLAR_N => with_vowel.literal(word![next]).joining(
+            &with_vowel
                 .literal(word![Letter::TAMIL_ALVEOLAR_TR])
                 .asserting_next(KCP)
                 .marking_expanded(),

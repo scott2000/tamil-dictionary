@@ -231,30 +231,36 @@ impl super::Search for Search {
         }
     }
 
-    fn suggest(mut self, count: u32) -> SuggestionList {
-        let mut list = SuggestionList::new(count);
+    fn freeze(&mut self) {
+        for branch in &mut self.branches {
+            branch.freeze();
+        }
+    }
 
-        self.branches.retain(|branch| branch.prev_letter.is_some());
+    fn suggest(self, count: u32) -> SuggestionList {
+        let mut list = SuggestionList::new(count);
 
         let is_single_branch = self.branches.len() == 1;
         for branch in self.branches {
-            branch.append_suggestions(
-                &mut list,
-                true,
-                is_single_branch && branch.prefix.is_empty(),
-            );
+            if branch.prev_letter.is_some() && !branch.is_frozen {
+                branch.append_suggestions(
+                    &mut list,
+                    true,
+                    is_single_branch && branch.prefix.is_empty(),
+                );
+            }
         }
 
         list
     }
 
-    fn end(mut self) -> Result<SearchResult, Self::Error> {
-        self.branches.retain(|branch| branch.prev_letter.is_some());
-
+    fn end(self) -> Result<SearchResult, Self::Error> {
         let mut result = SearchResult::default();
         let mut total_count = 0;
         for branch in self.branches {
-            branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
+            if branch.prev_letter.is_some() {
+                branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
+            }
         }
 
         Ok(result)
@@ -265,6 +271,7 @@ impl super::Search for Search {
 struct SearchBranch<T: Eq + 'static> {
     is_prefix_tree: bool,
     is_expanded: bool,
+    is_frozen: bool,
     prev_letter: Option<Letter>,
     require: Option<LetterSet>,
     prefix: &'static Word,
@@ -277,6 +284,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
         Self {
             is_prefix_tree,
             is_expanded: false,
+            is_frozen: false,
             prev_letter: None,
             require: None,
             prefix: tree.prefix,
@@ -287,13 +295,12 @@ impl<T: Eq + Copy> SearchBranch<T> {
 
     fn update(&self, lt: Letter, tree: &'static Tree<T>) -> Self {
         Self {
-            is_prefix_tree: self.is_prefix_tree,
-            is_expanded: self.is_expanded,
             prev_letter: Some(lt),
             require: None,
             prefix: tree.prefix,
             leaves: &tree.leaves,
             branches: &tree.branches,
+            ..*self
         }
     }
 
@@ -312,14 +319,18 @@ impl<T: Eq + Copy> SearchBranch<T> {
     }
 
     fn assert_next(&self, mut lts: LetterSet) -> Option<Self> {
-        // If the assertion always succeeds, ignore it
-        if lts.is_any() {
-            return Some(*self);
+        if self.is_frozen {
+            return None;
         }
 
         // Intersect the assertion with any existing assertion
         if let Some(require) = self.require {
             lts = lts.intersect(require);
+
+            // If the resulting assertion is the same, return early
+            if lts == require {
+                return Some(*self);
+            }
         }
 
         // If the assertion always fails, fail immediately
@@ -383,9 +394,17 @@ impl<T: Eq + Copy> SearchBranch<T> {
         self.is_expanded = true;
     }
 
+    fn freeze(&mut self) {
+        self.is_frozen = true;
+    }
+
     fn literal(mut self, word: &Word) -> Option<Self> {
         if word.is_empty() {
             return Some(self);
+        }
+
+        if self.is_frozen {
+            return None;
         }
 
         // Check for a requirement on the first letter
@@ -421,7 +440,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
             lts = lts.intersect(require);
         }
 
-        if lts.is_empty() {
+        if self.is_frozen || lts.is_empty() {
             return Ok(());
         }
 

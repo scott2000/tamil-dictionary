@@ -42,6 +42,13 @@ pub trait Search: Clone {
         self
     }
 
+    fn freeze(&mut self);
+
+    fn freezing(mut self) -> Self {
+        self.freeze();
+        self
+    }
+
     fn suggest(self, count: u32) -> SuggestionList;
 
     fn end(self) -> Result<SearchResult, Self::Error>;
