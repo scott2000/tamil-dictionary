@@ -695,14 +695,14 @@ impl Pattern {
     fn parse_text(chars: &mut Chars, in_group: bool) -> Self {
         let mut buffer = String::new();
         while let Some(&ch) = chars.peek() {
-            Self::skip_spaces(chars, in_group);
-
             if !Letter::is_valid(ch) {
                 break;
             }
 
             chars.next();
             buffer.push(ch);
+
+            Self::skip_spaces(chars, in_group);
         }
 
         if buffer.is_empty() {

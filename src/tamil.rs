@@ -212,16 +212,13 @@ impl Letter {
                         ]
                     }
 
-                    // Joining with "v"
-                    Self::SHORT_A
-                    | Self::LONG_A
-                    | Self::LONG_U
-                    | Self::SHORT_O
-                    | Self::LONG_O
-                    | Self::AU => vec![vec![], vec![Letter::TAMIL_V]],
-
                     // Joining with "y"
-                    _ => vec![vec![], vec![Letter::TAMIL_Y]],
+                    Self::SHORT_I | Self::LONG_I | Self::SHORT_E | Self::LONG_E | Self::AI => {
+                        vec![vec![], vec![Letter::TAMIL_Y]]
+                    }
+
+                    // Joining with "v"
+                    _ => vec![vec![], vec![Letter::TAMIL_V]],
                 }
             }
 
@@ -284,17 +281,23 @@ impl Letter {
         }
     }
 
+    #[rustfmt::skip]
     pub fn category(self) -> Category {
         match self.0 {
-            num::VOWEL_START..=num::VOWEL_END => Category::TamilVowel,
+            num::VOWEL_START..=num::VOWEL_END =>
+                Category::TamilVowel,
 
-            num::AAYDHAM => Category::TamilAaydham,
+            num::AAYDHAM =>
+                Category::TamilAaydham,
 
-            num::CONSONANT_START..=num::TAMIL_CONSONANT_END => Category::TamilConsonant,
+            num::CONSONANT_START..=num::TAMIL_CONSONANT_END =>
+                Category::TamilConsonant,
 
-            num::GRANTHA_START..=num::GRANTHA_END => Category::TamilGrantha,
+            num::GRANTHA_START..=num::GRANTHA_END =>
+                Category::TamilGrantha,
 
-            num::LATIN_A..=num::LATIN_Z => Category::LatinAlpha,
+            num::LATIN_A..=num::LATIN_Z =>
+                Category::LatinAlpha,
 
             ch => unreachable!("invalid character: {}", ch),
         }
@@ -312,21 +315,21 @@ impl Letter {
 }
 
 impl Display for Letter {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ch = self.0;
         match ch {
-            num::VOWEL_START..=num::VOWEL_END => write!(f, "{}", TAMIL_VOWELS[ch as usize]),
+            num::VOWEL_START..=num::VOWEL_END =>
+                write!(f, "{}", TAMIL_VOWELS[ch as usize]),
 
-            num::AAYDHAM => write!(f, "{}", AAYDHAM),
+            num::AAYDHAM =>
+                write!(f, "{}", AAYDHAM),
 
-            num::CONSONANT_START..=num::CONSONANT_END => write!(
-                f,
-                "{}{}",
-                TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize],
-                PULLI
-            ),
+            num::CONSONANT_START..=num::CONSONANT_END =>
+                write!(f, "{}{}", TAMIL_CONSONANTS[(ch - num::CONSONANT_START) as usize], PULLI),
 
-            num::LATIN_A..=num::LATIN_Z => write!(f, "{}", (ch - num::LATIN_A + b'a') as char),
+            num::LATIN_A..=num::LATIN_Z =>
+                write!(f, "{}", (ch - num::LATIN_A + b'a') as char),
 
             _ => unreachable!("invalid character: {}", ch),
         }
@@ -503,6 +506,14 @@ impl LetterSet {
                 TAMIL_Y,
                 TAMIL_ALVEOLAR_N,
             ])
+    }
+
+    pub const fn vowel_with_v() -> Self {
+        letterset![SHORT_A, LONG_A, SHORT_U, LONG_U, SHORT_O, LONG_O, AU]
+    }
+
+    pub const fn vowel_with_y() -> Self {
+        letterset![SHORT_I, LONG_I, SHORT_E, LONG_E, AI]
     }
 
     pub fn is_complement(self) -> bool {
@@ -793,6 +804,10 @@ impl<'a> WordIter<'a> {
         Self { word, index: 0 }
     }
 
+    pub fn prev(&self) -> Option<Letter> {
+        self.index.checked_sub(2).map(|i| self.word[i])
+    }
+
     pub fn peek(&self) -> Option<Letter> {
         self.word.get(self.index)
     }
@@ -804,6 +819,10 @@ impl<'a> WordIter<'a> {
 
     pub fn remaining(&self) -> &'a Word {
         &self.word[self.index..]
+    }
+
+    pub fn remaining_with_offset(&self, offset: isize) -> &'a Word {
+        &self.word[((self.index as isize + offset) as usize)..]
     }
 
     pub fn remaining_count(&self) -> usize {

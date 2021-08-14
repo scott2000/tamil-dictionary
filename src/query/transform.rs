@@ -236,7 +236,7 @@ pub fn literal_search<S: Search>(
     }
 
     let mut letters = word.iter();
-    while let Some(lt) = letters.next() {
+    'outer: while let Some(lt) = letters.next() {
         if trans {
             // Check for transliteration
             if let Some(result) = transliterate(&search, expand, &mut letters, lt)? {
@@ -248,11 +248,7 @@ pub fn literal_search<S: Search>(
         if expand {
             // Check for intervocalic grantha transformations
             if let Some(&alt) = GRANTHA_TRANSFORM.get(&lt) {
-                let prev_vowel = letters
-                    .index
-                    .checked_sub(2)
-                    .map(|index| letters.word[index].is_vowel())
-                    .unwrap_or(true);
+                let prev_vowel = letters.prev().map(Letter::is_vowel).unwrap_or(true);
 
                 if prev_vowel {
                     search = search
@@ -266,10 +262,15 @@ pub fn literal_search<S: Search>(
             }
 
             if let Some(next) = letters.peek() {
+                // Check for various common suffixes to make optional
+                if letters.index > 3 && check_suffix(&mut search, &mut letters)? {
+                    break;
+                }
+
                 // Check for consonant joining transformations
                 for check in [check_join, check_initial, check_final] {
                     if check(&mut search, &mut letters, lt, next)? {
-                        continue;
+                        continue 'outer;
                     }
                 }
             } else if letters.index > 3 {
@@ -288,6 +289,65 @@ pub fn literal_search<S: Search>(
     }
 
     Ok(search)
+}
+
+#[rustfmt::skip]
+fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<bool, S::Error> {
+    match letters.remaining_with_offset(-2).as_ref() {
+        // Check for "aaga" and "aana"
+        [_, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A] => {}
+
+        // Check for "aaga" and "aana"  with "y" joiner
+        &[lt, Letter::TAMIL_Y, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
+            if LetterSet::vowel_with_y().matches(lt) => {}
+
+        // Check for "aaga" and "aana"  with "v" joiner
+        &[lt, Letter::TAMIL_V, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
+            if LetterSet::vowel_with_v().matches(lt) => {}
+
+        // Check for "endru" and "endra"
+        &[
+            lt,
+            Letter::SHORT_E,
+            Letter::TAMIL_ALVEOLAR_N,
+            Letter::TAMIL_ALVEOLAR_TR,
+            Letter::SHORT_U | Letter::SHORT_A,
+        ] if LetterSet::tamil_final().matches(lt) => {}
+
+        // Check for "endru" and "endra" with "y" joiner
+        &[
+            lt,
+            Letter::TAMIL_Y,
+            Letter::SHORT_E,
+            Letter::TAMIL_ALVEOLAR_N,
+            Letter::TAMIL_ALVEOLAR_TR,
+            Letter::SHORT_U | Letter::SHORT_A,
+        ] if LetterSet::vowel_with_y().matches(lt) => {}
+
+        // Check for "endru" and "endra" with "v" joiner
+        &[
+            lt,
+            Letter::TAMIL_V,
+            Letter::SHORT_E,
+            Letter::TAMIL_ALVEOLAR_N,
+            Letter::TAMIL_ALVEOLAR_TR,
+            Letter::SHORT_U | Letter::SHORT_A,
+        ] if LetterSet::vowel_with_v().matches(lt) => {}
+
+        // Check for "thal"
+        &[lt, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
+        | &[lt, Letter::TAMIL_T, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
+        | &[lt, Letter::SHORT_U, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
+        | &[lt, Letter::SHORT_U, Letter::TAMIL_T, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
+            if LetterSet::tamil_final().matches(lt) => {}
+
+        _ => return Ok(false),
+    }
+
+    let without_suffix = mem::replace(search, search.literal(letters.remaining_with_offset(-1)));
+    search.join(&without_suffix.marking_expanded())?;
+
+    Ok(true)
 }
 
 fn check_join<S: Search>(
