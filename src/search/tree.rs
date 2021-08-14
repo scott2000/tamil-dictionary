@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::dictionary::{self, Loc, ENTRIES};
 use crate::tamil::{Letter, LetterSet, Word};
 
-use super::{SearchResult, SuggestionList};
+use super::{Search, SearchResult, SuggestionList};
 
 lazy_static! {
     static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
@@ -21,16 +21,16 @@ struct SearchTrees {
     suffix_tree: Tree<Loc>,
 }
 
-pub fn search_word() -> Search {
-    Search::new(&[&WORD_TREES])
+pub fn search_word() -> TreeSearch {
+    TreeSearch::new(&[&WORD_TREES])
 }
 
-pub fn search_definition() -> Search {
-    Search::new(&[&DEFINITION_TREES, &WORD_TREES])
+pub fn search_definition() -> TreeSearch {
+    TreeSearch::new(&[&DEFINITION_TREES, &WORD_TREES])
 }
 
-pub fn search_word_prefix() -> Search {
-    Search {
+pub fn search_word_prefix() -> TreeSearch {
+    TreeSearch {
         branches: vec![SearchBranch::new(&WORD_TREES.prefix_tree, true)],
     }
 }
@@ -85,11 +85,11 @@ pub enum SearchError {
 }
 
 #[derive(Clone, Debug)]
-pub struct Search {
+pub struct TreeSearch {
     branches: Vec<SearchBranch<Loc>>,
 }
 
-impl Search {
+impl TreeSearch {
     fn new(trees: &[&'static SearchTrees]) -> Self {
         let branches = trees
             .iter()
@@ -105,7 +105,7 @@ impl Search {
     }
 }
 
-impl super::Search for Search {
+impl Search for TreeSearch {
     type Error = SearchError;
 
     fn empty() -> Self {
