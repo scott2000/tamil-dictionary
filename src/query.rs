@@ -669,7 +669,7 @@ impl Pattern {
                     Err(ParseError::PartialRange)
                 }
             } else {
-                Ok(LetterSet::single(start))
+                Ok(letterset![start])
             }
         } else {
             Err(Query::expected_character(SurroundKind::Bracket, ch))

@@ -13,10 +13,8 @@ impl Joins {
     }
 
     pub fn insert(&mut self, from: (Letter, Letter), to: (LetterSet, LetterSet)) {
-        debug_assert!(LetterSet::single(from.0)
-            .union(LetterSet::single(from.1))
-            .union(to.0)
-            .union(to.1)
+        debug_assert!(letterset![from.0, from.1]
+            .union(to.0.union(to.1))
             .intersect(LetterSet::consonant().complement())
             .is_empty());
 
@@ -30,8 +28,8 @@ impl Joins {
     }
 
     pub fn insert_pair(&mut self, a: (Letter, Letter), b: (Letter, Letter)) {
-        let a_set = (LetterSet::single(a.0), LetterSet::single(a.1));
-        let b_set = (LetterSet::single(b.0), LetterSet::single(b.1));
+        let a_set = (letterset![a.0], letterset![a.1]);
+        let b_set = (letterset![b.0], letterset![b.1]);
 
         self.insert(a, a_set);
         self.insert(a, b_set);
@@ -48,141 +46,140 @@ lazy_static! {
     pub static ref JOINS: Joins = {
         let mut joins = Joins::new();
 
-        for right in letterset![TAMIL_K, TAMIL_CH, TAMIL_P].iter() {
-            // (TAMIL_RETRO_L, Vallinam)
+        for right in letterset![K, Ch, P].iter() {
+            // (RetroL, Vallinam)
             joins.insert_pair(
-                (Letter::TAMIL_RETRO_L, right),
-                (Letter::TAMIL_RETRO_T, right),
+                (Letter::RetroL, right),
+                (Letter::RetroT, right),
             );
 
-            let options = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N, TAMIL_ALVEOLAR_L];
+            let options = letterset![AlveolarR, AlveolarN, AlveolarL];
 
-            // (TAMIL_ALVEOLAR_TR, Vallinam)
+            // (AlveolarR, Vallinam)
             joins.insert(
-                (Letter::TAMIL_ALVEOLAR_TR, right),
-                (options, LetterSet::single(right)),
+                (Letter::AlveolarR, right),
+                (options, letterset![right]),
             );
 
-            let options = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_L];
+            let options = letterset![AlveolarR, AlveolarL];
 
-            // (TAMIL_ALVEOLAR_L, Vallinam)
+            // (AlveolarL, Vallinam)
             joins.insert(
-                (Letter::TAMIL_ALVEOLAR_L, right),
-                (options, LetterSet::single(right)),
+                (Letter::AlveolarL, right),
+                (options, letterset![right]),
             );
 
-            let options = letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N];
+            let options = letterset![AlveolarR, AlveolarN];
 
-            // (TAMIL_ALVEOLAR_N, Vallinam)
+            // (AlveolarN, Vallinam)
             joins.insert(
-                (Letter::TAMIL_ALVEOLAR_N, right),
-                (options, LetterSet::single(right)),
+                (Letter::AlveolarN, right),
+                (options, letterset![right]),
             );
         }
 
-        // (TAMIL_RETRO_L, TAMIL_T) - Strong
+        // (RetroL, T) - Strong
         joins.insert_pair(
-            (Letter::TAMIL_RETRO_L, Letter::TAMIL_T),
-            (Letter::TAMIL_RETRO_T, Letter::TAMIL_RETRO_T),
+            (Letter::RetroL, Letter::T),
+            (Letter::RetroT, Letter::RetroT),
         );
 
-        // (TAMIL_ALVEOLAR_L, TAMIL_T) - Strong
+        // (AlveolarL, T) - Strong
         joins.insert_pair(
-            (Letter::TAMIL_ALVEOLAR_L, Letter::TAMIL_T),
-            (Letter::TAMIL_ALVEOLAR_TR, Letter::TAMIL_ALVEOLAR_TR),
+            (Letter::AlveolarL, Letter::T),
+            (Letter::AlveolarR, Letter::AlveolarR),
         );
 
-        // (TAMIL_RETRO_L, TAMIL_T) - Weak
+        // (RetroL, T) - Weak
         joins.insert_pair(
-            (Letter::TAMIL_RETRO_L, Letter::TAMIL_T),
-            (Letter::TAMIL_RETRO_N, Letter::TAMIL_RETRO_T),
+            (Letter::RetroL, Letter::T),
+            (Letter::RetroN, Letter::RetroT),
         );
 
-        // (TAMIL_ALVEOLAR_L, TAMIL_T) - Weak
+        // (AlveolarL, T) - Weak
         joins.insert_pair(
-            (Letter::TAMIL_ALVEOLAR_L, Letter::TAMIL_T),
-            (Letter::TAMIL_ALVEOLAR_N, Letter::TAMIL_ALVEOLAR_TR),
+            (Letter::AlveolarL, Letter::T),
+            (Letter::AlveolarN, Letter::AlveolarR),
         );
 
-        let options = letterset![TAMIL_T, TAMIL_RETRO_T];
+        let options = letterset![T, RetroT];
 
-        // (TAMIL_RETRO_N, TAMIL_T)
+        // (RetroN, T)
         for right in options.iter() {
             joins.insert(
-                (Letter::TAMIL_RETRO_N, right),
-                (letterset![TAMIL_RETRO_N], options),
+                (Letter::RetroN, right),
+                (letterset![RetroN], options),
             );
         }
 
-        let options = letterset![TAMIL_T, TAMIL_ALVEOLAR_TR];
+        let options = letterset![T, AlveolarR];
 
-        // (TAMIL_ALVEOLAR_N, TAMIL_T)
+        // (AlveolarN, T)
         for right in options.iter() {
             joins.insert(
-                (Letter::TAMIL_ALVEOLAR_N, right),
-                (letterset![TAMIL_ALVEOLAR_N], options),
+                (Letter::AlveolarN, right),
+                (letterset![AlveolarN], options),
             );
         }
 
-        for right in letterset![TAMIL_K, TAMIL_CH, TAMIL_T].iter() {
-            let options = LetterSet::single(right.paired().unwrap())
-                .union(letterset![TAMIL_M]);
+        for right in letterset![K, Ch, T].iter() {
+            let options = letterset![M, right.paired().unwrap()];
 
-            // (TAMIL_M, Vallinam)
+            // (M, Vallinam)
             for left in options.iter() {
-                joins.insert((left, right), (options, LetterSet::single(right)));
+                joins.insert((left, right), (options, letterset![right]));
             }
         }
 
-        let options = letterset![TAMIL_M, TAMIL_NY];
+        let options = letterset![M, Ny];
 
-        // (TAMIL_M, TAMIL_NY)
+        // (M, Ny)
         for left in options.iter() {
             joins.insert(
-                (left, Letter::TAMIL_NY),
-                (options, letterset![TAMIL_NY]),
+                (left, Letter::Ny),
+                (options, letterset![Ny]),
             );
         }
 
-        let options = letterset![TAMIL_M, TAMIL_N];
+        let options = letterset![M, N];
 
-        // (TAMIL_M, TAMIL_N)
+        // (M, N)
         for right in options.iter() {
             joins.insert(
-                (Letter::TAMIL_M, right),
-                (letterset![TAMIL_M], options),
+                (Letter::M, right),
+                (letterset![M], options),
             );
         }
 
-        // (TAMIL_RETRO_L, TAMIL_N);
+        // (RetroL, N);
         joins.insert_pair(
-            (Letter::TAMIL_RETRO_L, Letter::TAMIL_N),
-            (Letter::TAMIL_RETRO_N, Letter::TAMIL_RETRO_N),
+            (Letter::RetroL, Letter::N),
+            (Letter::RetroN, Letter::RetroN),
         );
 
-        // (TAMIL_ALVEOLAR_L, TAMIL_N);
+        // (AlveolarL, N);
         joins.insert_pair(
-            (Letter::TAMIL_ALVEOLAR_L, Letter::TAMIL_N),
-            (Letter::TAMIL_ALVEOLAR_N, Letter::TAMIL_ALVEOLAR_N),
+            (Letter::AlveolarL, Letter::N),
+            (Letter::AlveolarN, Letter::AlveolarN),
         );
 
-        let options = letterset![TAMIL_RETRO_N, TAMIL_N];
+        let options = letterset![RetroN, N];
 
-        // (TAMIL_RETRO_N, TAMIL_N)
+        // (RetroN, N)
         for right in options.iter() {
             joins.insert(
-                (Letter::TAMIL_RETRO_N, right),
-                (letterset![TAMIL_RETRO_N], options),
+                (Letter::RetroN, right),
+                (letterset![RetroN], options),
             );
         }
 
-        let options = letterset![TAMIL_ALVEOLAR_N, TAMIL_N];
+        let options = letterset![AlveolarN, N];
 
-        // (TAMIL_ALVEOLAR_N, TAMIL_N)
+        // (AlveolarN, N)
         for right in options.iter() {
             joins.insert(
-                (Letter::TAMIL_ALVEOLAR_N, right),
-                (letterset![TAMIL_ALVEOLAR_N], options),
+                (Letter::AlveolarN, right),
+                (letterset![AlveolarN], options),
             );
         }
 
@@ -191,9 +188,9 @@ lazy_static! {
 
     pub static ref GRANTHA_TRANSFORM: HashMap<Letter, Letter> = {
         let pairs = &[
-            (Letter::GRANTHA_J, Letter::TAMIL_CH),
-            (Letter::GRANTHA_SH, Letter::TAMIL_RETRO_T),
-            (Letter::GRANTHA_H, Letter::TAMIL_K),
+            (Letter::J, Letter::Ch),
+            (Letter::Sh, Letter::RetroT),
+            (Letter::H, Letter::K),
         ];
 
         let mut map = HashMap::new();
@@ -280,7 +277,7 @@ pub fn literal_search<S: Search>(
                 }
             } else if letters.index > 3 {
                 // Check for final "u"
-                if let Letter::SHORT_U = lt {
+                if let Letter::U = lt {
                     search = search
                         .literal(word![lt])
                         .joining(&search.asserting_next(LetterSet::vowel()).marking_expanded())?;
@@ -296,76 +293,76 @@ pub fn literal_search<S: Search>(
     Ok(search)
 }
 
-const KCP: LetterSet = letterset![TAMIL_K, TAMIL_CH, TAMIL_P];
+const KCP: LetterSet = letterset![K, Ch, P];
 
 #[rustfmt::skip]
 fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<bool, S::Error> {
     match letters.remaining_with_offset(-2).as_ref() {
         // Check for "aaga" and "aana"
-        [_, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
+        [_, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
             if letters.index > 2 => {}
 
         // Check for "aaga" and "aana"  with "y" joiner
-        &[lt, Letter::TAMIL_Y, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
+        &[lt, Letter::Y, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
             if LetterSet::vowel_with_y().matches(lt) => {}
 
         // Check for "aaga" and "aana"  with "v" joiner
-        &[lt, Letter::TAMIL_V, Letter::LONG_A, Letter::TAMIL_K | Letter::TAMIL_ALVEOLAR_N, Letter::SHORT_A]
+        &[lt, Letter::V, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
             if LetterSet::vowel_with_v().matches(lt) => {}
 
         // Check for "endru" and "endra"
         &[
             lt,
-            Letter::SHORT_E,
-            Letter::TAMIL_ALVEOLAR_N,
-            Letter::TAMIL_ALVEOLAR_TR,
-            Letter::SHORT_U | Letter::SHORT_A,
+            Letter::E,
+            Letter::AlveolarN,
+            Letter::AlveolarR,
+            Letter::U | Letter::A,
         ] if LetterSet::tamil_final().matches(lt) => {}
 
         // Check for "endru" and "endra" with "y" joiner
         &[
             lt,
-            Letter::TAMIL_Y,
-            Letter::SHORT_E,
-            Letter::TAMIL_ALVEOLAR_N,
-            Letter::TAMIL_ALVEOLAR_TR,
-            Letter::SHORT_U | Letter::SHORT_A,
+            Letter::Y,
+            Letter::E,
+            Letter::AlveolarN,
+            Letter::AlveolarR,
+            Letter::U | Letter::A,
         ] if LetterSet::vowel_with_y().matches(lt) => {}
 
         // Check for "endru" and "endra" with "v" joiner
         &[
             lt,
-            Letter::TAMIL_V,
-            Letter::SHORT_E,
-            Letter::TAMIL_ALVEOLAR_N,
-            Letter::TAMIL_ALVEOLAR_TR,
-            Letter::SHORT_U | Letter::SHORT_A,
+            Letter::V,
+            Letter::E,
+            Letter::AlveolarN,
+            Letter::AlveolarR,
+            Letter::U | Letter::A,
         ] if LetterSet::vowel_with_v().matches(lt) => {}
 
         // Check for "padu", "paadu", or "paduthu"
-        &[prev, lt, Letter::TAMIL_P, Letter::SHORT_A | Letter::LONG_A, Letter::TAMIL_RETRO_T, Letter::SHORT_U]
+        &[prev, lt, Letter::P, Letter::A | Letter::LongA, Letter::RetroT, Letter::U]
         | &[
             prev,
             lt,
-            Letter::TAMIL_P,
-            Letter::SHORT_A,
-            Letter::TAMIL_RETRO_T,
-            Letter::SHORT_U,
-            Letter::TAMIL_T,
-            Letter::TAMIL_T,
-            Letter::SHORT_U,
+            Letter::P,
+            Letter::A,
+            Letter::RetroT,
+            Letter::U,
+            Letter::T,
+            Letter::T,
+            Letter::U,
         ] => {
             match lt {
                 // Handle doubling of "p"
-                Letter::TAMIL_P => {
+                Letter::P => {
                     if letters.index > 3 {
                         // Handle final "am"
-                        if prev == Letter::SHORT_A {
+                        if prev == Letter::A {
                             letters.adv();
                             *search = search
-                                .literal(word![Letter::TAMIL_P])
+                                .literal(word![P])
                                 .asserting_next(KCP)
-                                .joining(&search.literal(word![Letter::TAMIL_M]))?;
+                                .joining(&search.literal(word![M]))?;
                         }
                     } else {
                         return Ok(false);
@@ -373,21 +370,21 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
                 }
 
                 // Handle final retroflex "l"
-                Letter::TAMIL_RETRO_L | Letter::TAMIL_RETRO_T => {
+                Letter::RetroL | Letter::RetroT => {
                     letters.adv();
                     *search = search
-                        .literal(word![Letter::TAMIL_RETRO_T])
+                        .literal(word![RetroT])
                         .asserting_next(KCP)
-                        .joining(&search.literal(word![Letter::TAMIL_RETRO_L]))?;
+                        .joining(&search.literal(word![RetroL]))?;
                 }
 
                 // Handle final alveolar "l"
-                Letter::TAMIL_ALVEOLAR_L | Letter::TAMIL_ALVEOLAR_TR => {
+                Letter::AlveolarL | Letter::AlveolarR => {
                     letters.adv();
                     *search = search
-                        .literal(word![Letter::TAMIL_ALVEOLAR_TR])
+                        .literal(word![AlveolarR])
                         .asserting_next(KCP)
-                        .joining(&search.literal(word![Letter::TAMIL_ALVEOLAR_L]))?;
+                        .joining(&search.literal(word![AlveolarL]))?;
                 }
 
                 _ => {
@@ -402,10 +399,10 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
         }
 
         // Check for "thal"
-        &[lt, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
-        | &[lt, Letter::TAMIL_T, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
-        | &[lt, Letter::SHORT_U, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
-        | &[lt, Letter::SHORT_U, Letter::TAMIL_T, Letter::TAMIL_T, Letter::SHORT_A, Letter::TAMIL_ALVEOLAR_L]
+        &[lt, Letter::T, Letter::A, Letter::AlveolarL]
+        | &[lt, Letter::T, Letter::T, Letter::A, Letter::AlveolarL]
+        | &[lt, Letter::U, Letter::T, Letter::A, Letter::AlveolarL]
+        | &[lt, Letter::U, Letter::T, Letter::T, Letter::A, Letter::AlveolarL]
             if letters.index > 3 && LetterSet::tamil_final().matches(lt) => {}
 
         _ => return Ok(false),
@@ -453,27 +450,27 @@ fn check_initial<S: Search>(
 
     *search = match lt {
         // Initial "t"
-        Letter::TAMIL_T => search.literal(word![lt]).joining(
+        Letter::T => search.literal(word![lt]).joining(
             &search
-                .asserting_prev_matching(letterset![TAMIL_RETRO_T, TAMIL_RETRO_N])?
-                .literal(word![Letter::TAMIL_RETRO_T])
+                .asserting_prev_matching(letterset![RetroT, RetroN])?
+                .literal(word![RetroT])
                 .joining(
                     &search
-                        .asserting_prev_matching(letterset![TAMIL_ALVEOLAR_TR, TAMIL_ALVEOLAR_N])?
-                        .literal(word![Letter::TAMIL_ALVEOLAR_TR]),
+                        .asserting_prev_matching(letterset![AlveolarR, AlveolarN])?
+                        .literal(word![AlveolarR]),
                 )?
                 .marking_expanded(),
         )?,
 
         // Initial "n"
-        Letter::TAMIL_N => search.literal(word![lt]).joining(
+        Letter::N => search.literal(word![lt]).joining(
             &search
-                .asserting_prev(Letter::TAMIL_RETRO_N)
-                .literal(word![Letter::TAMIL_RETRO_N])
+                .asserting_prev(Letter::RetroN)
+                .literal(word![RetroN])
                 .joining(
                     &search
-                        .asserting_prev(Letter::TAMIL_ALVEOLAR_N)
-                        .literal(word![Letter::TAMIL_ALVEOLAR_N]),
+                        .asserting_prev(Letter::AlveolarN)
+                        .literal(word![AlveolarN]),
                 )?
                 .marking_expanded(),
         )?,
@@ -490,8 +487,7 @@ fn check_final<S: Search>(
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
-    const FINAL_TRANSFORM: LetterSet =
-        letterset![TAMIL_M, TAMIL_RETRO_L, TAMIL_ALVEOLAR_L, TAMIL_ALVEOLAR_N];
+    const FINAL_TRANSFORM: LetterSet = letterset![M, RetroL, AlveolarL, AlveolarN];
 
     if letters.remaining_count() != 1 || !lt.is_vowel() || !FINAL_TRANSFORM.matches(next) {
         return Ok(false);
@@ -501,13 +497,13 @@ fn check_final<S: Search>(
     let with_vowel = search.literal(word![lt]);
     let final_m = || -> Result<S, S::Error> {
         Ok(with_vowel
-            .matching(letterset![TAMIL_NG, TAMIL_NY, TAMIL_N])?
+            .matching(letterset![Ng, Ny, N])?
             .marking_expanded()
-            .joining(&with_vowel.literal(word![Letter::TAMIL_M]))?)
+            .joining(&with_vowel.literal(word![M]))?)
     };
 
     // Check for final "am"
-    if let (Letter::SHORT_A, Letter::TAMIL_M) = (lt, next) {
+    if let (Letter::A, Letter::M) = (lt, next) {
         if letters.index > 5 {
             // Allow entire "am" to be removed since the word is long
             *search = search
@@ -531,38 +527,38 @@ fn check_final<S: Search>(
 
     *search = match next {
         // Final "m"
-        Letter::TAMIL_M => final_m()?,
+        Letter::M => final_m()?,
 
         // Final retroflex "l"
-        Letter::TAMIL_RETRO_L => with_vowel.literal(word![next]).joining(
+        Letter::RetroL => with_vowel.literal(word![next]).joining(
             &with_vowel
-                .literal(word![Letter::TAMIL_RETRO_T])
-                .asserting_next(KCP.union(letterset![TAMIL_RETRO_T]))
+                .literal(word![RetroT])
+                .asserting_next(KCP.union(letterset![RetroT]))
                 .joining(
                     &with_vowel
-                        .literal(word![Letter::TAMIL_RETRO_N])
-                        .asserting_next(KCP.union(letterset![TAMIL_RETRO_N])),
+                        .literal(word![RetroN])
+                        .asserting_next(KCP.union(letterset![RetroN])),
                 )?
                 .marking_expanded(),
         )?,
 
         // Final alveolar "l"
-        Letter::TAMIL_ALVEOLAR_L => with_vowel.literal(word![next]).joining(
+        Letter::AlveolarL => with_vowel.literal(word![next]).joining(
             &with_vowel
-                .literal(word![Letter::TAMIL_ALVEOLAR_TR])
-                .asserting_next(KCP.union(letterset![TAMIL_ALVEOLAR_TR]))
+                .literal(word![AlveolarR])
+                .asserting_next(KCP.union(letterset![AlveolarR]))
                 .joining(
                     &with_vowel
-                        .literal(word![Letter::TAMIL_ALVEOLAR_N])
-                        .asserting_next(KCP.union(letterset![TAMIL_ALVEOLAR_N])),
+                        .literal(word![AlveolarN])
+                        .asserting_next(KCP.union(letterset![AlveolarN])),
                 )?
                 .marking_expanded(),
         )?,
 
         // Final alveolar "n"
-        Letter::TAMIL_ALVEOLAR_N => with_vowel.literal(word![next]).joining(
+        Letter::AlveolarN => with_vowel.literal(word![next]).joining(
             &with_vowel
-                .literal(word![Letter::TAMIL_ALVEOLAR_TR])
+                .literal(word![AlveolarR])
                 .asserting_next(KCP)
                 .marking_expanded(),
         )?,
@@ -582,117 +578,116 @@ fn transliterate<S: Search>(
     use Letter as L;
 
     let search = match lt {
-        L::LATIN_A => {
+        L::LatinA => {
             match letters.peek() {
                 // Check for "aa"
-                Some(L::LATIN_A) => {
+                Some(L::LatinA) => {
                     letters.adv();
-                    search.literal(word![Letter::LONG_A])
+                    search.literal(word![LongA])
                 }
 
                 // Check for "ae"
-                Some(L::LATIN_E) => {
+                Some(L::LatinE) => {
                     letters.adv();
-                    search.literal(word![Letter::LONG_E])
+                    search.literal(word![LongE])
                 }
 
                 // Check for "ai"
-                Some(L::LATIN_I) => {
+                Some(L::LatinI) => {
                     letters.adv();
-                    search.literal(word![Letter::AI])
+                    search.literal(word![Ai])
                 }
 
                 // Check for "ay"
-                Some(L::LATIN_Y) => {
+                Some(L::LatinY) => {
                     letters.adv();
 
                     let mut base = search
-                        .literal(word![Letter::AI])
-                        .joining(&search.literal(word![Letter::SHORT_A, Letter::TAMIL_Y]))?;
+                        .literal(word![Ai])
+                        .joining(&search.literal(word![A, Y]))?;
 
                     if expand {
-                        base =
-                            base.joining(&search.literal(word![Letter::LONG_A, Letter::TAMIL_Y]))?;
+                        base = base.joining(&search.literal(word![LongA, Y]))?;
                     }
 
-                    base.literal(word![Letter::TAMIL_Y]).joining(&base)?
+                    base.literal(word![Y]).joining(&base)?
                 }
 
                 // Check for "au" or "aw"
-                Some(L::LATIN_U | L::LATIN_W) => {
+                Some(L::LatinU | L::LatinW) => {
                     letters.adv();
-                    let av = search.literal(word![Letter::SHORT_A, Letter::TAMIL_V]);
+                    let av = search.literal(word![A, V]);
                     search
-                        .literal(word![Letter::AU])
+                        .literal(word![Au])
                         .joining(&av)?
-                        .joining(&av.literal(word![Letter::SHORT_U]))?
+                        .joining(&av.literal(word![U]))?
                 }
 
                 _ => {
                     if expand {
-                        search.matching(letterset![SHORT_A, LONG_A, AI])?
+                        search.matching(letterset![A, LongA, Ai])?
                     } else {
-                        search.literal(word![Letter::SHORT_A])
+                        search.literal(word![A])
                     }
                 }
             }
         }
 
-        L::LATIN_E => {
+        L::LatinE => {
             match letters.peek() {
                 // Check for "ee"
-                Some(L::LATIN_E) => {
+                Some(L::LatinE) => {
                     letters.adv();
-                    search.literal(word![Letter::LONG_I])
+                    search.literal(word![LongI])
                 }
 
                 _ => {
                     if expand {
-                        search.matching(letterset![SHORT_E, LONG_E, AI])?
+                        search.matching(letterset![E, LongE, Ai])?
                     } else {
-                        search.matching(letterset![SHORT_E, LONG_E])?
+                        search.matching(letterset![E, LongE])?
                     }
                 }
             }
         }
 
-        L::LATIN_O => {
+        L::LatinO => {
             match letters.peek() {
                 // Check for "oo"
-                Some(L::LATIN_O) => {
+                Some(L::LatinO) => {
                     letters.adv();
-                    search.literal(word![Letter::LONG_U])
+                    search.literal(word![LongU])
                 }
 
                 _ => {
                     if expand {
-                        search.matching(letterset![SHORT_O, LONG_O, AU])?
+                        search.matching(letterset![O, LongO, Au])?
                     } else {
-                        search.matching(letterset![SHORT_O, LONG_O])?
+                        search.matching(letterset![O, LongO])?
                     }
                 }
             }
         }
 
-        L::LATIN_N => {
-            let n_set = letterset![TAMIL_NG, TAMIL_NY, TAMIL_N, TAMIL_ALVEOLAR_N, TAMIL_RETRO_N];
+        L::LatinN => {
+            let n_set = letterset![Ng, Ny, N, AlveolarN, RetroN];
             match letters.peek() {
                 // Check for "ny"
-                Some(L::LATIN_Y) => {
+                Some(L::LatinY) => {
                     letters.adv();
                     search
                         .matching(n_set)?
-                        .literal(word![Letter::TAMIL_Y])
-                        .joining(&optional_double(search, Letter::TAMIL_NY)?)?
+                        .literal(word![Y])
+                        .joining(&optional_double(search, Letter::Ny)?)?
                 }
 
                 // Check for "ng"
-                Some(L::LATIN_G) => {
+                Some(L::LatinG) => {
                     letters.adv();
                     search
                         .matching(n_set)?
-                        .literal(word![Letter::TAMIL_K])
-                        .joining(&optional_double(search, Letter::TAMIL_NG)?)?
+                        .literal(word![K])
+                        .joining(&optional_double(search, Letter::Ng)?)?
                 }
 
                 _ => search.matching(n_set)?,
@@ -700,32 +695,32 @@ fn transliterate<S: Search>(
         }
 
         // Check for "dr"
-        L::LATIN_D if letters.peek() == Some(L::LATIN_R) => {
+        L::LatinD if letters.peek() == Some(L::LatinR) => {
             letters.adv();
             search
-                .matching(letterset![TAMIL_T, TAMIL_RETRO_T])?
-                .literal(word![Letter::TAMIL_R])
-                .joining(&optional_double(search, Letter::TAMIL_ALVEOLAR_TR)?)?
+                .matching(letterset![T, RetroT])?
+                .literal(word![R])
+                .joining(&optional_double(search, Letter::AlveolarR)?)?
         }
 
         // If not expanding, treat these more strictly
-        L::LATIN_I if !expand => search.literal(word![Letter::SHORT_I]),
-        L::LATIN_L if !expand => search.matching(letterset![TAMIL_ALVEOLAR_L, TAMIL_RETRO_L])?,
-        L::LATIN_U if !expand => search.literal(word![Letter::SHORT_U]),
+        L::LatinI if !expand => search.literal(word![I]),
+        L::LatinL if !expand => search.matching(letterset![AlveolarL, RetroL])?,
+        L::LatinU if !expand => search.literal(word![U]),
 
         _ => {
             if let Some((kind, lts)) = transliterate_letter(lt) {
                 let mut search = if kind.can_double {
                     optional_double_set(search, lts)?
                 } else {
-                    search.matching(lts.union(LetterSet::single(lt)))?
+                    search.matching(lts.union(letterset![lt]))?
                 };
 
                 if kind.follow_by_h {
-                    if let Some(L::LATIN_H) = letters.peek() {
+                    if let Some(L::LatinH) = letters.peek() {
                         letters.adv();
 
-                        let with_h = search.matching(letterset![TAMIL_K, GRANTHA_H, AAYDHAM])?;
+                        let with_h = search.matching(letterset![K, H, Aaydham])?;
                         search.join(&with_h)?;
                     }
                 }
@@ -770,41 +765,32 @@ const fn transliterate_letter(lt: Letter) -> Option<(TransliterationKind, Letter
     use TransliterationKind as T;
 
     let (kind, lts) = match lt {
-        L::LATIN_A => (T::NONE, letterset![SHORT_A, LONG_A, AI]),
-        L::LATIN_B => (T::DOUBLE_H, letterset![TAMIL_P]),
-        L::LATIN_C => (T::DOUBLE_H, letterset![TAMIL_CH]),
-        L::LATIN_D => (T::DOUBLE_H, letterset![TAMIL_T, TAMIL_RETRO_T]),
-        L::LATIN_E => (T::NONE, letterset![SHORT_E, LONG_E, AI]),
-        L::LATIN_F => (T::DOUBLE, letterset![TAMIL_P]),
-        L::LATIN_G => (T::DOUBLE_H, letterset![TAMIL_K]),
-        L::LATIN_H => (T::NONE, letterset![TAMIL_K, GRANTHA_H, AAYDHAM]),
-        L::LATIN_I => (T::NONE, letterset![SHORT_I, LONG_I, TAMIL_Y]),
-        L::LATIN_J => (T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_J]),
-        L::LATIN_K => (T::DOUBLE_H, letterset![TAMIL_K, AAYDHAM]),
-        L::LATIN_L => (
-            T::DOUBLE,
-            letterset![TAMIL_ALVEOLAR_L, TAMIL_RETRO_L, TAMIL_ZH],
-        ),
-        L::LATIN_M => (T::DOUBLE, letterset![TAMIL_M]),
-        L::LATIN_N => (
-            T::DOUBLE,
-            letterset![TAMIL_NG, TAMIL_NY, TAMIL_N, TAMIL_ALVEOLAR_N, TAMIL_RETRO_N],
-        ),
-        L::LATIN_O => (T::NONE, letterset![SHORT_O, LONG_O, AU]),
-        L::LATIN_P => (T::DOUBLE, letterset![TAMIL_P]),
-        L::LATIN_Q => (T::DOUBLE, letterset![TAMIL_K]),
-        L::LATIN_R => (T::DOUBLE, letterset![TAMIL_R, TAMIL_ALVEOLAR_TR]),
-        L::LATIN_S => (T::DOUBLE_H, letterset![TAMIL_CH, GRANTHA_S, GRANTHA_SH]),
-        L::LATIN_T => (
-            T::DOUBLE_H,
-            letterset![TAMIL_T, TAMIL_ALVEOLAR_TR, TAMIL_RETRO_T],
-        ),
-        L::LATIN_U => (T::NONE, letterset![SHORT_U, LONG_U]),
-        L::LATIN_V => (T::DOUBLE, letterset![TAMIL_V]),
-        L::LATIN_W => (T::DOUBLE, letterset![TAMIL_V]),
-        L::LATIN_X => (T::NONE, letterset![GRANTHA_S]),
-        L::LATIN_Y => (T::DOUBLE, letterset![TAMIL_Y]),
-        L::LATIN_Z => (T::ALLOW_H, letterset![TAMIL_ZH]),
+        L::LatinA => (T::NONE, letterset![A, LongA, Ai]),
+        L::LatinB => (T::DOUBLE_H, letterset![P]),
+        L::LatinC => (T::DOUBLE_H, letterset![Ch]),
+        L::LatinD => (T::DOUBLE_H, letterset![T, RetroT]),
+        L::LatinE => (T::NONE, letterset![E, LongE, Ai]),
+        L::LatinF => (T::DOUBLE, letterset![P]),
+        L::LatinG => (T::DOUBLE_H, letterset![K]),
+        L::LatinH => (T::NONE, letterset![K, H, Aaydham]),
+        L::LatinI => (T::NONE, letterset![I, LongI, Y]),
+        L::LatinJ => (T::DOUBLE_H, letterset![Ch, J]),
+        L::LatinK => (T::DOUBLE_H, letterset![K, Aaydham]),
+        L::LatinL => (T::DOUBLE, letterset![AlveolarL, RetroL, Zh]),
+        L::LatinM => (T::DOUBLE, letterset![M]),
+        L::LatinN => (T::DOUBLE, letterset![Ng, Ny, N, AlveolarN, RetroN]),
+        L::LatinO => (T::NONE, letterset![O, LongO, Au]),
+        L::LatinP => (T::DOUBLE, letterset![P]),
+        L::LatinQ => (T::DOUBLE, letterset![K]),
+        L::LatinR => (T::DOUBLE, letterset![R, AlveolarR]),
+        L::LatinS => (T::DOUBLE_H, letterset![Ch, S, Sh]),
+        L::LatinT => (T::DOUBLE_H, letterset![T, AlveolarR, RetroT]),
+        L::LatinU => (T::NONE, letterset![U, LongU]),
+        L::LatinV => (T::DOUBLE, letterset![V]),
+        L::LatinW => (T::DOUBLE, letterset![V]),
+        L::LatinX => (T::NONE, letterset![S]),
+        L::LatinY => (T::DOUBLE, letterset![Y]),
+        L::LatinZ => (T::ALLOW_H, letterset![Zh]),
         _ => return None,
     };
 

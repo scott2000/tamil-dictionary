@@ -6,23 +6,25 @@ extern crate lazy_static;
 #[doc(hidden)]
 macro_rules! letterset_impl {
     ([$n:expr]) => { $n };
-    ([$n:expr], ) => { $n };
-    ([$n:expr], $lt:ident $($tt:tt)*) => {
-        letterset_impl!([$n | (1 << $crate::tamil::num::$lt)] $($tt)*)
+    ([$n:expr] $lt:expr, $($tt:tt)*) => {
+        letterset_impl!([$n | (1 << ($lt) as u8)] $($tt)*)
     };
 }
 
 macro_rules! letterset {
-    ($($tt:tt)*) => {{
-        const _LETTER_SET: $crate::tamil::LetterSet = $crate::tamil::LetterSet(letterset_impl!([0], $($tt)*));
-        _LETTER_SET
+    ($($lt:expr),* $(,)?) => {{
+        #[allow(unused_imports)]
+        use $crate::tamil::Letter::*;
+        $crate::tamil::LetterSet(letterset_impl!([0] $($lt,)*))
     }};
 }
 
 macro_rules! word {
-    ($($tt:tt)*) => {
+    ($($tt:tt)*) => {{
+        #[allow(unused_imports)]
+        use $crate::tamil::Letter::*;
         [$($tt)*][..].into()
-    };
+    }};
 }
 
 use rocket::fs::{relative, FileServer};
