@@ -773,21 +773,44 @@ fn optional_double<S: Search>(
 ) -> Result<S, S::Error> {
     debug_assert!(!avoid_single || !avoid_double);
 
-    let search = search.literal(word![lt]);
+    let with_single = search.literal(word![lt]);
 
     if avoid_double {
-        search
+        with_single
             .literal(word![lt])
             .marking_expanded()
-            .joining(&search)
+            .joining(&with_single)
     } else if avoid_single {
-        search
+        let kcp_lt = KCP.union(letterset![lt]);
+        let tr_lt = letterset![RetroT, AlveolarR, lt];
+
+        // Check for end of word
+        let end_of_word = with_single.asserting_end();
+
+        // Check for following hard consonant
+        let double_next = with_single.asserting_next(kcp_lt);
+
+        // Check for previous hard consonant and following not hard consonant
+        let double_prev_only = search
+            .asserting_prev_matching(tr_lt)?
             .literal(word![lt])
-            .joining(&search.asserting_end())?
-            .joining(&search.asserting_next(letterset![lt]))?
-            .joining(&search.marking_expanded())
+            .asserting_next(kcp_lt.complement());
+
+        // Check for no hard consonant on either side
+        let no_double = search
+            .asserting_prev_matching(tr_lt.complement())?
+            .literal(word![lt])
+            .asserting_next(kcp_lt.complement())
+            .marking_expanded();
+
+        with_single
+            .literal(word![lt])
+            .joining(&end_of_word)?
+            .joining(&double_next)?
+            .joining(&double_prev_only)?
+            .joining(&no_double)
     } else {
-        search.literal(word![lt]).joining(&search)
+        with_single.literal(word![lt]).joining(&with_single)
     }
 }
 
