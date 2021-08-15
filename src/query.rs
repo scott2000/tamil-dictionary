@@ -118,7 +118,7 @@ impl Query {
         loop {
             // Check for negative patterns
             let mut negative = false;
-            if let Some('!' | '-') = chars.peek() {
+            if let Some('-') = chars.peek() {
                 chars.next();
                 negative = true;
             }
@@ -617,7 +617,7 @@ impl Pattern {
 
         let mut allowed = LetterSet::empty();
         let mut negated = false;
-        if let Some('!' | '^') = chars.peek() {
+        if let Some('^') = chars.peek() {
             chars.next();
             negated = true;
         }
