@@ -679,7 +679,7 @@ fn transliterate<S: Search>(
             search
                 .matching(letterset![N, RetroN, AlveolarN])?
                 .literal(word![Y])
-                .joining(&optional_double(search, false, Letter::Ny)?)?
+                .joining(&optional_double(search, false, false, Letter::Ny)?)?
         }
 
         // Check for "ng"
@@ -688,7 +688,7 @@ fn transliterate<S: Search>(
             search
                 .matching(letterset![Ng, N, RetroN, AlveolarN])?
                 .literal(word![K])
-                .joining(&optional_double(search, false, Letter::Ng)?)?
+                .joining(&optional_double(search, false, false, Letter::Ng)?)?
         }
 
         // Check for "dr"
@@ -708,6 +708,11 @@ fn transliterate<S: Search>(
 
         _ => {
             if let Some(tr) = Transliteration::get(lt) {
+                let mut double_kind = tr.double_kind;
+
+                // Record whether at the start of the word or not before advancing
+                let start_of_word = letters.index == 1;
+
                 // Decide which letters are likely and unlikely
                 let (mut likely, mut unlikely) = if tr.with_h.is_empty() {
                     tr.without_h()
@@ -718,16 +723,21 @@ fn transliterate<S: Search>(
                     tr.without_h()
                 };
 
-                // If at the start of the word, allow unlikely valid initial characters
-                if letters.index == 1 && LetterSet::tamil_initial().intersect(likely).is_empty() {
-                    likely = LetterSet::tamil_initial().intersect(unlikely).union(likely);
+                if start_of_word {
+                    // If at the start of the word, allow unlikely valid initial characters
+                    if LetterSet::tamil_initial().intersect(likely).is_empty() {
+                        likely = LetterSet::tamil_initial().intersect(unlikely).union(likely);
+                    }
+
+                    // If at the start of the word, allow single letters always
+                    double_kind.allow_single();
                 }
 
                 // Remove any overlap between the likely and unlikely characters
                 unlikely = likely.complement().intersect(unlikely);
 
-                optional_double_set(search, tr.double_kind, likely)?.joining(
-                    &optional_double_set(search, tr.double_kind, unlikely)?.marking_expanded(),
+                optional_double_set(search, double_kind, likely)?.joining(
+                    &optional_double_set(search, double_kind, unlikely)?.marking_expanded(),
                 )?
             } else {
                 return Ok(None);
@@ -743,24 +753,39 @@ fn optional_double_set<S: Search>(
     kind: DoubleKind,
     lts: LetterSet,
 ) -> Result<S, S::Error> {
-    let avoid = match kind {
+    let (avoid_single, avoid_double) = match kind {
         DoubleKind::NeverDouble => return matching(search, lts),
-        DoubleKind::AvoidDouble => true,
-        DoubleKind::AllowDouble => false,
+        DoubleKind::AvoidDouble => (false, true),
+        DoubleKind::AllowDouble => (false, false),
+        DoubleKind::ForceDouble => (true, false),
     };
 
     lts.iter().try_fold(S::empty(), |a, b| {
-        a.joining(&optional_double(search, avoid, b)?)
+        a.joining(&optional_double(search, avoid_single, avoid_double, b)?)
     })
 }
 
-fn optional_double<S: Search>(search: &S, avoid: bool, lt: Letter) -> Result<S, S::Error> {
+fn optional_double<S: Search>(
+    search: &S,
+    avoid_single: bool,
+    avoid_double: bool,
+    lt: Letter,
+) -> Result<S, S::Error> {
+    debug_assert!(!avoid_single || !avoid_double);
+
     let search = search.literal(word![lt]);
-    if avoid {
+
+    if avoid_double {
         search
             .literal(word![lt])
             .marking_expanded()
             .joining(&search)
+    } else if avoid_single {
+        search
+            .literal(word![lt])
+            .joining(&search.asserting_end())?
+            .joining(&search.asserting_next(letterset![lt]))?
+            .joining(&search.marking_expanded())
     } else {
         search.literal(word![lt]).joining(&search)
     }
@@ -801,7 +826,7 @@ impl Transliteration {
         let (double_kind, without_h, unlikely, with_h) = match lt {
             LatinA => (NeverDouble, letterset![A],                    letterset![LongA, Ai], letterset![]),
             LatinB => (AvoidDouble, letterset![P],                    letterset![],          letterset![P]),
-            LatinC => (AllowDouble, letterset![Ch],                   letterset![],          letterset![Ch]),
+            LatinC => (ForceDouble, letterset![Ch],                   letterset![],          letterset![Ch]),
             LatinD => (AvoidDouble, letterset![RetroT],               letterset![],          letterset![T]),
             LatinE => (NeverDouble, letterset![E, LongE, Ai],         letterset![],          letterset![]),
             LatinF => (AllowDouble, letterset![P],                    letterset![],          letterset![]),
@@ -809,16 +834,16 @@ impl Transliteration {
             LatinH => (NeverDouble, letterset![K, H, Aaydham],        letterset![],          letterset![]),
             LatinI => (NeverDouble, letterset![I],                    letterset![LongI, Y],  letterset![]),
             LatinJ => (AvoidDouble, letterset![Ch, J],                letterset![],          letterset![Ch, J]),
-            LatinK => (AllowDouble, letterset![K],                    letterset![Aaydham],   letterset![K]),
+            LatinK => (ForceDouble, letterset![K],                    letterset![Aaydham],   letterset![K]),
             LatinL => (AllowDouble, letterset![AlveolarL, RetroL],    letterset![Zh],        letterset![]),
             LatinM => (AllowDouble, letterset![M],                    letterset![],          letterset![]),
             LatinN => (AllowDouble, letterset![N, AlveolarN, RetroN], letterset![Ng, Ny],    letterset![]),
             LatinO => (NeverDouble, letterset![O, LongO, Au],         letterset![],          letterset![]),
-            LatinP => (AllowDouble, letterset![P],                    letterset![],          letterset![P]),
+            LatinP => (ForceDouble, letterset![P],                    letterset![],          letterset![P]),
             LatinQ => (AllowDouble, letterset![K],                    letterset![],          letterset![]),
             LatinR => (AvoidDouble, letterset![R, AlveolarR],         letterset![],          letterset![]),
             LatinS => (AvoidDouble, letterset![Ch, S],                letterset![],          letterset![Sh]),
-            LatinT => (AllowDouble, letterset![RetroT, AlveolarR],    letterset![],          letterset![T]),
+            LatinT => (ForceDouble, letterset![RetroT, AlveolarR],    letterset![],          letterset![T]),
             LatinU => (NeverDouble, letterset![U],                    letterset![LongU],     letterset![]),
             LatinV => (AllowDouble, letterset![V],                    letterset![],          letterset![]),
             LatinW => (AllowDouble, letterset![V],                    letterset![],          letterset![]),
@@ -854,4 +879,13 @@ enum DoubleKind {
     NeverDouble,
     AvoidDouble,
     AllowDouble,
+    ForceDouble,
+}
+
+impl DoubleKind {
+    fn allow_single(&mut self) {
+        if *self == Self::ForceDouble {
+            *self = Self::AllowDouble;
+        }
+    }
 }

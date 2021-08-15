@@ -156,10 +156,9 @@ impl SuggestionList {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(u8)]
 enum SearchPrecedence {
-    // Always top: exact word
-    Top,
-    // Type A: exact definition, prefix word
+    // Type A: exact word, exact definition, prefix word
     A,
     // Type B: prefix definition, suffix word
     B,
@@ -171,17 +170,20 @@ enum SearchPrecedence {
 
 #[derive(Debug)]
 struct SearchResultEntry {
+    exact: bool,
     precedence: SearchPrecedence,
     words: BTreeSet<WordIndex>,
 }
 
 impl SearchResultEntry {
     fn new(word: WordData, start: bool, end: bool, expanded: bool) -> Self {
+        let is_word = word.index() == NO_WORD;
+        let exact = is_word && start && end;
+
         // Pick the precedence depending on if it is a definition
-        let precedence = if word.index() == NO_WORD && !expanded {
+        let precedence = if is_word && !expanded {
             match (start, end) {
-                (true, true) => SearchPrecedence::Top,
-                (true, false) => SearchPrecedence::A,
+                (true, _) => SearchPrecedence::A,
                 (false, true) => SearchPrecedence::B,
                 (false, false) => SearchPrecedence::Bottom,
             }
@@ -201,7 +203,11 @@ impl SearchResultEntry {
         let mut words = BTreeSet::new();
         words.insert(word.index());
 
-        Self { precedence, words }
+        Self {
+            exact,
+            precedence,
+            words,
+        }
     }
 
     fn word_match(&self) -> bool {
@@ -209,6 +215,8 @@ impl SearchResultEntry {
     }
 
     fn append(&mut self, mut other: Self, intersect: bool) {
+        self.exact |= other.exact;
+
         self.precedence = match (self.word_match(), other.word_match()) {
             // Combine definition searches by taking the worst precedence when intersecting
             (false, false) if intersect => self.precedence.max(other.precedence),
@@ -303,7 +311,7 @@ impl SearchResult {
         let mut other_count = 0;
         for entry in self.map.values() {
             match entry.precedence {
-                Top | A => a_count += 1,
+                A => a_count += 1,
                 B => b_count += 1,
                 C => c_count += 1,
                 Bottom => other_count += 1,
@@ -345,14 +353,16 @@ impl SearchResult {
         let mut ranking = SearchRanking::default();
         for (index, entry) in self.map {
             let rank = match entry.precedence {
-                Top => Exact,
                 A => a,
                 B => b,
                 C => c,
                 Bottom => other,
             };
 
-            ranking.insert(rank, index, entry.words);
+            // Highlight the entry as exact only if it is in the best ranking
+            let exact = rank == Best && entry.exact;
+
+            ranking.insert(rank, exact, index, entry.words);
         }
 
         ranking
@@ -361,7 +371,6 @@ impl SearchResult {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum SearchRank {
-    Exact,
     Best,
     Related,
     Other,
@@ -387,17 +396,23 @@ impl SearchRanking {
         self.best.is_empty() && self.related.is_empty() && self.other.is_empty()
     }
 
-    fn insert(&mut self, rank: SearchRank, index: EntryIndex, words: BTreeSet<WordIndex>) {
+    fn insert(
+        &mut self,
+        rank: SearchRank,
+        exact: bool,
+        index: EntryIndex,
+        words: BTreeSet<WordIndex>,
+    ) {
         use SearchRank::*;
 
         let entry = SearchRankingEntry {
             entry: &ENTRIES[index as usize],
             words,
-            exact: rank == Exact,
+            exact,
         };
 
         match rank {
-            Exact | Best => self.best.push(entry),
+            Best => self.best.push(entry),
             Related => self.related.push(entry),
             Other => self.other.push(entry),
             Ignore => {}
