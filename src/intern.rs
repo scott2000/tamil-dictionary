@@ -14,7 +14,8 @@ pub fn word(word: Box<Word>) -> &'static Word {
     // Get any existing interned static copy
     let mut words = WORDS.lock().expect("cannot lock mutex");
     let existing = unsafe {
-        let word: &'static Word = &(&*ptr);
+        let word: &'static Word = &*ptr;
+
         words
             .range(word..)
             .next()

@@ -496,10 +496,10 @@ fn check_final<S: Search>(
     letters.adv();
     let with_vowel = search.literal(word![lt]);
     let final_m = || -> Result<S, S::Error> {
-        Ok(with_vowel
+        with_vowel
             .matching(letterset![Ng, Ny, N])?
             .marking_expanded()
-            .joining(&with_vowel.literal(word![M]))?)
+            .joining(&with_vowel.literal(word![M]))
     };
 
     // Check for final "am"
@@ -754,10 +754,10 @@ fn optional_double_set<S: Search>(
     lts: LetterSet,
 ) -> Result<S, S::Error> {
     let (avoid_single, avoid_double) = match kind {
-        DoubleKind::NeverDouble => return matching(search, lts),
-        DoubleKind::AvoidDouble => (false, true),
-        DoubleKind::AllowDouble => (false, false),
-        DoubleKind::ForceDouble => (true, false),
+        DoubleKind::Never => return matching(search, lts),
+        DoubleKind::Avoid => (false, true),
+        DoubleKind::Allow => (false, false),
+        DoubleKind::Force => (true, false),
     };
 
     lts.iter().try_fold(S::empty(), |a, b| {
@@ -847,32 +847,32 @@ impl Transliteration {
         use DoubleKind::*;
 
         let (double_kind, without_h, unlikely, with_h) = match lt {
-            LatinA => (NeverDouble, letterset![A],                    letterset![LongA, Ai], letterset![]),
-            LatinB => (AvoidDouble, letterset![P],                    letterset![],          letterset![P]),
-            LatinC => (ForceDouble, letterset![Ch],                   letterset![],          letterset![Ch]),
-            LatinD => (AvoidDouble, letterset![RetroT],               letterset![],          letterset![T]),
-            LatinE => (NeverDouble, letterset![E, LongE, Ai],         letterset![],          letterset![]),
-            LatinF => (AllowDouble, letterset![P],                    letterset![],          letterset![]),
-            LatinG => (AvoidDouble, letterset![K],                    letterset![],          letterset![K]),
-            LatinH => (NeverDouble, letterset![K, H, Aaydham],        letterset![],          letterset![]),
-            LatinI => (NeverDouble, letterset![I],                    letterset![LongI, Y],  letterset![]),
-            LatinJ => (AvoidDouble, letterset![Ch, J],                letterset![],          letterset![Ch, J]),
-            LatinK => (ForceDouble, letterset![K],                    letterset![Aaydham],   letterset![K]),
-            LatinL => (AllowDouble, letterset![AlveolarL, RetroL],    letterset![Zh],        letterset![]),
-            LatinM => (AllowDouble, letterset![M],                    letterset![],          letterset![]),
-            LatinN => (AllowDouble, letterset![N, AlveolarN, RetroN], letterset![Ng, Ny],    letterset![]),
-            LatinO => (NeverDouble, letterset![O, LongO, Au],         letterset![],          letterset![]),
-            LatinP => (ForceDouble, letterset![P],                    letterset![],          letterset![P]),
-            LatinQ => (AllowDouble, letterset![K],                    letterset![],          letterset![]),
-            LatinR => (AvoidDouble, letterset![R, AlveolarR],         letterset![],          letterset![]),
-            LatinS => (AvoidDouble, letterset![Ch, S],                letterset![],          letterset![Sh]),
-            LatinT => (ForceDouble, letterset![RetroT, AlveolarR],    letterset![],          letterset![T]),
-            LatinU => (NeverDouble, letterset![U],                    letterset![LongU],     letterset![]),
-            LatinV => (AllowDouble, letterset![V],                    letterset![],          letterset![]),
-            LatinW => (AllowDouble, letterset![V],                    letterset![],          letterset![]),
-            LatinX => (NeverDouble, letterset![S],                    letterset![],          letterset![]),
-            LatinY => (AllowDouble, letterset![Y],                    letterset![],          letterset![]),
-            LatinZ => (NeverDouble, letterset![Zh],                   letterset![],          letterset![Zh]),
+            LatinA => (Never, letterset![A],                    letterset![LongA, Ai], letterset![]),
+            LatinB => (Avoid, letterset![P],                    letterset![],          letterset![P]),
+            LatinC => (Force, letterset![Ch],                   letterset![],          letterset![Ch]),
+            LatinD => (Avoid, letterset![RetroT],               letterset![],          letterset![T]),
+            LatinE => (Never, letterset![E, LongE, Ai],         letterset![],          letterset![]),
+            LatinF => (Allow, letterset![P],                    letterset![],          letterset![]),
+            LatinG => (Avoid, letterset![K],                    letterset![],          letterset![K]),
+            LatinH => (Never, letterset![K, H, Aaydham],        letterset![],          letterset![]),
+            LatinI => (Never, letterset![I],                    letterset![LongI, Y],  letterset![]),
+            LatinJ => (Avoid, letterset![Ch, J],                letterset![],          letterset![Ch, J]),
+            LatinK => (Force, letterset![K],                    letterset![Aaydham],   letterset![K]),
+            LatinL => (Allow, letterset![AlveolarL, RetroL],    letterset![Zh],        letterset![]),
+            LatinM => (Allow, letterset![M],                    letterset![],          letterset![]),
+            LatinN => (Allow, letterset![N, AlveolarN, RetroN], letterset![Ng, Ny],    letterset![]),
+            LatinO => (Never, letterset![O, LongO, Au],         letterset![],          letterset![]),
+            LatinP => (Force, letterset![P],                    letterset![],          letterset![P]),
+            LatinQ => (Allow, letterset![K],                    letterset![],          letterset![]),
+            LatinR => (Avoid, letterset![R, AlveolarR],         letterset![],          letterset![]),
+            LatinS => (Avoid, letterset![Ch, S],                letterset![],          letterset![Sh]),
+            LatinT => (Force, letterset![RetroT, AlveolarR],    letterset![],          letterset![T]),
+            LatinU => (Never, letterset![U],                    letterset![LongU],     letterset![]),
+            LatinV => (Allow, letterset![V],                    letterset![],          letterset![]),
+            LatinW => (Allow, letterset![V],                    letterset![],          letterset![]),
+            LatinX => (Never, letterset![S],                    letterset![],          letterset![]),
+            LatinY => (Allow, letterset![Y],                    letterset![],          letterset![]),
+            LatinZ => (Never, letterset![Zh],                   letterset![],          letterset![Zh]),
             _ => return None,
         };
 
@@ -899,16 +899,16 @@ impl Transliteration {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum DoubleKind {
-    NeverDouble,
-    AvoidDouble,
-    AllowDouble,
-    ForceDouble,
+    Never,
+    Avoid,
+    Allow,
+    Force,
 }
 
 impl DoubleKind {
     fn allow_single(&mut self) {
-        if *self == Self::ForceDouble {
-            *self = Self::AllowDouble;
+        if *self == Self::Force {
+            *self = Self::Allow;
         }
     }
 }

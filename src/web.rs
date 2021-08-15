@@ -17,7 +17,7 @@ use crate::tamil::{self, LetterSet};
 const MAX_OTHER_SECTIONS: usize = 5;
 const MAX_EXPAND: usize = 250;
 
-const EXAMPLES: &'static [&'static str] = &[
+const EXAMPLES: &[&str] = &[
     "thamizh",
     "vanakkam",
     "pazham",
@@ -469,10 +469,8 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
             }
 
             if let Some(list) = pat.suggest(count) {
-                let mut suggestions: Vec<_> = list
-                    .suggestions()
-                    .map(|entry| SuggestResponseEntry::from(entry))
-                    .collect();
+                let mut suggestions: Vec<_> =
+                    list.suggestions().map(SuggestResponseEntry::from).collect();
 
                 // Use ":" to indicate this last row should be used for definition search
                 if add_definition {

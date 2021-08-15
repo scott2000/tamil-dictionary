@@ -177,7 +177,7 @@ impl Entry {
         RawEntry::words(&self.word).next().unwrap()
     }
 
-    fn parsed_words<'a>(&'a self) -> impl Iterator<Item = Box<Word>> + 'a {
+    fn parsed_words(&self) -> impl Iterator<Item = Box<Word>> + '_ {
         RawEntry::words(&self.word).map(Word::parse)
     }
 }
@@ -196,7 +196,8 @@ impl From<RawEntry> for Entry {
             .secs
             .into_iter()
             .map(|sec| {
-                sec.into_iter()
+                let section: Box<[_]> = sec
+                    .into_iter()
                     .map(|para| {
                         para.into_iter()
                             .map(|(kind, s)| {
@@ -208,9 +209,12 @@ impl From<RawEntry> for Entry {
                             })
                             .collect()
                     })
-                    .collect()
+                    .collect();
+
+                assert!(!section.is_empty());
+
+                section
             })
-            .inspect(|sec: &Box<[_]>| assert!(!sec.is_empty()))
             .collect();
 
         assert!(!sections.is_empty());
@@ -238,9 +242,9 @@ impl From<RawEntry> for Entry {
 
             if let Some((start, _)) = chars.next() {
                 // Skip word characters
-                while let Some(_) = chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)) {}
+                while chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)).is_some() {}
 
-                let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
+                let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
 
                 // Push the parsed word and the indices
                 parsed_text.push(intern::word(Word::parse(&text[start..end])));

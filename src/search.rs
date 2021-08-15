@@ -277,8 +277,8 @@ impl SearchResult {
 
         // Find the intersection of the positive results
         let mut intersect_set = intersect[0].map.keys().cloned().collect();
-        for i in 1..intersect.len() {
-            intersect[i].entry_intersection(&mut intersect_set);
+        for intersect in &intersect[1..] {
+            intersect.entry_intersection(&mut intersect_set);
         }
 
         // Find the union of the negative results

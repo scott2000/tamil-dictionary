@@ -10,7 +10,7 @@ pub const COMBINING_LA: char = '\u{bd7}';
 pub const OM: char = '\u{bd0}';
 
 #[rustfmt::skip]
-const TAMIL_VOWELS: &'static [char] = &[
+const TAMIL_VOWELS: &[char] = &[
     'அ', 'ஆ',
     'இ', 'ஈ',
     'உ', 'ஊ',
@@ -19,7 +19,7 @@ const TAMIL_VOWELS: &'static [char] = &[
 ];
 
 #[rustfmt::skip]
-const TAMIL_VOWEL_SIGNS: &'static [char] = &[
+const TAMIL_VOWEL_SIGNS: &[char] = &[
     '\u{bbe}',
     '\u{bbf}', '\u{bc0}',
     '\u{bc1}', '\u{bc2}',
@@ -31,7 +31,7 @@ const AAYDHAM: char = 'ஃ';
 const GRANTHA_SSH: char = 'ஶ';
 
 #[rustfmt::skip]
-const TAMIL_CONSONANTS: &'static [char] = &[
+const TAMIL_CONSONANTS: &[char] = &[
     'க', 'ங',
     'ச', 'ஞ',
     'ட', 'ண',
@@ -231,17 +231,11 @@ impl Letter {
     }
 
     pub fn is_vowel(self) -> bool {
-        match self as u8 {
-            Self::VOWEL_START..=Self::VOWEL_END => true,
-            _ => false,
-        }
+        matches!(self as u8, Self::VOWEL_START..=Self::VOWEL_END)
     }
 
     pub fn is_consonant(self) -> bool {
-        match self as u8 {
-            Self::CONSONANT_START..=Self::CONSONANT_END => true,
-            _ => false,
-        }
+        matches!(self as u8, Self::CONSONANT_START..=Self::CONSONANT_END)
     }
 
     pub fn pairs_with(self, rhs: Self) -> bool {
@@ -952,7 +946,7 @@ impl<'a> IntoIterator for &'a mut Word {
     type IntoIter = std::slice::IterMut<'a, Letter>;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&mut self.0).into_iter()
+        self.0.iter_mut()
     }
 }
 
@@ -960,13 +954,13 @@ impl Index<usize> for Word {
     type Output = Letter;
 
     fn index(&self, index: usize) -> &Letter {
-        self.0.index(index).into()
+        self.0.index(index)
     }
 }
 
 impl IndexMut<usize> for Word {
     fn index_mut(&mut self, index: usize) -> &mut Letter {
-        self.0.index_mut(index).into()
+        self.0.index_mut(index)
     }
 }
 

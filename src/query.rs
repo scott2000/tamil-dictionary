@@ -264,11 +264,8 @@ impl Query {
         };
 
         // Give special error for failing negative patterns
-        match process_negatives() {
-            Err(tree::SearchError::TooManyResults) => {
-                return Err(tree::SearchError::CommonExclusion);
-            }
-            _ => {}
+        if let Err(tree::SearchError::TooManyResults) = process_negatives() {
+            return Err(tree::SearchError::CommonExclusion);
         }
 
         let result = SearchResult::intersect_difference(intersect, difference);
@@ -296,7 +293,7 @@ impl Query {
             };
 
             // If successful, return the definition search instead
-            if let Ok(_) = process_definitions() {
+            if process_definitions().is_ok() {
                 return Ok(SearchResult::intersect_difference(intersect, difference));
             }
         }
