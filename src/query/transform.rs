@@ -575,31 +575,31 @@ fn transliterate<S: Search>(
     letters: &mut WordIter,
     lt: Letter,
 ) -> Result<Option<S>, S::Error> {
-    use Letter as L;
+    use Letter::*;
 
     let search = match lt {
-        L::LatinA => {
+        LatinA => {
             match letters.peek() {
                 // Check for "aa"
-                Some(L::LatinA) => {
+                Some(LatinA) => {
                     letters.adv();
                     search.literal(word![LongA])
                 }
 
                 // Check for "ae"
-                Some(L::LatinE) => {
+                Some(LatinE) => {
                     letters.adv();
                     search.literal(word![LongE])
                 }
 
                 // Check for "ai"
-                Some(L::LatinI) => {
+                Some(LatinI) => {
                     letters.adv();
                     search.literal(word![Ai])
                 }
 
                 // Check for "ay"
-                Some(L::LatinY) => {
+                Some(LatinY) => {
                     letters.adv();
 
                     let mut base = search
@@ -614,7 +614,7 @@ fn transliterate<S: Search>(
                 }
 
                 // Check for "au" or "aw"
-                Some(L::LatinU | L::LatinW) => {
+                Some(LatinU | LatinW) => {
                     letters.adv();
                     let av = search.literal(word![A, V]);
                     search
@@ -625,7 +625,9 @@ fn transliterate<S: Search>(
 
                 _ => {
                     if expand {
-                        search.matching(letterset![A, LongA, Ai])?
+                        search
+                            .literal(word![A])
+                            .joining(&search.matching(letterset![LongA, Ai])?)?
                     } else {
                         search.literal(word![A])
                     }
@@ -633,10 +635,10 @@ fn transliterate<S: Search>(
             }
         }
 
-        L::LatinE => {
+        LatinE => {
             match letters.peek() {
                 // Check for "ee"
-                Some(L::LatinE) => {
+                Some(LatinE) => {
                     letters.adv();
                     search.literal(word![LongI])
                 }
@@ -651,17 +653,19 @@ fn transliterate<S: Search>(
             }
         }
 
-        L::LatinO => {
+        LatinO => {
             match letters.peek() {
                 // Check for "oo"
-                Some(L::LatinO) => {
+                Some(LatinO) => {
                     letters.adv();
                     search.literal(word![LongU])
                 }
 
                 _ => {
                     if expand {
-                        search.matching(letterset![O, LongO, Au])?
+                        search
+                            .matching(letterset![O, LongO])?
+                            .joining(&search.literal(word![Au]))?
                     } else {
                         search.matching(letterset![O, LongO])?
                     }
@@ -669,63 +673,62 @@ fn transliterate<S: Search>(
             }
         }
 
-        L::LatinN => {
-            let n_set = letterset![Ng, Ny, N, AlveolarN, RetroN];
-            match letters.peek() {
-                // Check for "ny"
-                Some(L::LatinY) => {
-                    letters.adv();
-                    search
-                        .matching(n_set)?
-                        .literal(word![Y])
-                        .joining(&optional_double(search, Letter::Ny)?)?
-                }
+        // Check for "ny"
+        LatinN if letters.peek() == Some(LatinY) => {
+            letters.adv();
+            search
+                .matching(letterset![N, RetroN, AlveolarN])?
+                .literal(word![Y])
+                .joining(&optional_double(search, false, Letter::Ny)?)?
+        }
 
-                // Check for "ng"
-                Some(L::LatinG) => {
-                    letters.adv();
-                    search
-                        .matching(n_set)?
-                        .literal(word![K])
-                        .joining(&optional_double(search, Letter::Ng)?)?
-                }
-
-                _ => search.matching(n_set)?,
-            }
+        // Check for "ng"
+        LatinN if letters.peek() == Some(LatinG) => {
+            letters.adv();
+            search
+                .matching(letterset![Ng, N, RetroN, AlveolarN])?
+                .literal(word![K])
+                .joining(&optional_double(search, false, Letter::Ng)?)?
         }
 
         // Check for "dr"
-        L::LatinD if letters.peek() == Some(L::LatinR) => {
+        LatinD if letters.peek() == Some(LatinR) => {
             letters.adv();
             search
                 .matching(letterset![T, RetroT])?
                 .literal(word![R])
-                .joining(&optional_double(search, Letter::AlveolarR)?)?
+                .marking_expanded()
+                .joining(&search.literal(word![AlveolarR]))?
         }
 
         // If not expanding, treat these more strictly
-        L::LatinI if !expand => search.literal(word![I]),
-        L::LatinL if !expand => search.matching(letterset![AlveolarL, RetroL])?,
-        L::LatinU if !expand => search.literal(word![U]),
+        LatinI if !expand => search.literal(word![I]),
+        LatinL if !expand => search.matching(letterset![AlveolarL, RetroL])?,
+        LatinU if !expand => search.literal(word![U]),
 
         _ => {
-            if let Some((kind, lts)) = transliterate_letter(lt) {
-                let mut search = if kind.can_double {
-                    optional_double_set(search, lts)?
+            if let Some(tr) = Transliteration::get(lt) {
+                // Decide which letters are likely and unlikely
+                let (mut likely, mut unlikely) = if tr.with_h.is_empty() {
+                    tr.without_h()
+                } else if let Some(LatinH) = letters.peek() {
+                    letters.adv();
+                    tr.with_h()
                 } else {
-                    search.matching(lts.union(letterset![lt]))?
+                    tr.without_h()
                 };
 
-                if kind.follow_by_h {
-                    if let Some(L::LatinH) = letters.peek() {
-                        letters.adv();
-
-                        let with_h = search.matching(letterset![K, H, Aaydham])?;
-                        search.join(&with_h)?;
-                    }
+                // If at the start of the word, allow unlikely valid initial characters
+                if letters.index == 1 && LetterSet::tamil_initial().intersect(likely).is_empty() {
+                    likely = LetterSet::tamil_initial().intersect(unlikely).union(likely);
                 }
 
-                search
+                // Remove any overlap between the likely and unlikely characters
+                unlikely = likely.complement().intersect(unlikely);
+
+                optional_double_set(search, tr.double_kind, likely)?.joining(
+                    &optional_double_set(search, tr.double_kind, unlikely)?.marking_expanded(),
+                )?
             } else {
                 return Ok(None);
             }
@@ -735,92 +738,120 @@ fn transliterate<S: Search>(
     Ok(Some(search))
 }
 
-fn optional_double_set<S: Search>(search: &S, lts: LetterSet) -> Result<S, S::Error> {
-    lts.iter()
-        .try_fold(S::empty(), |a, b| a.joining(&optional_double(search, b)?))
+fn optional_double_set<S: Search>(
+    search: &S,
+    kind: DoubleKind,
+    lts: LetterSet,
+) -> Result<S, S::Error> {
+    let avoid = match kind {
+        DoubleKind::NeverDouble => return matching(search, lts),
+        DoubleKind::AvoidDouble => true,
+        DoubleKind::AllowDouble => false,
+    };
+
+    lts.iter().try_fold(S::empty(), |a, b| {
+        a.joining(&optional_double(search, avoid, b)?)
+    })
 }
 
-fn optional_double<S: Search>(search: &S, lt: Letter) -> Result<S, S::Error> {
+fn optional_double<S: Search>(search: &S, avoid: bool, lt: Letter) -> Result<S, S::Error> {
     let search = search.literal(word![lt]);
-    search.literal(word![lt]).joining(&search)
+    if avoid {
+        search
+            .literal(word![lt])
+            .marking_expanded()
+            .joining(&search)
+    } else {
+        search.literal(word![lt]).joining(&search)
+    }
 }
 
 fn transliterate_letter_set(lts: LetterSet) -> LetterSet {
     lts.iter()
-        .filter_map(|lt| transliterate_letter(lt).map(|(_, lts)| lts))
+        .filter_map(|lt| Transliteration::get(lt).map(|tr| tr.all()))
         .fold(lts, LetterSet::union)
 }
 
 fn two_letter_sets<S: Search>(search: &S, a: LetterSet, b: LetterSet) -> Result<S, S::Error> {
-    match (a.to_single(), b.to_single()) {
-        (None, None) => search.matching(a)?.matching(b),
-        (Some(a), None) => search.literal(word![a]).matching(b),
-        (None, Some(b)) => Ok(search.matching(a)?.literal(word![b])),
-        (Some(a), Some(b)) => Ok(search.literal(word![a, b])),
+    matching(&matching(search, a)?, b)
+}
+
+fn matching<S: Search>(search: &S, lts: LetterSet) -> Result<S, S::Error> {
+    if let Some(lt) = lts.to_single() {
+        Ok(search.literal(word![lt]))
+    } else {
+        search.matching(lts)
     }
 }
 
-const fn transliterate_letter(lt: Letter) -> Option<(TransliterationKind, LetterSet)> {
-    use Letter as L;
-    use TransliterationKind as T;
-
-    let (kind, lts) = match lt {
-        L::LatinA => (T::NONE, letterset![A, LongA, Ai]),
-        L::LatinB => (T::DOUBLE_H, letterset![P]),
-        L::LatinC => (T::DOUBLE_H, letterset![Ch]),
-        L::LatinD => (T::DOUBLE_H, letterset![T, RetroT]),
-        L::LatinE => (T::NONE, letterset![E, LongE, Ai]),
-        L::LatinF => (T::DOUBLE, letterset![P]),
-        L::LatinG => (T::DOUBLE_H, letterset![K]),
-        L::LatinH => (T::NONE, letterset![K, H, Aaydham]),
-        L::LatinI => (T::NONE, letterset![I, LongI, Y]),
-        L::LatinJ => (T::DOUBLE_H, letterset![Ch, J]),
-        L::LatinK => (T::DOUBLE_H, letterset![K, Aaydham]),
-        L::LatinL => (T::DOUBLE, letterset![AlveolarL, RetroL, Zh]),
-        L::LatinM => (T::DOUBLE, letterset![M]),
-        L::LatinN => (T::DOUBLE, letterset![Ng, Ny, N, AlveolarN, RetroN]),
-        L::LatinO => (T::NONE, letterset![O, LongO, Au]),
-        L::LatinP => (T::DOUBLE, letterset![P]),
-        L::LatinQ => (T::DOUBLE, letterset![K]),
-        L::LatinR => (T::DOUBLE, letterset![R, AlveolarR]),
-        L::LatinS => (T::DOUBLE_H, letterset![Ch, S, Sh]),
-        L::LatinT => (T::DOUBLE_H, letterset![T, AlveolarR, RetroT]),
-        L::LatinU => (T::NONE, letterset![U, LongU]),
-        L::LatinV => (T::DOUBLE, letterset![V]),
-        L::LatinW => (T::DOUBLE, letterset![V]),
-        L::LatinX => (T::NONE, letterset![S]),
-        L::LatinY => (T::DOUBLE, letterset![Y]),
-        L::LatinZ => (T::ALLOW_H, letterset![Zh]),
-        _ => return None,
-    };
-
-    Some((kind, lts))
-}
-
 #[derive(Copy, Clone, Debug)]
-struct TransliterationKind {
-    can_double: bool,
-    follow_by_h: bool,
+struct Transliteration {
+    double_kind: DoubleKind,
+    without_h: LetterSet,
+    unlikely: LetterSet,
+    with_h: LetterSet,
 }
 
-impl TransliterationKind {
-    const NONE: Self = Self {
-        can_double: false,
-        follow_by_h: false,
-    };
+impl Transliteration {
+    #[rustfmt::skip]
+    const fn get(lt: Letter) -> Option<Self> {
+        use Letter::*;
+        use DoubleKind::*;
 
-    const DOUBLE: Self = Self {
-        can_double: true,
-        follow_by_h: false,
-    };
+        let (double_kind, without_h, unlikely, with_h) = match lt {
+            LatinA => (NeverDouble, letterset![A],                    letterset![LongA, Ai], letterset![]),
+            LatinB => (AvoidDouble, letterset![P],                    letterset![],          letterset![P]),
+            LatinC => (AllowDouble, letterset![Ch],                   letterset![],          letterset![Ch]),
+            LatinD => (AvoidDouble, letterset![RetroT],               letterset![],          letterset![T]),
+            LatinE => (NeverDouble, letterset![E, LongE, Ai],         letterset![],          letterset![]),
+            LatinF => (AllowDouble, letterset![P],                    letterset![],          letterset![]),
+            LatinG => (AvoidDouble, letterset![K],                    letterset![],          letterset![K]),
+            LatinH => (NeverDouble, letterset![K, H, Aaydham],        letterset![],          letterset![]),
+            LatinI => (NeverDouble, letterset![I],                    letterset![LongI, Y],  letterset![]),
+            LatinJ => (AvoidDouble, letterset![Ch, J],                letterset![],          letterset![Ch, J]),
+            LatinK => (AllowDouble, letterset![K],                    letterset![Aaydham],   letterset![K]),
+            LatinL => (AllowDouble, letterset![AlveolarL, RetroL],    letterset![Zh],        letterset![]),
+            LatinM => (AllowDouble, letterset![M],                    letterset![],          letterset![]),
+            LatinN => (AllowDouble, letterset![N, AlveolarN, RetroN], letterset![Ng, Ny],    letterset![]),
+            LatinO => (NeverDouble, letterset![O, LongO, Au],         letterset![],          letterset![]),
+            LatinP => (AllowDouble, letterset![P],                    letterset![],          letterset![P]),
+            LatinQ => (AllowDouble, letterset![K],                    letterset![],          letterset![]),
+            LatinR => (AvoidDouble, letterset![R, AlveolarR],         letterset![],          letterset![]),
+            LatinS => (AvoidDouble, letterset![Ch, S],                letterset![],          letterset![Sh]),
+            LatinT => (AllowDouble, letterset![RetroT, AlveolarR],    letterset![],          letterset![T]),
+            LatinU => (NeverDouble, letterset![U],                    letterset![LongU],     letterset![]),
+            LatinV => (AllowDouble, letterset![V],                    letterset![],          letterset![]),
+            LatinW => (AllowDouble, letterset![V],                    letterset![],          letterset![]),
+            LatinX => (NeverDouble, letterset![S],                    letterset![],          letterset![]),
+            LatinY => (AllowDouble, letterset![Y],                    letterset![],          letterset![]),
+            LatinZ => (NeverDouble, letterset![Zh],                   letterset![],          letterset![Zh]),
+            _ => return None,
+        };
 
-    const ALLOW_H: Self = Self {
-        can_double: false,
-        follow_by_h: true,
-    };
+        Some(Self {
+            double_kind,
+            without_h,
+            unlikely,
+            with_h,
+        })
+    }
 
-    const DOUBLE_H: Self = Self {
-        can_double: true,
-        follow_by_h: true,
-    };
+    const fn all(&self) -> LetterSet {
+        self.without_h.union(self.unlikely).union(self.with_h)
+    }
+
+    const fn without_h(&self) -> (LetterSet, LetterSet) {
+        (self.without_h, self.unlikely.union(self.with_h))
+    }
+
+    const fn with_h(&self) -> (LetterSet, LetterSet) {
+        (self.with_h, self.unlikely.union(self.without_h))
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum DoubleKind {
+    NeverDouble,
+    AvoidDouble,
+    AllowDouble,
 }

@@ -9,9 +9,7 @@ use rocket::response::Redirect;
 use rocket::serde::json::Json;
 use rocket_dyn_templates::Template;
 
-use crate::dictionary::{
-    Entry, Paragraph, Section, Segment, SegmentKind, WordIndex, WordRange, NO_WORD,
-};
+use crate::dictionary::*;
 use crate::query::{Pattern, Query};
 use crate::search::{SearchRankingEntry, SearchResult};
 use crate::tamil::{self, LetterSet};
@@ -20,7 +18,7 @@ const MAX_OTHER_SECTIONS: usize = 5;
 const MAX_EXPAND: usize = 250;
 
 const EXAMPLES: &'static [&'static str] = &[
-    "tamil",
+    "thamizh",
     "vanakkam",
     "pazham",
     "vendum",
