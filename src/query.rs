@@ -394,7 +394,7 @@ impl Pattern {
             &Self::Assert(lts) => Ok(search.asserting_next(transform::letter_set(lts, trans))),
             &Self::Set(lts) => search.matching(transform::letter_set(lts, trans)),
             Self::Literal(word) => transform::literal_search(search, word, expand, trans),
-            Self::Exact(pat) => pat.search(search, false, false),
+            Self::Exact(pat) => pat.search(search, false, trans),
             Self::Trans(pat) => pat.search(search, expand, true),
             &Self::Repeat(ref pat, a, b) => {
                 let mut search = search;

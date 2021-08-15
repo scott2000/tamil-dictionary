@@ -697,7 +697,6 @@ fn transliterate<S: Search>(
             search
                 .matching(letterset![T, RetroT])?
                 .literal(word![R])
-                .marking_expanded()
                 .joining(&search.literal(word![AlveolarR]))?
         }
 
@@ -733,12 +732,24 @@ fn transliterate<S: Search>(
                     double_kind.allow_single();
                 }
 
-                // Remove any overlap between the likely and unlikely characters
-                unlikely = likely.complement().intersect(unlikely);
+                if expand {
+                    // Remove any overlap between the likely and unlikely characters
+                    unlikely = likely.complement().intersect(unlikely);
+                } else {
+                    // Ignore unlikely characters since expansions are disabled
+                    unlikely = LetterSet::empty();
+                }
 
-                optional_double_set(search, double_kind, likely)?.joining(
-                    &optional_double_set(search, double_kind, unlikely)?.marking_expanded(),
-                )?
+                let mut result = optional_double_set(search, double_kind, likely)?;
+
+                // Only join the unlikely set if it is non-empty
+                if !unlikely.is_empty() {
+                    result.join(
+                        &optional_double_set(search, double_kind, unlikely)?.marking_expanded(),
+                    )?;
+                }
+
+                result
             } else {
                 return Ok(None);
             }
@@ -774,14 +785,25 @@ fn optional_double<S: Search>(
     debug_assert!(!avoid_single || !avoid_double);
 
     let with_single = search.literal(word![lt]);
+    let kcp_lt = KCP.union(letterset![lt]);
 
     if avoid_double {
+        // Check for end of word
+        let end_of_word = with_single.asserting_end().marking_expanded();
+
+        // Check for no following hard consonant
+        let vowel_next = with_single.asserting_next(kcp_lt.complement());
+
+        // Check for following hard consonant
+        let non_vowel_next = with_single.asserting_next(kcp_lt).marking_expanded();
+
         with_single
             .literal(word![lt])
             .marking_expanded()
-            .joining(&with_single)
+            .joining(&end_of_word)?
+            .joining(&vowel_next)?
+            .joining(&non_vowel_next)
     } else if avoid_single {
-        let kcp_lt = KCP.union(letterset![lt]);
         let tr_lt = letterset![RetroT, AlveolarR, lt];
 
         // Check for end of word
@@ -850,7 +872,7 @@ impl Transliteration {
             LatinA => (Never, letterset![A],                    letterset![LongA, Ai], letterset![]),
             LatinB => (Avoid, letterset![P],                    letterset![],          letterset![P]),
             LatinC => (Force, letterset![Ch],                   letterset![],          letterset![Ch]),
-            LatinD => (Avoid, letterset![RetroT],               letterset![],          letterset![T]),
+            LatinD => (Avoid, letterset![RetroT, T],            letterset![],          letterset![T]),
             LatinE => (Never, letterset![E, LongE, Ai],         letterset![],          letterset![]),
             LatinF => (Allow, letterset![P],                    letterset![],          letterset![]),
             LatinG => (Avoid, letterset![K],                    letterset![],          letterset![K]),
@@ -863,14 +885,14 @@ impl Transliteration {
             LatinN => (Allow, letterset![N, AlveolarN, RetroN], letterset![Ng, Ny],    letterset![]),
             LatinO => (Never, letterset![O, LongO, Au],         letterset![],          letterset![]),
             LatinP => (Force, letterset![P],                    letterset![],          letterset![P]),
-            LatinQ => (Allow, letterset![K],                    letterset![],          letterset![]),
+            LatinQ => (Never, letterset![],                     letterset![],          letterset![]),
             LatinR => (Avoid, letterset![R, AlveolarR],         letterset![],          letterset![]),
             LatinS => (Avoid, letterset![Ch, S],                letterset![],          letterset![Sh]),
-            LatinT => (Force, letterset![RetroT, AlveolarR],    letterset![],          letterset![T]),
+            LatinT => (Force, letterset![RetroT, AlveolarR, T], letterset![],          letterset![T]),
             LatinU => (Never, letterset![U],                    letterset![LongU],     letterset![]),
             LatinV => (Allow, letterset![V],                    letterset![],          letterset![]),
             LatinW => (Allow, letterset![V],                    letterset![],          letterset![]),
-            LatinX => (Never, letterset![S],                    letterset![],          letterset![]),
+            LatinX => (Never, letterset![],                     letterset![],          letterset![]),
             LatinY => (Allow, letterset![Y],                    letterset![],          letterset![]),
             LatinZ => (Never, letterset![Zh],                   letterset![],          letterset![Zh]),
             _ => return None,
