@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::dictionary::{self, Loc, ENTRIES};
 use crate::tamil::{Letter, LetterSet, Word};
 
-use super::{Search, SearchResult, SuggestionList};
+use super::{Search, SearchResult, Suggest, SuggestionList};
 
 lazy_static! {
     static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
@@ -106,6 +106,7 @@ impl TreeSearch {
 }
 
 impl Search for TreeSearch {
+    type Output = SearchResult;
     type Error = SearchError;
 
     fn empty() -> Self {
@@ -237,6 +238,20 @@ impl Search for TreeSearch {
         }
     }
 
+    fn end(self) -> Result<Self::Output, Self::Error> {
+        let mut result = SearchResult::default();
+        let mut total_count = 0;
+        for branch in self.branches {
+            if branch.prev_letter.is_some() {
+                branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
+            }
+        }
+
+        Ok(result)
+    }
+}
+
+impl Suggest for TreeSearch {
     fn suggest(self, count: u32) -> SuggestionList {
         let mut list = SuggestionList::new(count);
 
@@ -252,18 +267,6 @@ impl Search for TreeSearch {
         }
 
         list
-    }
-
-    fn end(self) -> Result<SearchResult, Self::Error> {
-        let mut result = SearchResult::default();
-        let mut total_count = 0;
-        for branch in self.branches {
-            if branch.prev_letter.is_some() {
-                branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
-            }
-        }
-
-        Ok(result)
     }
 }
 
@@ -380,7 +383,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
     }
 
     fn suffix(&self, empty: &'static BTreeMap<Letter, Tree<T>>) -> Option<Self> {
-        if self.prefix.is_empty() && !self.leaves.is_empty() {
+        if self.prefix.is_empty() && !self.leaves.is_empty() && !self.is_frozen {
             Some(Self {
                 branches: empty,
                 ..*self

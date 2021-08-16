@@ -613,8 +613,21 @@ fn transliterate<S: Search>(
                     base.literal(word![Y]).joining(&base)?
                 }
 
-                // Check for "au" or "aw"
-                Some(LatinU | LatinW) => {
+                // Check for "au"
+                Some(LatinU) => {
+                    letters.adv();
+                    let av = search.literal(word![A, V]);
+                    let search = search.literal(word![Au]).joining(&av.literal(word![U]))?;
+
+                    if expand {
+                        search.joining(&av.marking_expanded())?
+                    } else {
+                        search
+                    }
+                }
+
+                // Check for "aw"
+                Some(LatinW) => {
                     letters.adv();
                     let av = search.literal(word![A, V]);
                     search
@@ -673,6 +686,15 @@ fn transliterate<S: Search>(
             }
         }
 
+        // Check for "ng"
+        LatinN if letters.peek() == Some(LatinG) => {
+            letters.adv();
+            search
+                .matching(letterset![Ng, N, RetroN, AlveolarN])?
+                .literal(word![K])
+                .joining(&optional_double(search, false, false, Letter::Ng)?)?
+        }
+
         // Check for "ny"
         LatinN if letters.peek() == Some(LatinY) => {
             letters.adv();
@@ -682,13 +704,10 @@ fn transliterate<S: Search>(
                 .joining(&optional_double(search, false, false, Letter::Ny)?)?
         }
 
-        // Check for "ng"
-        LatinN if letters.peek() == Some(LatinG) => {
+        // Check for "nj"
+        LatinN if letters.peek() == Some(LatinJ) => {
             letters.adv();
-            search
-                .matching(letterset![Ng, N, RetroN, AlveolarN])?
-                .literal(word![K])
-                .joining(&optional_double(search, false, false, Letter::Ng)?)?
+            search.literal(word![Ny, Ch])
         }
 
         // Check for "dr"
@@ -787,24 +806,8 @@ fn optional_double<S: Search>(
     let with_single = search.literal(word![lt]);
     let kcp_lt = KCP.union(letterset![lt]);
 
-    if avoid_double {
-        // Check for end of word
-        let end_of_word = with_single.asserting_end().marking_expanded();
-
-        // Check for no following hard consonant
-        let vowel_next = with_single.asserting_next(kcp_lt.complement());
-
-        // Check for following hard consonant
-        let non_vowel_next = with_single.asserting_next(kcp_lt).marking_expanded();
-
-        with_single
-            .literal(word![lt])
-            .marking_expanded()
-            .joining(&end_of_word)?
-            .joining(&vowel_next)?
-            .joining(&non_vowel_next)
-    } else if avoid_single {
-        let tr_lt = letterset![RetroT, AlveolarR, lt];
+    if avoid_single {
+        let tr_lt = letterset![RetroT, AlveolarR, J, Sh, S, lt];
 
         // Check for end of word
         let end_of_word = with_single.asserting_end();
@@ -831,8 +834,31 @@ fn optional_double<S: Search>(
             .joining(&double_next)?
             .joining(&double_prev_only)?
             .joining(&no_double)
-    } else {
+    } else if !avoid_double {
+        // Since there is no preference, the context doesn't matter
         with_single.literal(word![lt]).joining(&with_single)
+    } else if LetterSet::vallinam().matches(lt) {
+        // Check for end of word
+        let end_of_word = with_single.asserting_end().marking_expanded();
+
+        // Check for no following hard consonant
+        let vowel_next = with_single.asserting_next(kcp_lt.complement());
+
+        // Check for following hard consonant
+        let non_vowel_next = with_single.asserting_next(kcp_lt).marking_expanded();
+
+        with_single
+            .literal(word![lt])
+            .marking_expanded()
+            .joining(&end_of_word)?
+            .joining(&vowel_next)?
+            .joining(&non_vowel_next)
+    } else {
+        // Since the letter isn't a hard consonant, the context doesn't matter
+        with_single
+            .literal(word![lt])
+            .marking_expanded()
+            .joining(&with_single)
     }
 }
 
@@ -878,7 +904,7 @@ impl Transliteration {
             LatinG => (Avoid, letterset![K],                    letterset![],          letterset![K]),
             LatinH => (Never, letterset![K, H, Aaydham],        letterset![],          letterset![]),
             LatinI => (Never, letterset![I],                    letterset![LongI, Y],  letterset![]),
-            LatinJ => (Avoid, letterset![Ch, J],                letterset![],          letterset![Ch, J]),
+            LatinJ => (Avoid, letterset![J],                    letterset![Ch],        letterset![J]),
             LatinK => (Force, letterset![K],                    letterset![Aaydham],   letterset![K]),
             LatinL => (Allow, letterset![AlveolarL, RetroL],    letterset![Zh],        letterset![]),
             LatinM => (Allow, letterset![M],                    letterset![],          letterset![]),
@@ -892,9 +918,9 @@ impl Transliteration {
             LatinU => (Never, letterset![U],                    letterset![LongU],     letterset![]),
             LatinV => (Allow, letterset![V],                    letterset![],          letterset![]),
             LatinW => (Allow, letterset![V],                    letterset![],          letterset![]),
-            LatinX => (Never, letterset![],                     letterset![],          letterset![]),
+            LatinX => (Never, letterset![Aaydham],              letterset![],          letterset![]),
             LatinY => (Allow, letterset![Y],                    letterset![],          letterset![]),
-            LatinZ => (Never, letterset![Zh],                   letterset![],          letterset![Zh]),
+            LatinZ => (Never, letterset![Zh],                   letterset![J],         letterset![Zh]),
             _ => return None,
         };
 

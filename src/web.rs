@@ -11,38 +11,115 @@ use rocket_dyn_templates::Template;
 
 use crate::dictionary::*;
 use crate::query::{Pattern, Query};
-use crate::search::{SearchRankingEntry, SearchResult};
-use crate::tamil::{self, LetterSet};
+use crate::search::word::WordSearch;
+use crate::search::{Search, SearchRankingEntry, SearchResult};
+use crate::tamil::{self, LetterSet, Word};
+
+const EXAMPLE_REFRESH_TIME_SECS: u64 = 30;
+const EXAMPLE_CYCLE_PERIOD: usize = 12;
 
 const MAX_OTHER_SECTIONS: usize = 5;
 const MAX_EXPAND: usize = 250;
 
-const EXAMPLES: &[&str] = &[
-    "thamizh",
-    "vanakkam",
-    "pazham",
-    "vendum",
-    "ellaam",
-    "utkaar",
-    "konduvaa",
-    "sandhosham",
-    "puthaham",
-    "koottam",
-];
+#[derive(Serialize, Debug)]
+pub struct Example {
+    latin: &'static str,
+    tamil: Box<str>,
+}
+
+impl Example {
+    fn new(&(latin, tamil): &(&'static str, &Word)) -> Self {
+        // Check whether the Latin pattern matches the Tamil
+        let matches = Pattern::parse(latin)
+            .expect("invalid pattern")
+            .search(WordSearch::new(tamil), false, true)
+            .unwrap()
+            .end()
+            .unwrap();
+
+        if !matches {
+            panic!("pattern {:?} does not match {:?}", latin, tamil);
+        }
+
+        Self {
+            latin,
+            tamil: tamil.to_string().into_boxed_str(),
+        }
+    }
+}
+
+pub fn current_example() -> &'static Example {
+    #[rustfmt::skip]
+    lazy_static! {
+        static ref EXAMPLES: Box<[Example]> = {
+            let examples = &[
+                ("appuram",    word![A, P, P, U, AlveolarR, A, M]),
+                ("aayiram",    word![LongA, Y, I, R, A, M]),
+                ("ippadi",     word![I, P, P, A, RetroT, I]),
+                ("ishtam",     word![I, Sh, RetroT, A, M]),
+                ("eeram",      word![LongI, R, A, M]),
+                ("utkaar",     word![U, RetroT, K, LongA, R]),
+                ("ulagam",     word![U, AlveolarL, A, K, A, M]),
+                ("ellaam",     word![E, AlveolarL, AlveolarL, LongA, M]),
+                ("oruvelai",   word![O, R, U, V, LongE, RetroL, Ai]),
+                ("kadhai",     word![K, A, T, Ai]),
+                ("kaalam",     word![K, LongA, AlveolarL, A, M]),
+                ("koottam",    word![K, LongU, RetroT, RetroT, A, M]),
+                ("kooppidu",   word![K, LongU, P, P, I, RetroT, U]),
+                ("konduvaa",   word![K, O, RetroN, RetroT, U, V, LongA]),
+                ("sattendru",  word![Ch, A, RetroT, RetroT, E, AlveolarN, AlveolarR, U]),
+                ("sandhosham", word![Ch, A, N, T, LongO, Sh, A, M]),
+                ("nyaabaham",  word![Ny, LongA, P, A, K, A, M]),
+                ("thangam",    word![T, A, Ng, K, A, M]),
+                ("thamizh",    word![T, A, M, I, Zh]),
+                ("nenjam",     word![N, E, Ny, Ch, A, M]),
+                ("pandhu",     word![P, A, N, T, U]),
+                ("pazham",     word![P, A, Zh, A, M]),
+                ("patri",      word![P, A, AlveolarR, AlveolarR, I]),
+                ("puthaham",   word![P, U, T, T, A, K, A, M]),
+                ("mazhai",     word![M, A, Zh, Ai]),
+                ("maunam",     word![M, Au, AlveolarN, A, M]),
+                ("yaanai",     word![Y, LongA, AlveolarN, Ai]),
+                ("vanakkam",   word![V, A, RetroN, A, K, K, A, M]),
+                ("vinyaanam",  word![V, I, Ny, Ny, LongA, AlveolarN, A, M]),
+                ("veedu",      word![V, LongI, RetroT, U]),
+            ];
+
+            examples.iter().map(Example::new).collect()
+        };
+
+        static ref INDICES: Box<[u8]> = {
+            let count = EXAMPLES.len();
+            assert!(count <= u8::MAX as usize);
+
+            let mut indices = Vec::with_capacity(count * EXAMPLE_CYCLE_PERIOD);
+
+            let mut rng = rand::thread_rng();
+            for _ in 0..EXAMPLE_CYCLE_PERIOD {
+                let mut slice: Box<[u8]> = (0..count).map(|i| i as u8).collect();
+                slice.shuffle(&mut rng);
+                indices.extend_from_slice(&slice);
+            }
+
+            indices.into_boxed_slice()
+        };
+    }
+
+    let uptime = crate::uptime();
+    let num_refreshes = uptime.as_secs() / EXAMPLE_REFRESH_TIME_SECS;
+    let index = INDICES[num_refreshes as usize % INDICES.len()];
+    &EXAMPLES[index as usize]
+}
 
 #[derive(Serialize, Debug)]
-struct Index {
-    example: &'static str,
+struct IndexTemplate {
+    example: &'static Example,
 }
 
 #[get("/")]
 pub fn index() -> Template {
-    Template::render(
-        "index",
-        &Index {
-            example: EXAMPLES.choose(&mut rand::thread_rng()).unwrap(),
-        },
-    )
+    let example = current_example();
+    Template::render("index", &IndexTemplate { example })
 }
 
 fn link(word: &str) -> String {
@@ -286,7 +363,7 @@ impl From<usize> for NumWithPlural {
 }
 
 #[derive(Serialize, Debug)]
-struct Search {
+struct SearchTemplate {
     query: String,
     other_uri: String,
     hide_other: bool,
@@ -300,7 +377,7 @@ struct Search {
     other_count: NumWithPlural,
 }
 
-impl Search {
+impl SearchTemplate {
     fn new(query: &str, all: bool) -> Self {
         let query = query.trim();
         let other_uri = if all {
@@ -398,7 +475,7 @@ pub fn search_no_query() -> Redirect {
 }
 
 fn search_query(q: &str, all: bool) -> Template {
-    let mut search = Search::new(q, all);
+    let mut search = SearchTemplate::new(q, all);
     match Query::parse(&search.query) {
         Err(err) => search.error(err),
         Ok(query) => search.result(query.search()),

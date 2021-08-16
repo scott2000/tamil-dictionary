@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::search::{tree, Search, SearchResult, SuggestionList};
+use crate::search::{tree, Search, SearchResult, Suggest, SuggestionList};
 use crate::tamil::{Category, Letter, LetterSet, Word, PULLI};
 
 mod transform;
@@ -131,7 +131,7 @@ impl Query {
             }
 
             // Parse the pattern and add it to the appropriate list
-            match Pattern::parse(&mut chars, false)? {
+            match Pattern::parse_term(&mut chars, false)? {
                 Pattern::Empty => {
                     if negative {
                         return Err(ParseError::EmptyNegative);
@@ -380,6 +380,15 @@ pub enum Pattern {
 }
 
 impl Pattern {
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        if s.len() > MAX_LEN {
+            Err(ParseError::LengthExceeded)
+        } else {
+            let mut chars = s.chars().peekable();
+            Self::parse_term(&mut chars, false)
+        }
+    }
+
     pub fn search<S: Search>(&self, search: S, expand: bool, trans: bool) -> Result<S, S::Error> {
         if search.is_empty() {
             return Ok(search);
@@ -459,7 +468,7 @@ impl Pattern {
     }
 
     fn parse_group(chars: &mut Chars) -> Result<Self, ParseError> {
-        let pat = Self::parse(chars, true)?;
+        let pat = Self::parse_term(chars, true)?;
 
         Self::skip_spaces(chars, true);
 
@@ -472,7 +481,7 @@ impl Pattern {
         }
     }
 
-    fn parse(chars: &mut Chars, in_group: bool) -> Result<Self, ParseError> {
+    fn parse_term(chars: &mut Chars, in_group: bool) -> Result<Self, ParseError> {
         Self::skip_spaces(chars, in_group);
 
         // Parse a single term of the pattern
@@ -542,7 +551,7 @@ impl Pattern {
         };
 
         // Continue parsing if possible, and concatenate the result
-        let next = Self::parse(chars, in_group)?;
+        let next = Self::parse_term(chars, in_group)?;
         if let Self::Empty = next {
             Ok(pat)
         } else {

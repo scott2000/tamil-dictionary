@@ -4,8 +4,10 @@ use crate::dictionary::{Entry, EntryIndex, Loc, WordData, WordIndex, ENTRIES, NO
 use crate::tamil::{Letter, LetterSet, Word};
 
 pub mod tree;
+pub mod word;
 
 pub trait Search: Clone {
+    type Output;
     type Error;
 
     fn empty() -> Self;
@@ -49,9 +51,11 @@ pub trait Search: Clone {
         self
     }
 
-    fn suggest(self, count: u32) -> SuggestionList;
+    fn end(self) -> Result<Self::Output, Self::Error>;
+}
 
-    fn end(self) -> Result<SearchResult, Self::Error>;
+pub trait Suggest {
+    fn suggest(self, count: u32) -> SuggestionList;
 }
 
 pub struct SuggestionList {

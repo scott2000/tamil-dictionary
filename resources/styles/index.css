@@ -7,14 +7,9 @@
 }
 
 #search-tips {
-    padding: 0 10px;
-    margin-top: 100px;
-    margin-bottom: 50px;
-    margin-left: auto;
-    margin-right: auto;
-    width: 500px;
-    max-width: 90%;
-    border: 1px solid #a0a0a0;
+    margin: 100px auto 50px;
+    width: 350px;
+    max-width: 95%;
     font-size: 16px;
 }
 
@@ -24,16 +19,11 @@
 }
 
 #search-tips li {
-    margin: 5px 0;
-    line-height: 1.4;
-}
-
-#search-tips p {
-    line-height: 1.4;
+    line-height: 1.8;
 }
 
 #search-tips span {
-    padding: 1px 3px;
+    padding: 2px 3px;
     margin: 0 1px;
     background-color: #f0f0f0;
     border: 1px solid #d0d0d0;
