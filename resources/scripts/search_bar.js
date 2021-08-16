@@ -106,9 +106,13 @@ window.addEventListener('load', function() {
 
     cache.set(query, null);
 
+    const params = new URLSearchParams();
+    params.append('q', query);
+    params.append('n', count);
+
     const request = new XMLHttpRequest();
-    request.open('POST', '/api/suggest', true);
-    request.setRequestHeader('Content-Type', 'application/json');
+    request.open('GET', '/api/suggest?' + params, true);
+    request.setRequestHeader('Accept', 'application/json');
 
     function error() {
       console.error(request.statusText);
@@ -136,10 +140,7 @@ window.addEventListener('load', function() {
     };
 
     request.onerror = error;
-    request.send(JSON.stringify({
-      count,
-      query,
-    }));
+    request.send(null);
   }
 
   function cancelQuery() {

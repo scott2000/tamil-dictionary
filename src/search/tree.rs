@@ -78,7 +78,7 @@ const SEARCH_MAX_BRANCHES: usize = 8192;
 pub enum SearchError {
     #[error("Error: the search query is too complex. Try using fewer wildcards.")]
     TooComplex,
-    #[error("Error: the search query isn't specific enough. Try surrounding it in quotes.")]
+    #[error("Error: the search query has too many matches. Try being more specific.")]
     TooManyResults,
     #[error("Error: an excluded word in the search has too many matches.")]
     CommonExclusion,
@@ -372,13 +372,13 @@ impl<T: Eq + Copy> SearchBranch<T> {
             None
         } else if !self.prefix.is_empty() {
             Some(*self)
-        } else if !self.branches.is_empty() {
+        } else if self.branches.is_empty() {
+            None
+        } else {
             Some(Self {
                 leaves: &[],
                 ..*self
             })
-        } else {
-            None
         }
     }
 

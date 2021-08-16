@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use rand::seq::SliceRandom;
 
@@ -69,25 +69,25 @@ pub fn current_example() -> &'static Example {
                 ("oruvelai",   word![O, R, U, V, LongE, RetroL, Ai]),
                 ("kadhai",     word![K, A, T, Ai]),
                 ("kaalam",     word![K, LongA, AlveolarL, A, M]),
+                ("kaatru",     word![K, LongA, AlveolarR, AlveolarR, U]),
                 ("koottam",    word![K, LongU, RetroT, RetroT, A, M]),
                 ("kooppidu",   word![K, LongU, P, P, I, RetroT, U]),
                 ("konduvaa",   word![K, O, RetroN, RetroT, U, V, LongA]),
                 ("sattendru",  word![Ch, A, RetroT, RetroT, E, AlveolarN, AlveolarR, U]),
                 ("sandhosham", word![Ch, A, N, T, LongO, Sh, A, M]),
-                ("nyaabaham",  word![Ny, LongA, P, A, K, A, M]),
+                ("nyaabagam",  word![Ny, LongA, P, A, K, A, M]),
                 ("thangam",    word![T, A, Ng, K, A, M]),
                 ("thamizh",    word![T, A, M, I, Zh]),
                 ("nenjam",     word![N, E, Ny, Ch, A, M]),
                 ("pandhu",     word![P, A, N, T, U]),
                 ("pazham",     word![P, A, Zh, A, M]),
-                ("patri",      word![P, A, AlveolarR, AlveolarR, I]),
-                ("puthaham",   word![P, U, T, T, A, K, A, M]),
+                ("puthagam",   word![P, U, T, T, A, K, A, M]),
                 ("mazhai",     word![M, A, Zh, Ai]),
                 ("maunam",     word![M, Au, AlveolarN, A, M]),
                 ("yaanai",     word![Y, LongA, AlveolarN, Ai]),
                 ("vanakkam",   word![V, A, RetroN, A, K, K, A, M]),
                 ("vinyaanam",  word![V, I, Ny, Ny, LongA, AlveolarN, A, M]),
-                ("veedu",      word![V, LongI, RetroT, U]),
+                ("veedham",    word![V, LongI, T, A, M]),
             ];
 
             examples.iter().map(Example::new).collect()
@@ -493,12 +493,6 @@ fn search_query(q: &str, all: bool) -> Template {
     Template::render("search", search)
 }
 
-#[derive(Deserialize)]
-pub struct SuggestRequest<'a> {
-    count: u32,
-    query: Cow<'a, str>,
-}
-
 #[derive(Serialize)]
 pub struct SuggestResponseEntry {
     word: &'static str,
@@ -519,11 +513,11 @@ impl From<&'static Entry> for SuggestResponseEntry {
     }
 }
 
-#[post("/api/suggest", format = "json", data = "<request>")]
-pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
+#[get("/api/suggest?<q>&<n>")]
+pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
     SUGGEST_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    let mut query = request.0.query;
+    let mut query = Cow::from(q);
 
     // Check for trailing "a", and allow other letters as well
     let mut append_a = false;
@@ -537,7 +531,7 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
     // Parse the query into a single pattern
     if let Ok(parsed_query) = Query::parse(&query) {
         if let Some(mut pat) = parsed_query.into_pattern() {
-            let mut count = request.0.count.min(100);
+            let mut count = n.min(100);
 
             // If there is implicit transliteration, reserve a row for definition search
             let add_definition = count > 3 && pat.implicit_transliteration();
@@ -562,7 +556,7 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
 
                 // Use ":" to indicate this last row should be used for definition search
                 if add_definition {
-                    let completion = format!(":{}", query);
+                    let completion = format!(":{}", q);
                     suggestions.push(SuggestResponseEntry {
                         word: ":",
                         uri: uri!(search(&completion)).to_string(),
@@ -590,7 +584,7 @@ pub fn stats() -> String {
 
     format!(
         concat!(
-            "{:02}:{:02}:{:02}\n",
+            "{:}:{:02}:{:02}\n",
             "result_count={}\n",
             "search_count={}\n",
             "suggest_count={}\n",
