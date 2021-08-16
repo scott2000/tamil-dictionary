@@ -285,6 +285,16 @@ window.addEventListener('load', function() {
     autocomplete.classList.remove('autocomplete-selected');
   });
 
+  window.addEventListener('keydown', function(event) {
+    if (!focused && event.code === 'Slash') {
+      searchField.focus();
+      searchField.select();
+      searchField.scrollIntoView(false);
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
   window.addEventListener('unload', function() {
     searchField.value = '';
     setQuery('');
