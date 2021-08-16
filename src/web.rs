@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,10 @@ const EXAMPLE_CYCLE_PERIOD: usize = 12;
 
 const MAX_OTHER_SECTIONS: usize = 5;
 const MAX_EXPAND: usize = 250;
+
+static RESULT_COUNT: AtomicU64 = AtomicU64::new(0);
+static SEARCH_COUNT: AtomicU64 = AtomicU64::new(0);
+static SUGGEST_COUNT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize, Debug)]
 pub struct Example {
@@ -434,6 +439,8 @@ impl SearchTemplate {
 
                     total += self.other_count.num;
                     self.other = ResultEntry::render_all(ranking.other, total <= MAX_EXPAND);
+
+                    RESULT_COUNT.fetch_add(total as u64, Ordering::Relaxed);
                 }
 
                 // Only hide the other results if they are too long
@@ -475,6 +482,8 @@ pub fn search_no_query() -> Redirect {
 }
 
 fn search_query(q: &str, all: bool) -> Template {
+    SEARCH_COUNT.fetch_add(1, Ordering::Relaxed);
+
     let mut search = SearchTemplate::new(q, all);
     match Query::parse(&search.query) {
         Err(err) => search.error(err),
@@ -512,6 +521,8 @@ impl From<&'static Entry> for SuggestResponseEntry {
 
 #[post("/api/suggest", format = "json", data = "<request>")]
 pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>> {
+    SUGGEST_COUNT.fetch_add(1, Ordering::Relaxed);
+
     let mut query = request.0.query;
 
     // Check for trailing "a", and allow other letters as well
@@ -565,4 +576,25 @@ pub fn suggest(request: Json<SuggestRequest>) -> Json<Vec<SuggestResponseEntry>>
     }
 
     Json(Vec::new())
+}
+
+#[get("/api/stats")]
+pub fn stats() -> String {
+    let secs = crate::uptime().as_secs();
+    let (mins, secs) = (secs / 60, secs % 60);
+    let (hours, mins) = (mins / 60, mins % 60);
+
+    let result_count = RESULT_COUNT.load(Ordering::Acquire);
+    let search_count = SEARCH_COUNT.load(Ordering::Acquire);
+    let suggest_count = SUGGEST_COUNT.load(Ordering::Acquire);
+
+    format!(
+        concat!(
+            "{:02}:{:02}:{:02}\n",
+            "result_count={}\n",
+            "search_count={}\n",
+            "suggest_count={}\n",
+        ),
+        hours, mins, secs, result_count, search_count, suggest_count,
+    )
 }

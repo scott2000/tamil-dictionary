@@ -66,6 +66,7 @@ async fn main() -> Result<(), rocket::Error> {
                     web::search_empty_query,
                     web::search_no_query,
                     web::suggest,
+                    web::stats,
                 ],
             )
             .mount("/resources", FileServer::from(relative!("resources")))
