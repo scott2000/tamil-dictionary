@@ -3,10 +3,10 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="/resources/styles/main.css">
-        <link rel="stylesheet" href="/resources/styles/search.css">
-        <link rel="stylesheet" href="/resources/styles/search_bar.css">
-        <script src="/resources/scripts/search_bar.js"></script>
+        <link rel="stylesheet" href="/res/{{{version}}}/styles/main.css">
+        <link rel="stylesheet" href="/res/{{{version}}}/styles/search.css">
+        <link rel="stylesheet" href="/res/{{{version}}}/styles/search_bar.css">
+        <script src="/res/{{{version}}}/scripts/search_bar.js"></script>
         {{#if query~}}
             {{#if error~}}
                 <title>Search Error for '{{query}}'</title>
@@ -18,7 +18,7 @@
         {{~/if}}
         {{~#if other}}
             {{~#if hide_other~}}
-                <script src="/resources/scripts/search_other.js"></script>
+                <script src="/res/{{{version}}}/scripts/search_other.js"></script>
             {{~/if}}
         {{~/if}}
     </head>

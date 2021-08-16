@@ -1,5 +1,4 @@
 target/
 convert/
-resources/fonts/
 *.txt
 *.json

@@ -49,6 +49,22 @@ pub fn uptime() -> Duration {
     Instant::now().saturating_duration_since(*START)
 }
 
+pub fn version() -> &'static str {
+    lazy_static! {
+        static ref VERSION: Box<str> = {
+            if let Ok(version) = std::env::var("RES_VERSION") {
+                assert!(!version.is_empty());
+                assert!(version.chars().all(|ch| ch.is_ascii_alphanumeric()));
+                version.into_boxed_str()
+            } else {
+                Box::from("dev")
+            }
+        };
+    }
+
+    &VERSION
+}
+
 #[rocket::main]
 #[rustfmt::skip]
 async fn main() -> Result<(), rocket::Error> {
@@ -56,6 +72,9 @@ async fn main() -> Result<(), rocket::Error> {
     web::current_example();
 
     let rocket_handle = tokio::spawn(async {
+        // Host resources at a path including the version number
+        let res_path = format!("/res/{}", version());
+
         rocket::build()
             .mount(
                 "/",
@@ -69,7 +88,8 @@ async fn main() -> Result<(), rocket::Error> {
                     web::stats,
                 ],
             )
-            .mount("/resources", FileServer::from(relative!("resources")))
+            .mount(res_path, FileServer::from(relative!("res")))
+            .mount("/res/static", FileServer::from(relative!("static")))
             .attach(Template::fairing())
             .launch()
             .await

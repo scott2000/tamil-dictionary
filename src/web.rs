@@ -26,6 +26,23 @@ static RESULT_COUNT: AtomicU64 = AtomicU64::new(0);
 static SEARCH_COUNT: AtomicU64 = AtomicU64::new(0);
 static SUGGEST_COUNT: AtomicU64 = AtomicU64::new(0);
 
+pub fn render_template(template: &'static str, context: impl Serialize) -> Template {
+    #[derive(Serialize)]
+    struct Versioned<T: Serialize> {
+        version: &'static str,
+        #[serde(flatten)]
+        inner: T,
+    }
+
+    Template::render(
+        template,
+        Versioned {
+            version: crate::version(),
+            inner: context,
+        },
+    )
+}
+
 #[derive(Serialize, Debug)]
 pub struct Example {
     latin: &'static str,
@@ -66,7 +83,7 @@ pub fn current_example() -> &'static Example {
                 ("utkaar",     word![U, RetroT, K, LongA, R]),
                 ("ulagam",     word![U, AlveolarL, A, K, A, M]),
                 ("ellaam",     word![E, AlveolarL, AlveolarL, LongA, M]),
-                ("oruvelai",   word![O, R, U, V, LongE, RetroL, Ai]),
+                ("onbadhu",    word![O, AlveolarN, P, A, T, U]),
                 ("kadhai",     word![K, A, T, Ai]),
                 ("kaalam",     word![K, LongA, AlveolarL, A, M]),
                 ("kaatru",     word![K, LongA, AlveolarR, AlveolarR, U]),
@@ -124,7 +141,7 @@ struct IndexTemplate {
 #[get("/")]
 pub fn index() -> Template {
     let example = current_example();
-    Template::render("index", &IndexTemplate { example })
+    render_template("index", IndexTemplate { example })
 }
 
 fn link(word: &str) -> String {
@@ -490,7 +507,7 @@ fn search_query(q: &str, all: bool) -> Template {
         Ok(query) => search.result(query.search()),
     }
 
-    Template::render("search", search)
+    render_template("search", search)
 }
 
 #[derive(Serialize)]
@@ -585,10 +602,17 @@ pub fn stats() -> String {
     format!(
         concat!(
             "{:}:{:02}:{:02}\n",
+            "version={}\n",
             "result_count={}\n",
             "search_count={}\n",
             "suggest_count={}\n",
         ),
-        hours, mins, secs, result_count, search_count, suggest_count,
+        hours,
+        mins,
+        secs,
+        crate::version(),
+        result_count,
+        search_count,
+        suggest_count,
     )
 }
