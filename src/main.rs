@@ -90,7 +90,6 @@ async fn main() -> Result<(), rocket::Error> {
                 ],
             )
             .mount(res_path, FileServer::from(relative!("res")))
-            .mount("/res/static", FileServer::from(relative!("static")))
             .attach(Template::fairing())
             .launch()
             .await
