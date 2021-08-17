@@ -144,6 +144,11 @@ pub fn index() -> Template {
     render_template("index", IndexTemplate { example })
 }
 
+#[get("/grammar")]
+pub fn grammar() -> Template {
+    render_template("grammar", ())
+}
+
 fn link(word: &str) -> String {
     link_no_escape(&Query::escape(word))
 }

@@ -2,6 +2,24 @@
     font-family: sans-serif;
 }
 
+a.plain, a.plain:visited, a.plain:hover, a.plain:active {
+    color: inherit;
+}
+
+code {
+    font-family: 'Mono Specials', sans-serif;
+}
+
+pre code {
+    font-family: 'Mono All', monospace;
+}
+
+@font-face {
+    font-family: 'Mono All';
+    src: url(/res/static/fonts/monospace.woff2) format('woff2');
+    unicode-range: U+20-7E;
+}
+
 @font-face {
     font-family: 'Mono Specials';
     src: url(/res/static/fonts/monospace.woff2) format('woff2');

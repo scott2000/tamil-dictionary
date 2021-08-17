@@ -80,6 +80,7 @@ async fn main() -> Result<(), rocket::Error> {
                 "/",
                 routes![
                     web::index,
+                    web::grammar,
                     web::search_all,
                     web::search,
                     web::search_empty_query,

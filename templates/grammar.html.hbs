@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="/res/{{{version}}}/styles/main.css">
+        <title>Search Grammar</title>
+    </head>
+    <body>
+<h2>Search Grammar</h2>
+<p>
+</p>
+<a class="plain" href="/">Home Page</a>
+<pre><code>
+This grammar describes the syntax of a search query. The semantics are roughly
+described in comments, but there are some restrictions which are not listed.
+
+Due to how the dictionary is implemented, branching operations can sometimes
+be expensive. If a query results in too many possible branches during a search,
+it may be rejected. Therefore, instead of using '_*' in patterns, break them
+up into smaller patterns. For instance, '&lt;A_*B_*C&gt;' could be written as three
+separate patterns: '&lt;A B C&gt;'.
+
+During search, some expansions are applied to queries. These expansions help
+find related words even if they don't exactly match what you entered.
+Expansions are enabled by default for patterns unless they start with '-',
+excluding them from the results. Use '#(...)' to disable expansions.
+
+When searching for a word, you can either use Tamil letters directly, or
+search with transliteration using Latin letters (a-z). In definition searches,
+this is disabled by default. Use '%(...)' to enable transliteration.
+
+
+query = patterns? definition*       // Full search query
+
+definition = ':' patterns?          // Definition search
+
+patterns = pattern                  // Single pattern
+         | pattern ' ' patterns     // Patterns separated by spaces
+
+pattern = quote                     // Require in search
+        | '-' quote                 // Exclude from search
+
+quote = term*                       // Search with default expansions
+      | '"' term* '"'               // Exact search '#(&lt;...&gt;)'
+
+term = single repeat?               // A single term optionally repeated
+
+single = '-'                        // Separator (ignored)
+       | '&lt;'                        // Match start of word
+       | '&gt;'                        // Match end of word
+       | '~'                        // Match not start and not end
+       | '@'                        // Mark branch as unlikely
+       | '_'                        // Match any letter
+       | '(' alts ')'               // Parentheses for grouping
+       | '#(' alts ')'              // Disable expansions
+       | '%(' alts ')'              // Enable transliteration
+       | set                        // Set of possible letters
+       | '&amp;' set                    // Lookahead assertion
+       | char                       // Single letter
+       | escape                     // Escape sequence
+
+alts = term*                        // Concatenation of terms
+     | term* '|' alts               // Alternatives separated by pipes
+
+set = '[' range* ']'                // Set of possible letters
+    | '[^' range* ']'               // Negated set of letters
+
+range = char                        // Single letter
+      | char '-' char               // Range of letters
+      | escape                      // Escape sequence
+
+escape = '\V'                       // Vowel
+       | '\C'                       // Consonant
+       | '\k'                       // Kuril vowel
+       | '\n'                       // Nedil vowel
+       | '\v'                       // Vallinam consonant
+       | '\i'                       // Idaiyinam consonant
+       | '\m'                       // Mellinam consonant
+       | '\g'                       // Grantha consonant
+       | '\l'                       // Latin [a-z]
+       | '\P'                       // Plosive (\v)
+       | '\N'                       // Nasal (\m)
+       | '\G'                       // Glide [ய்வ்]
+       | '\R'                       // Rhotic [ர்ழ்]
+       | '\L'                       // Lateral [ல்ள்]
+       | '\&lt;'                       // Tamil initial (according to grammar)
+       | '\&gt;'                       // Tamil final (according to grammar)
+
+repeat = '?'                        // Zero or one
+       | '*'                        // Zero or more
+       | '+'                        // One or more
+       | '{' digit* '}'             // Exact number of repetitions
+       | '{' digit* ':' digit* '}'  // Range of repetitions
+
+digit = '0'...'9'
+
+char = 'அ'...'ஔ'
+     | 'ஃ'
+     | 'க்'...'ன்'
+     | 'ஜ்'...'ஹ்'
+     | 'a'...'z'
+</code></pre>
+    </body>
+</html>
