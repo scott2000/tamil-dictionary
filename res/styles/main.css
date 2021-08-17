@@ -1,5 +1,52 @@
+@font-face {
+    font-family: 'Mono All';
+    src: url(../fonts/monospace.woff2) format('woff2');
+    unicode-range: U+20-7E;
+}
+
+@font-face {
+    font-family: 'Mono Specials';
+    src: url(../fonts/monospace.woff2) format('woff2');
+    unicode-range: U+21-2C, U+2E-7E;
+}
+
 * {
     font-family: sans-serif;
+    color: black;
+}
+
+:root {
+    background-color: white;
+    --overlay-color: white;
+    --overlay-hover: #f0f0f0;
+    --overlay-active: #e0e0e0;
+    --button-color: #f0f0f0;
+    --button-active: #e0e0e0;
+    --code-color: #f0f0f0;
+    --code-border: #d0d0d0;
+    --border-color: #a0a0a0;
+    --highlight-color: #0030a027;
+    --faded-text-color: #00000060;
+}
+
+@media (prefers-color-scheme: dark) {
+    * {
+        color: #d0d0d0;
+    }
+
+    :root {
+        background-color: black;
+        --overlay-color: #303030;
+        --overlay-hover: #202020;
+        --overlay-active: #101010;
+        --button-color: black;
+        --button-active: #202020;
+        --code-color: #202020;
+        --code-border: #606060;
+        --border-color: #808080;
+        --highlight-color: #b7c0f077;
+        --faded-text-color: #ffffff60;
+    }
 }
 
 a.plain, a.plain:visited, a.plain:hover, a.plain:active {
@@ -12,16 +59,4 @@ code {
 
 pre code {
     font-family: 'Mono All', monospace;
-}
-
-@font-face {
-    font-family: 'Mono All';
-    src: url(../fonts/monospace.woff2) format('woff2');
-    unicode-range: U+20-7E;
-}
-
-@font-face {
-    font-family: 'Mono Specials';
-    src: url(../fonts/monospace.woff2) format('woff2');
-    unicode-range: U+21-2C, U+2E-7E;
 }

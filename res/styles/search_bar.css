@@ -14,8 +14,8 @@
     z-index: 2;
     padding: 7px;
     border-radius: 4px;
-    border: 1px solid #a0a0a0;
-    color: black;
+    border: 1px solid var(--border-color);
+    color: inherit;
     font-family: 'Mono Specials', sans-serif;
     font-size: 16px;
 }
@@ -23,28 +23,29 @@
 #search-field {
     flex-grow: 1;
     margin-right: 6px;
-    background-color: white;
+    background-color: inherit;
 }
 
 #search-field:focus {
-    box-shadow: 0 0 0 3px #0030a027;
+    box-shadow: 0 0 0 3px var(--highlight-color);
     outline: none;
-    color: black;
+    color: inherit;
 }
 
 #search-button {
-    background-color: #f0f0f0;
+    background-color: var(--button-color);
 }
 
 #search-button:focus {
+    background-color: var(--button-color);
     box-shadow: none;
     outline: none;
-    color: black;
+    color: inherit;
 }
 
 #search-button:active {
-    background-color: #e0e0e0;
-    color: black;
+    background-color: var(--button-active);
+    color: inherit;
 }
 
 #autocomplete {
@@ -53,7 +54,7 @@
     top: 125%;
     width: 100%;
     border-radius: 4px;
-    background-color: white;
+    background-color: var(--overlay-color);
     box-shadow: 0px 0px 4px #000000a0;
 }
 
@@ -62,7 +63,6 @@
     padding: 2px 4px;
     cursor: pointer;
     font-size: 16px;
-    color: black;
     text-decoration: none;
 }
 
@@ -84,12 +84,12 @@
 
 .suggestion:hover > div,
 .suggestion-selected > div {
-    background-color: #f0f0f0;
+    background-color: var(--overlay-hover);
 }
 
 .suggestion-selected:hover > div,
 .autocomplete-selected > .suggestion:hover > div {
-    background-color: #e0e0e0;
+    background-color: var(--overlay-active);
 }
 
 .suggestion-def-query {
@@ -97,6 +97,6 @@
 }
 
 .suggestion-def-text {
-    color: #00000060;
+    color: var(--faded-text-color);
     font-size: 14px;
 }

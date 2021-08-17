@@ -27,18 +27,25 @@
     padding: 10px;
     margin: 15px auto;
     min-width: 200px;
-    border: 1px solid #a0a0a0;
+    border: 1px solid var(--border-color);
     font-size: 18px;
     overflow-wrap: break-word;
 }
 
 .ex {
-    outline: 3px solid #0030a027;
+    outline: 3px solid var(--highlight-color);
 }
 
-.wrd {
-    color: black;
+.wrd, .wrd:visited, .wrd:hover, .wrd:active {
+    color: inherit;
     font-weight: bold;
+}
+
+@media (prefers-color-scheme: dark) {
+    .wrd, .wrd:visited, .wrd:hover, .wrd:active {
+        color: white;
+        font-weight: normal;
+    }
 }
 
 .sec {

@@ -1,6 +1,6 @@
 <div id="search-bar">
     <form id="search-form" autocomplete="off" method="get" action="/search">
-        <input type="text" name="q" id="search-field" size="10" value="{{query}}" {{~#if focus}} autofocus {{~/if}}>
+        <input type="text" name="q" id="search-field" size="10" title="Type search query" value="{{query}}">
         <input type="submit" id="search-button" value="Search">
     </form>
     <div id="autocomplete" style="display:none;"></div>

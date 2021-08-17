@@ -25,7 +25,7 @@
 #search-tips code {
     padding: 2px 3px;
     margin: 0 1px;
-    background-color: #f0f0f0;
-    border: 1px solid #d0d0d0;
+    background-color: var(--code-color);
+    border: 1px solid var(--code-border);
     white-space: nowrap;
 }

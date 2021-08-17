@@ -55,8 +55,9 @@ window.addEventListener('load', function() {
     autocomplete.innerHTML = '';
     for (const result of results) {
       const row = document.createElement('a');
+      row.classList.add('suggestion');
+      row.classList.add('plain');
       row.href = result.uri;
-      row.className = 'suggestion';
 
       const innerDiv = document.createElement('div');
 
@@ -299,4 +300,9 @@ window.addEventListener('load', function() {
     searchField.value = '';
     setQuery('');
   });
+
+  if (document.activeElement == searchField) {
+    focused = true;
+    refreshQuery();
+  }
 });

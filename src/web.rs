@@ -606,7 +606,7 @@ pub fn stats() -> String {
 
     format!(
         concat!(
-            "{:}:{:02}:{:02}\n",
+            "uptime={:}:{:02}:{:02}\n",
             "version={}\n",
             "result_count={}\n",
             "search_count={}\n",
