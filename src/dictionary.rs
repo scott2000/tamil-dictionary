@@ -9,8 +9,14 @@ lazy_static! {
     pub static ref ENTRIES: Box<[Entry]> = {
         eprintln!("Loading dictionary...");
 
-        let file = File::open("dictionary.json")
-            .expect("missing dictionary.json");
+        let file = match File::open("dictionary.json") {
+            Ok(file) => file,
+            Err(_) => {
+                // Exit nicely with an error message if the file doesn't exist
+                eprintln!("Cannot open 'dictionary.json'. Make sure the file exists and is in the current directory.");
+                std::process::exit(1)
+            }
+        };
 
         let mut entries: Box<[Entry]> = serde_json::from_reader(file)
             .expect("dictionary parse error");
