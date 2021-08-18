@@ -31,20 +31,20 @@
 
 @media (prefers-color-scheme: dark) {
     * {
-        color: #d0d0d0;
+        color: #d7d7d7;
     }
 
     :root {
-        background-color: black;
+        background-color: #171717;
         --overlay-color: #303030;
-        --overlay-hover: #202020;
-        --overlay-active: #101010;
-        --button-color: black;
-        --button-active: #202020;
-        --code-color: #202020;
-        --code-border: #606060;
+        --overlay-hover: #232323;
+        --overlay-active: #171717;
+        --button-color: #232323;
+        --button-active: #303030;
+        --code-color: #232323;
+        --code-border: #404040;
         --border-color: #808080;
-        --highlight-color: #b7c0f077;
+        --highlight-color: #b7c0f060;
         --faded-text-color: #ffffff60;
     }
 }
