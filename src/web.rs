@@ -6,8 +6,10 @@ use serde::Serialize;
 
 use rand::seq::SliceRandom;
 
+use rocket::http::Status;
 use rocket::response::Redirect;
 use rocket::serde::json::Json;
+use rocket::Request;
 use rocket_dyn_templates::Template;
 
 use crate::dictionary::*;
@@ -620,4 +622,34 @@ pub fn stats() -> String {
         search_count,
         suggest_count,
     )
+}
+
+#[derive(Serialize, Default)]
+pub struct Error {
+    uri: String,
+    not_found: bool,
+    code: u16,
+    reason: &'static str,
+    method: String,
+    headers: Vec<String>,
+}
+
+#[catch(default)]
+pub fn error(status: Status, req: &Request) -> Template {
+    let not_found = status == Status::NotFound;
+
+    let mut error = Error {
+        uri: req.uri().to_string(),
+        not_found,
+        code: status.code,
+        reason: status.reason_lossy(),
+        ..Error::default()
+    };
+
+    if !not_found {
+        error.headers = req.headers().iter().map(|h| h.to_string()).collect();
+        error.method = req.method().to_string();
+    }
+
+    render_template("error", error)
 }

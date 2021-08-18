@@ -90,6 +90,7 @@ async fn main() -> Result<(), rocket::Error> {
                 ],
             )
             .mount(res_path, FileServer::from(relative!("res")))
+            .register("/", catchers![web::error])
             .attach(Template::fairing())
             .launch()
             .await

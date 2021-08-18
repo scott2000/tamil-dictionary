@@ -49,7 +49,7 @@
     }
 }
 
-a.plain, a.plain:visited, a.plain:hover, a.plain:active {
+a, a:visited, a:hover, a:active {
     color: inherit;
 }
 

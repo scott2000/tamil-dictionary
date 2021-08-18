@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="/res/{{{version}}}/styles/main.css">
+        <title>{{uri}}</title>
+    </head>
+    <body>
+        <h2 id="title">{{code}} - {{reason}}</h2>
+        {{#if not_found~}}
+            <p>The page you requested does not exist. Make sure the URL is correct.</p>
+        {{~else~}}
+            <p>
+                An error occured while retrieving this page. Please report this bug to
+                <a href="mailto:scott11x8@gmail.com">scott11x8@gmail.com</a>,
+                including the following information:
+            </p>
+<pre><code>{{method}} {{uri}}
+{{#each headers~}}
+{{this}}
+{{/each~}}</code></pre>
+        {{~/if}}
+        <a href="/">Home Page</a>
+    </body>
+</html>
