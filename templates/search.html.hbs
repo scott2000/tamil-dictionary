@@ -25,8 +25,14 @@
     <body>
         {{> common/search_bar}}
         <div id="results">
-            {{~#if message~}}
-                <p>{{message}}</p>
+            {{~#if def_uri~}}
+                <p class="center">
+                    Did you mean to search <a href="{{def_uri}}">in definitions</a>?
+                </p>
+            {{~else}}
+                {{~#if message~}}
+                    <p class="center">{{message}}</p>
+                {{~/if}}
             {{~/if}}
             {{~#if best_count.num}}
                 <h2 class="header">Best Matches</h2>
@@ -54,7 +60,7 @@
             {{~/if}}
             {{~#if other}}
                 {{~#if hide_other~}}
-                    <p id="other-msg">
+                    <p id="other-msg" class="center">
                         There are some more results which may be less relevant to your search.
                         <a id="other-link" href="{{other_uri}}#other">Show {{other_count.num}} other words</a>.
                     </p>

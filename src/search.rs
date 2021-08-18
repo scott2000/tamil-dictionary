@@ -309,11 +309,14 @@ impl SearchResult {
         use SearchRank::*;
 
         // Check for which precedence levels are present
+        let mut has_exact = false;
         let mut a_count = 0;
         let mut b_count = 0;
         let mut c_count = 0;
         let mut other_count = 0;
         for entry in self.map.values() {
+            has_exact |= entry.exact;
+
             match entry.precedence {
                 A => a_count += 1,
                 B => b_count += 1,
@@ -354,7 +357,7 @@ impl SearchResult {
         limit(other_count, &mut other);
 
         // Insert results into the ranking at the appropriate level
-        let mut ranking = SearchRanking::default();
+        let mut ranking = SearchRanking::new(has_exact);
         for (index, entry) in self.map {
             let rank = match entry.precedence {
                 A => a,
@@ -388,8 +391,9 @@ pub struct SearchRankingEntry {
     pub exact: bool,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct SearchRanking {
+    pub good_search: bool,
     pub best: Vec<SearchRankingEntry>,
     pub related: Vec<SearchRankingEntry>,
     pub other: Vec<SearchRankingEntry>,
@@ -398,6 +402,15 @@ pub struct SearchRanking {
 impl SearchRanking {
     pub fn is_empty(&self) -> bool {
         self.best.is_empty() && self.related.is_empty() && self.other.is_empty()
+    }
+
+    fn new(good_search: bool) -> Self {
+        Self {
+            good_search,
+            best: Vec::new(),
+            related: Vec::new(),
+            other: Vec::new(),
+        }
     }
 
     fn insert(

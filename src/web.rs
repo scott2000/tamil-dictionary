@@ -13,9 +13,9 @@ use rocket::Request;
 use rocket_dyn_templates::Template;
 
 use crate::dictionary::*;
-use crate::query::{Pattern, Query};
+use crate::query::{Pattern, Query, SearchKind};
 use crate::search::word::WordSearch;
-use crate::search::{Search, SearchRankingEntry, SearchResult};
+use crate::search::{Search, SearchRankingEntry};
 use crate::tamil::{self, LetterSet, Word};
 
 const EXAMPLE_REFRESH_TIME_SECS: u64 = 30;
@@ -397,6 +397,7 @@ struct SearchTemplate {
     other_uri: String,
     hide_other: bool,
     error: bool,
+    def_uri: Option<String>,
     message: Option<String>,
     best: Vec<ResultEntry>,
     related: Vec<ResultEntry>,
@@ -420,6 +421,7 @@ impl SearchTemplate {
             other_uri,
             hide_other: !all,
             error: false,
+            def_uri: None,
             message: None,
             best: Vec::new(),
             related: Vec::new(),
@@ -435,26 +437,27 @@ impl SearchTemplate {
         self.message = Some(err.to_string());
     }
 
-    fn no_results(&mut self) {
+    fn message(&mut self, msg: impl ToString) {
         if !self.error {
-            self.message = Some(String::from("No results found."));
+            self.message = Some(msg.to_string());
         }
     }
 
-    fn result(&mut self, result: Result<SearchResult, impl ToString>) {
-        match result {
+    fn search(&mut self, query: Query) {
+        match query.search() {
             Err(err) => self.error(err),
-            Ok(result) => {
+            Ok((result, kind)) => {
                 // Convert the search results to a ranked page
                 let ranking = result.rank();
                 if ranking.is_empty() {
-                    self.no_results();
+                    self.message("No results found.");
                 } else {
-                    // Render the search results so they can be displayed
+                    // Count how many of each result kind there are
                     self.best_count = ranking.best.len().into();
                     self.related_count = ranking.related.len().into();
                     self.other_count = ranking.other.len().into();
 
+                    // Render the search results so they can be displayed
                     let mut total = self.best_count.num;
                     self.best = ResultEntry::render_all(ranking.best, total <= MAX_EXPAND);
 
@@ -465,6 +468,21 @@ impl SearchTemplate {
                     self.other = ResultEntry::render_all(ranking.other, total <= MAX_EXPAND);
 
                     RESULT_COUNT.fetch_add(total as u64, Ordering::Relaxed);
+
+                    // Add special warnings for unintuitive situations
+                    match kind {
+                        SearchKind::AsSpecified => {
+                            // Check for unwanted implicit transliteration
+                            if !ranking.good_search && query.implicit_transliteration() {
+                                self.def_uri =
+                                    Some(uri!(search(format!(":{}", self.query))).to_string());
+                            }
+                        }
+
+                        SearchKind::DefSearch => {
+                            self.message("No words found, showing definitions.");
+                        }
+                    }
                 }
 
                 // Only hide the other results if they are too long
@@ -511,7 +529,7 @@ fn search_query(q: &str, all: bool) -> Template {
     let mut search = SearchTemplate::new(q, all);
     match Query::parse(&search.query) {
         Err(err) => search.error(err),
-        Ok(query) => search.result(query.search()),
+        Ok(query) => search.search(query),
     }
 
     render_template("search", search)

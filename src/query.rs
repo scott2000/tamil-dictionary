@@ -85,6 +85,11 @@ impl Display for SurroundKind {
 
 type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
 
+pub enum SearchKind {
+    AsSpecified,
+    DefSearch,
+}
+
 #[derive(Debug)]
 pub struct Query {
     word_patterns: Vec<Pattern>,
@@ -235,7 +240,7 @@ impl Query {
         Ok(query)
     }
 
-    pub fn search(self) -> Result<SearchResult, tree::SearchError> {
+    pub fn search(&self) -> Result<(SearchResult, SearchKind), tree::SearchError> {
         let mut intersect = Vec::new();
         let mut difference = Vec::new();
 
@@ -294,11 +299,12 @@ impl Query {
 
             // If successful, return the definition search instead
             if process_definitions().is_ok() {
-                return Ok(SearchResult::intersect_difference(intersect, difference));
+                let result = SearchResult::intersect_difference(intersect, difference);
+                return Ok((result, SearchKind::DefSearch));
             }
         }
 
-        Ok(result)
+        Ok((result, SearchKind::AsSpecified))
     }
 
     pub fn into_pattern(self) -> Option<Pattern> {
@@ -311,6 +317,16 @@ impl Query {
         } else {
             None
         }
+    }
+
+    pub fn implicit_transliteration(&self) -> bool {
+        if !self.definition_patterns.is_empty() || !self.negative_definition_patterns.is_empty() {
+            return false;
+        }
+
+        self.word_patterns
+            .iter()
+            .any(|pat| pat.implicit_transliteration())
     }
 
     pub fn escape(s: &str) -> String {
