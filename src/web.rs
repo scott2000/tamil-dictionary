@@ -480,7 +480,7 @@ impl SearchTemplate {
                         }
 
                         SearchKind::DefSearch => {
-                            self.message("No words found, showing definitions.");
+                            self.message("No words found, searching definitions.");
                         }
                     }
                 }
