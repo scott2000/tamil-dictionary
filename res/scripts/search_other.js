@@ -1,3 +1,5 @@
+'use strict';
+
 window.addEventListener('load', function() {
   var link = document.getElementById('other-link');
   var msg = document.getElementById('other-msg');
