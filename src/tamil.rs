@@ -771,6 +771,10 @@ impl<'a> WordIter<'a> {
         self.word.get(self.index)
     }
 
+    pub fn peek_over(&self) -> Option<Letter> {
+        self.word.get(self.index + 1)
+    }
+
     pub fn adv(&mut self) {
         self.index += 1;
         debug_assert!(self.index <= self.word.len());

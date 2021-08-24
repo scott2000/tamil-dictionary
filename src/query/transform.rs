@@ -270,20 +270,48 @@ pub fn literal_search<S: Search>(
                 }
 
                 // Check for consonant joining transformations
-                for check in [check_join, check_initial, check_final] {
+                for check in [
+                    check_join,
+                    check_initial,
+                    check_expanded_diphthongs,
+                    check_final,
+                ] {
                     if check(&mut search, &mut letters, lt, next)? {
                         continue 'outer;
                     }
                 }
-            } else if letters.index > 3 {
+            } else if letters.index > 3 && lt == Letter::U {
                 // Check for final "u"
-                if let Letter::U = lt {
+                search = search
+                    .literal(word![U])
+                    .joining(&search.asserting_next(LetterSet::vowel()).marking_expanded())?;
+
+                continue;
+            }
+
+            // Check for non-expanded diphthongs
+            match lt {
+                // Check for "ai"
+                Letter::Ai => {
                     search = search
-                        .literal(word![lt])
-                        .joining(&search.asserting_next(LetterSet::vowel()).marking_expanded())?;
+                        .literal(word![A, Y])
+                        .marking_expanded()
+                        .joining(&search.literal(word![Ai]))?;
 
                     continue;
                 }
+
+                // Check for "au"
+                Letter::Au => {
+                    search = search
+                        .literal(word![A, V, U])
+                        .marking_expanded()
+                        .joining(&search.literal(word![Au]))?;
+
+                    continue;
+                }
+
+                _ => {}
             }
         }
 
@@ -481,6 +509,37 @@ fn check_initial<S: Search>(
     Ok(true)
 }
 
+fn check_expanded_diphthongs<S: Search>(
+    search: &mut S,
+    letters: &mut WordIter,
+    lt: Letter,
+    next: Letter,
+) -> Result<bool, S::Error> {
+    *search = match (lt, next) {
+        // Check for "ay"
+        (Letter::A, Letter::Y) => search
+            .literal(word![Ai])
+            .marking_expanded()
+            .joining(&search.literal(word![A, Y]))?,
+
+        // Check for "avu"
+        (Letter::A, Letter::V) if letters.peek_over() == Some(Letter::U) => {
+            letters.adv();
+
+            search
+                .literal(word![Au])
+                .marking_expanded()
+                .joining(&search.literal(word![A, V, U]))?
+        }
+
+        _ => return Ok(false),
+    };
+
+    letters.adv();
+
+    Ok(true)
+}
+
 fn check_final<S: Search>(
     search: &mut S,
     letters: &mut WordIter,
@@ -504,7 +563,7 @@ fn check_final<S: Search>(
 
     // Check for final "am"
     if let (Letter::A, Letter::M) = (lt, next) {
-        if letters.index > 5 {
+        if letters.index > 4 {
             // Allow entire "am" to be removed since the word is long
             *search = search
                 .asserting_next(LetterSet::vowel())
