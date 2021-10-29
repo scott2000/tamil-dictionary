@@ -968,7 +968,7 @@ impl IndexMut<usize> for Word {
     }
 }
 
-#[doc(hiddden)]
+#[doc(hidden)]
 macro_rules! index_impl {
     () => {};
     ($ty:ty; $($tt:tt)*) => {
