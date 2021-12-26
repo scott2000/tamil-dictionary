@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::BufReader;
 
 use serde::Deserialize;
 
@@ -18,7 +19,7 @@ lazy_static! {
             }
         };
 
-        let mut entries: Box<[Entry]> = serde_json::from_reader(file)
+        let mut entries: Box<[Entry]> = serde_json::from_reader(BufReader::new(file))
             .expect("dictionary parse error");
 
         // Clear the interning metadata since it won't be used anymore
