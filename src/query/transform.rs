@@ -183,6 +183,18 @@ lazy_static! {
             );
         }
 
+        // (RetroL, M);
+        joins.insert_pair(
+            (Letter::RetroL, Letter::M),
+            (Letter::RetroN, Letter::M),
+        );
+
+        // (AlveolarL, M);
+        joins.insert_pair(
+            (Letter::AlveolarL, Letter::M),
+            (Letter::AlveolarN, Letter::M),
+        );
+
         joins
     };
 
@@ -596,7 +608,7 @@ fn check_final<S: Search>(
                 .joining(
                     &with_vowel
                         .literal(word![RetroN])
-                        .asserting_next(KCP.union(letterset![RetroN])),
+                        .asserting_next(KCP.union(letterset![RetroN, M])),
                 )?
                 .marking_expanded(),
         )?,
@@ -609,7 +621,7 @@ fn check_final<S: Search>(
                 .joining(
                     &with_vowel
                         .literal(word![AlveolarN])
-                        .asserting_next(KCP.union(letterset![AlveolarN])),
+                        .asserting_next(KCP.union(letterset![AlveolarN, M])),
                 )?
                 .marking_expanded(),
         )?,
