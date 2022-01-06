@@ -503,6 +503,12 @@ impl SearchTemplate {
     }
 }
 
+#[get("/random")]
+pub fn random() -> Template {
+    let word = Query::escape(Entry::random().primary_word());
+    search_query(&word, false)
+}
+
 #[get("/search?<q>&all")]
 pub fn search_all(q: &str) -> Template {
     search_query(q, true)

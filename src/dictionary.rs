@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::BufReader;
 
+use rand::seq::SliceRandom;
+
 use serde::Deserialize;
 
 use crate::intern;
@@ -180,6 +182,10 @@ pub struct Entry {
 }
 
 impl Entry {
+    pub fn random() -> &'static Self {
+        ENTRIES.choose(&mut rand::thread_rng()).unwrap()
+    }
+
     pub fn primary_word(&self) -> &str {
         RawEntry::words(&self.word).next().unwrap()
     }
@@ -192,7 +198,7 @@ impl Entry {
 impl From<RawEntry> for Entry {
     fn from(raw: RawEntry) -> Self {
         let parsed_word: Box<[_]> = RawEntry::words(&raw.word)
-            .flat_map(|word| RawEntry::joined_subwords(word))
+            .flat_map(RawEntry::joined_subwords)
             .collect();
 
         assert!(!parsed_word.is_empty());
