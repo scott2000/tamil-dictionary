@@ -65,42 +65,35 @@ pub fn version() -> &'static str {
     &VERSION
 }
 
-#[rocket::main]
+#[launch]
 #[rustfmt::skip]
-async fn main() -> Result<(), rocket::Error> {
+async fn rocket() -> _ {
     // Initialize the examples for the front page
     web::current_example();
 
-    let rocket_handle = tokio::spawn(async {
-        // Host resources at a path including the version number
-        let res_path = format!("/res/{}", version());
+    // Start building the word and definition trees immediately
+    task::spawn_blocking(search::tree::search_word);
+    task::spawn_blocking(search::tree::search_definition);
 
-        rocket::build()
-            .mount(
-                "/",
-                routes![
-                    web::index,
-                    web::grammar,
-                    web::random,
-                    web::search_all,
-                    web::search,
-                    web::search_empty_query,
-                    web::search_no_query,
-                    web::suggest,
-                    web::stats,
-                ],
-            )
-            .mount(res_path, FileServer::from(relative!("res")))
-            .register("/", catchers![web::error])
-            .attach(Template::fairing())
-            .launch()
-            .await
-    });
+    // Host resources at a path including the version number
+    let res_path = format!("/res/{}", version());
 
-    let word_handle = task::spawn_blocking(search::tree::search_word);
-    let definition_handle = task::spawn_blocking(search::tree::search_definition);
-
-    word_handle.await.expect("failed to build word trees");
-    definition_handle.await.expect("failed to build definition trees");
-    rocket_handle.await.expect("rocket panicked")
+    rocket::build()
+        .mount(
+            "/",
+            routes![
+                web::index,
+                web::grammar,
+                web::random,
+                web::search_all,
+                web::search,
+                web::search_empty_query,
+                web::search_no_query,
+                web::suggest,
+                web::stats,
+            ],
+        )
+        .mount(res_path, FileServer::from(relative!("res")))
+        .register("/", catchers![web::error])
+        .attach(Template::fairing())
 }
