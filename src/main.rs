@@ -1,17 +1,15 @@
-#[macro_use]
-extern crate rocket;
-
 use std::hash::BuildHasherDefault;
 use std::time::{Duration, Instant};
 
 use once_cell::sync::OnceCell;
 
-use rocket::fs::{relative, FileServer};
-use rocket_dyn_templates::Template;
-
 use seahash::SeaHasher;
 
-use tokio::task;
+use dictionary::*;
+use std::collections::*;
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
+use tamil::*;
 
 #[doc(hidden)]
 macro_rules! letterset_impl {
@@ -44,7 +42,6 @@ pub mod query;
 pub mod refs;
 pub mod search;
 pub mod tamil;
-pub mod web;
 
 pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<SeaHasher>>;
 pub type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<SeaHasher>>;
@@ -70,46 +67,100 @@ pub fn version() -> &'static str {
     })
 }
 
-#[launch]
-async fn rocket() -> _ {
-    // Initialize the examples for the front page
-    web::current_example();
+fn freqs(entries: &[Entry]) -> io::Result<()> {
+    println!("Counting letters...");
 
-    // Start building the word, definition, and stem data structures
-    task::spawn_blocking(|| {
-        let _ = annotate::supported();
-        let _ = search::tree::search_word();
-        let _ = search::tree::search_definition();
-    });
+    let mut file = BufWriter::new(File::create("freqs.csv")?);
 
-    // Host resources at a path including the version number
-    let res_path = format!("/res/{}", version());
+    let mut map = BTreeMap::new();
+    for entry in entries.iter() {
+        for word in &*entry.parsed_text {
+            let mut last = None;
+            for letter in word.iter() {
+                let (count, no_double) = map.get(&letter).copied().unwrap_or((0, 0));
+                let no_double = no_double + (last != Some(letter)) as u32;
+                map.insert(letter, (count + 1, no_double));
+                last = Some(letter);
+            }
+        }
+    }
 
-    rocket::build()
-        .mount(
-            "/",
-            routes![
-                // Index and other pages
-                web::index,
-                web::advanced,
-                web::grammar,
-                web::annotate,
-                // Search pages
-                web::entries,
-                web::random,
-                web::search_all,
-                web::search,
-                web::search_no_query,
-                // API endpoints
-                web::annotate_api_get,
-                web::annotate_raw_get,
-                web::annotate_api,
-                web::annotate_raw,
-                web::suggest,
-                web::stats,
-            ],
-        )
-        .mount(res_path, FileServer::from(relative!("res")))
-        .register("/", catchers![web::error])
-        .attach(Template::fairing())
+    writeln!(file, r#""letter","count","no_double","kind""#)?;
+    for (letter, (count, no_double)) in map {
+        let kind = match letter.category() {
+            Category::LatinAlpha => "latin",
+            Category::TamilGrantha => "grantha",
+            _ => "tamil",
+        };
+        writeln!(file, "\"{}\",{},{},\"{}\"", letter, count, no_double, kind)?;
+    }
+
+    Ok(())
+}
+
+fn write_letter(file: &mut BufWriter<File>, letter: Option<Letter>) -> io::Result<()> {
+    if let Some(letter) = letter {
+        write!(file, "\"{:?}\",", letter)
+    } else {
+        write!(file, "\"$\",")
+    }
+}
+
+fn bigrams(entries: &[Entry]) -> io::Result<()> {
+    println!("Counting bigrams...");
+
+    let mut file = BufWriter::new(File::create("bigrams.csv")?);
+
+    let mut map = BTreeMap::new();
+    for entry in entries.iter() {
+        for word in &*entry.parsed_text {
+            let mut last = None;
+            for letter in word.iter().map(Some).chain(std::iter::once(None)) {
+                let key = (last, letter);
+                let count = map.get(&key).copied().unwrap_or(0);
+                map.insert(key, count + 1);
+                last = letter;
+            }
+        }
+    }
+
+    writeln!(file, r#""left","right","count""#)?;
+    for (&(left, right), count) in map.iter() {
+        write_letter(&mut file, left)?;
+        write_letter(&mut file, right)?;
+        writeln!(file, "{}", count)?;
+    }
+
+    drop(file);
+
+    let mut file = BufWriter::new(File::create("clusters.csv")?);
+    let mut key_file = BufWriter::new(File::create("clusters.key.csv")?);
+
+    const CONSONANTS: LetterSet = LetterSet::consonant().difference(LetterSet::grantha());
+
+    for left in CONSONANTS.iter() {
+        for right in CONSONANTS.iter() {
+            let count = map.get(&(Some(left), Some(right))).copied().unwrap_or(0);
+
+            if right != Letter::K {
+                write!(file, ",")?;
+                write!(key_file, ",")?;
+            }
+
+            write!(file, "{}", count)?;
+            write!(key_file, "\"{}{}\"", left, right)?;
+        }
+
+        writeln!(file)?;
+        writeln!(key_file)?;
+    }
+
+    Ok(())
+}
+
+fn main() -> io::Result<()> {
+    let entries: &[Entry] = entries();
+    freqs(entries)?;
+    bigrams(entries)?;
+    Ok(())
 }
