@@ -3,3 +3,4 @@ convert/
 Rocket.toml
 *.txt
 *.json
+*.csv
