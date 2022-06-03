@@ -3,6 +3,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use crate::dictionary::{Entry, EntryIndex, Loc, WordData, WordIndex, ENTRIES, NO_WORD};
 use crate::tamil::{Letter, LetterSet, Word};
 
+pub use crate::dictionary::KindSet;
+
 pub mod tree;
 pub mod word;
 
@@ -271,11 +273,11 @@ impl SearchResult {
         set.retain(|entry| self.map.contains_key(entry));
     }
 
-    pub fn intersect_difference(intersect: Vec<Self>, difference: Vec<Self>) -> Self {
+    pub fn filter(intersect: Vec<Self>, difference: Vec<Self>, kinds: KindSet) -> Self {
         assert!(!intersect.is_empty());
 
-        // If the search is exactly one result, return it
-        if intersect.len() == 1 && difference.is_empty() {
+        // If the search is exactly one result with no filters, return it
+        if intersect.len() == 1 && difference.is_empty() && kinds.is_empty() {
             return intersect.into_iter().next().unwrap();
         }
 
@@ -291,13 +293,29 @@ impl SearchResult {
             .flat_map(|result| result.map.into_keys())
             .collect();
 
-        // Combine results which are in intersection but not union
+        // Convert an empty set of kinds to match anything
+        let kinds = kinds.to_non_empty();
+
+        // Get a direct slice for the entries array
+        let entries: &[Entry] = &ENTRIES;
+
+        // Combine results which are in intersection but not union, and match in kind
         let mut intersect_difference = Self::default();
         for result in intersect {
             for (index, entry) in result.map {
-                if intersect_set.contains(&index) && !difference_set.contains(&index) {
-                    intersect_difference.insert_entry(index, entry, true);
+                if !intersect_set.contains(&index) {
+                    continue;
                 }
+
+                if difference_set.contains(&index) {
+                    continue;
+                }
+
+                if !entries[index as usize].kind_set.matches_any(kinds) {
+                    continue;
+                }
+
+                intersect_difference.insert_entry(index, entry, true);
             }
         }
 

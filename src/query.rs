@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::search::{tree, Search, SearchResult, Suggest, SuggestionList};
+use crate::search::{tree, KindSet, Search, SearchResult, Suggest, SuggestionList};
 use crate::tamil::{Category, Letter, LetterSet, Word, PULLI};
 
 mod transform;
@@ -273,7 +273,7 @@ impl Query {
             return Err(tree::SearchError::CommonExclusion);
         }
 
-        let result = SearchResult::intersect_difference(intersect, difference);
+        let result = SearchResult::filter(intersect, difference, KindSet::empty());
 
         // If there are no results, try again as a definition
         if result.is_empty()
@@ -299,7 +299,7 @@ impl Query {
 
             // If successful, return the definition search instead
             if process_definitions().is_ok() {
-                let result = SearchResult::intersect_difference(intersect, difference);
+                let result = SearchResult::filter(intersect, difference, KindSet::empty());
                 return Ok((result, SearchKind::DefSearch));
             }
         }

@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::ops::*;
 
 use rand::seq::SliceRandom;
 
@@ -122,12 +123,12 @@ impl RawEntry {
         kind.iter().copied().map(RawEntryKind::to_str).collect()
     }
 
-    fn kinds(kind: &[RawEntryKind]) -> Vec<EntryKind> {
+    fn kind_set(kind: &[RawEntryKind]) -> KindSet {
         kind.iter()
             .copied()
-            .flat_map(EntryKind::from_raw)
-            .copied()
-            .collect()
+            .map(KindSet::from)
+            .reduce(KindSet::bitor)
+            .unwrap_or(KindSet::empty())
     }
 
     fn words(word: &str) -> impl Iterator<Item = &str> {
@@ -248,7 +249,7 @@ pub struct Entry {
     pub subword: Option<u8>,
     pub hint: Option<Box<str>>,
     pub kind_strs: Box<[&'static str]>,
-    pub kinds: Box<[EntryKind]>,
+    pub kind_set: KindSet,
     pub text: Box<str>,
     pub parsed_text: Box<[&'static Word]>,
     pub word_ranges: Box<[WordRange]>,
@@ -346,7 +347,7 @@ impl From<RawEntry> for Entry {
         }
 
         let kind_strs = RawEntry::kind_strs(&raw.kind).into_boxed_slice();
-        let kinds = RawEntry::kinds(&raw.kind).into_boxed_slice();
+        let kind_set = RawEntry::kind_set(&raw.kind);
 
         Self {
             word: raw.word.into_boxed_str(),
@@ -354,7 +355,7 @@ impl From<RawEntry> for Entry {
             subword: raw.sub,
             hint: raw.hint.map(String::into_boxed_str),
             kind_strs,
-            kinds,
+            kind_set,
             text: text.into_boxed_str(),
             parsed_text: parsed_text.into_boxed_slice(),
             word_ranges: word_ranges.into_boxed_slice(),
@@ -364,40 +365,94 @@ impl From<RawEntry> for Entry {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(u32)]
 pub enum EntryKind {
-    VinaiChol,
-    VinaiAdai,
-    VinaiMutru,
-    ThunaiVinai,
-    PeyarChol,
-    PeyarAdai,
-    SuttuPeyar,
-    VinaaPeyar,
-    IdaiChol,
-    InaiIdaiChol,
-    ViliIdaiChol,
+    VinaiChol = 1 << 0,
+    VinaiAdai = 1 << 1,
+    VinaiMutru = 1 << 2,
+    ThunaiVinai = 1 << 3,
+    PeyarChol = 1 << 4,
+    PeyarAdai = 1 << 5,
+    SuttuPeyar = 1 << 6,
+    VinaaPeyar = 1 << 7,
+    IdaiChol = 1 << 8,
+    InaiIdaiChol = 1 << 9,
+    ViliIdaiChol = 1 << 10,
 }
 
-impl EntryKind {
-    fn from_raw(kind: RawEntryKind) -> &'static [Self] {
-        use RawEntryKind::*;
-        match kind {
-            VinaiChol => &[Self::VinaiChol],
-            VinaiAdai => &[Self::VinaiAdai],
-            VinaiMutru => &[Self::VinaiMutru],
-            ThunaiVinaiChol => &[Self::ThunaiVinai, Self::VinaiChol],
-            ThunaiVinaiAdai => &[Self::ThunaiVinai, Self::VinaiAdai],
-            ThunaiVinaiMutru => &[Self::ThunaiVinai, Self::VinaiMutru],
-            PeyarChol => &[Self::PeyarChol],
-            PeyarAdai => &[Self::PeyarAdai],
-            SuttuPeyarChol => &[Self::SuttuPeyar, Self::PeyarChol],
-            SuttuPeyarAdai => &[Self::SuttuPeyar, Self::PeyarAdai],
-            VinaaPeyarChol => &[Self::VinaaPeyar, Self::PeyarChol],
-            VinaaPeyarAdai => &[Self::VinaaPeyar, Self::PeyarAdai],
-            IdaiChol => &[Self::IdaiChol],
-            InaiIdaiChol => &[Self::InaiIdaiChol, Self::IdaiChol],
-            ViliIdaiChol => &[Self::ViliIdaiChol, Self::IdaiChol],
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct KindSet(pub u32);
+
+impl KindSet {
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn any() -> Self {
+        Self(!0)
+    }
+
+    pub const fn single(kind: EntryKind) -> Self {
+        Self(kind as u32)
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    pub const fn to_non_empty(self) -> Self {
+        if self.is_empty() {
+            Self::any()
+        } else {
+            self
         }
+    }
+
+    pub const fn matches(self, kind: EntryKind) -> bool {
+        (self.0 & kind as u32) != 0
+    }
+
+    pub const fn matches_any(self, other: Self) -> bool {
+        (self.0 & other.0) != 0
+    }
+}
+
+impl From<RawEntryKind> for KindSet {
+    fn from(kind: RawEntryKind) -> Self {
+        use EntryKind::*;
+        match kind {
+            RawEntryKind::VinaiChol => Self(VinaiChol as u32),
+            RawEntryKind::VinaiAdai => Self(VinaiAdai as u32),
+            RawEntryKind::VinaiMutru => Self(VinaiMutru as u32),
+            RawEntryKind::ThunaiVinaiChol => Self(ThunaiVinai as u32 | VinaiChol as u32),
+            RawEntryKind::ThunaiVinaiAdai => Self(ThunaiVinai as u32 | VinaiAdai as u32),
+            RawEntryKind::ThunaiVinaiMutru => Self(ThunaiVinai as u32 | VinaiMutru as u32),
+            RawEntryKind::PeyarChol => Self(PeyarChol as u32),
+            RawEntryKind::PeyarAdai => Self(PeyarAdai as u32),
+            RawEntryKind::SuttuPeyarChol => Self(SuttuPeyar as u32 | PeyarChol as u32),
+            RawEntryKind::SuttuPeyarAdai => Self(SuttuPeyar as u32 | PeyarAdai as u32),
+            RawEntryKind::VinaaPeyarChol => Self(VinaaPeyar as u32 | PeyarChol as u32),
+            RawEntryKind::VinaaPeyarAdai => Self(VinaaPeyar as u32 | PeyarAdai as u32),
+            RawEntryKind::IdaiChol => Self(IdaiChol as u32),
+            RawEntryKind::InaiIdaiChol => Self(InaiIdaiChol as u32 | IdaiChol as u32),
+            RawEntryKind::ViliIdaiChol => Self(ViliIdaiChol as u32 | IdaiChol as u32),
+        }
+    }
+}
+
+impl BitOr for KindSet {
+    type Output = Self;
+
+    fn bitor(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl BitAnd for KindSet {
+    type Output = Self;
+
+    fn bitand(self, other: Self) -> Self {
+        Self(self.0 & other.0)
     }
 }
 
