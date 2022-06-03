@@ -4,7 +4,6 @@ window.addEventListener('load', function() {
   const delay = 300;
   const count = 6;
 
-  const searchForm = document.getElementById('search-form');
   const searchField = document.getElementById('search-field');
   const autocomplete = document.getElementById('autocomplete');
   const cache = new Map();

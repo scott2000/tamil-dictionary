@@ -1,7 +1,26 @@
-<div id="search-bar">
-    <form id="search-form" autocomplete="off" method="get" action="/search">
-        <input type="text" name="q" id="search-field" size="10" title="Type search query" value="{{query}}">
-        <input type="submit" id="search-button" value="Search">
+<div id="search-box">
+    <form autocomplete="off" method="get" action="/search">
+        <div id="search-bar">
+            <input type="text" id="search-field" class="search-input" name="q"
+                   size="10" title="Type search query" value="{{query}}">
+            <input type="submit" id="search-button" class="search-input" value="Search">
+            <div id="autocomplete" style="display:none;"></div>
+        </div>
+        <div id="search-adv">
+            <p>Filter by Part of Speech:</p>
+            <div id="search-kinds">
+            {{> common/checkbox key="v"  name="Verb"}}
+            {{> common/checkbox key="tv" name="Auxiliary Verb"}}
+            {{> common/checkbox key="p"  name="Noun"}}
+            {{> common/checkbox key="sp" name="Pronoun"}}
+            {{> common/checkbox key="i"  name="Particle"}}
+
+            {{> common/checkbox key="va" name="Adverb"}}
+            {{> common/checkbox key="vm" name="Finite Verb"}}
+            {{> common/checkbox key="pa" name="Adjective"}}
+            {{> common/checkbox key="vp" name="Question Word"}}
+            {{> common/checkbox key="ii" name="Conjunction"}}
+            </div>
+        </div>
     </form>
-    <div id="autocomplete" style="display:none;"></div>
 </div>

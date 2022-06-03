@@ -1,16 +1,20 @@
-#search-bar {
-    position: relative;
+#search-box {
     margin: 20px auto 0;
     width: 350px;
     max-width: 95%;
     vertical-align: middle;
 }
 
-#search-form {
+#search-bar {
     display: flex;
+    position: relative;
 }
 
-#search-form input {
+#search-kinds {
+    column-count: 2;
+}
+
+.search-input {
     z-index: 2;
     padding: 7px;
     border-radius: 4px;

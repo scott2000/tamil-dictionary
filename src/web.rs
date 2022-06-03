@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use rand::seq::SliceRandom;
 
+use rocket::http::uri;
 use rocket::http::Status;
 use rocket::response::Redirect;
 use rocket::serde::json::Json;
@@ -151,12 +152,48 @@ pub fn grammar() -> Template {
     render_template("grammar", ())
 }
 
+#[derive(Serialize, FromForm, UriDisplayQuery, Default, Debug)]
+pub struct QueryKindSet {
+    v: bool,
+    va: bool,
+    vm: bool,
+    tv: bool,
+    p: bool,
+    pa: bool,
+    sp: bool,
+    vp: bool,
+    i: bool,
+    ii: bool,
+}
+
+impl uri::fmt::Ignorable<uri::fmt::Query> for QueryKindSet {}
+
+impl<'a> From<&'a QueryKindSet> for KindSet {
+    #[rustfmt::skip]
+    fn from(kinds: &'a QueryKindSet) -> Self {
+        let &QueryKindSet { v, va, vm, tv, p, pa, sp, vp, i, ii } = kinds;
+
+        [v, va, vm, tv, p, pa, sp, vp, i, ii]
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, b)| {
+                if b {
+                    Some(KindSet::single(ALL_KINDS[i]))
+                } else {
+                    None
+                }
+            })
+            .reduce(std::ops::BitOr::bitor)
+            .unwrap_or(KindSet::empty())
+    }
+}
+
 fn link(word: &str) -> String {
     link_no_escape(&Query::escape(word))
 }
 
 fn link_no_escape(escaped: &str) -> String {
-    uri!(search(escaped)).to_string()
+    uri!(search(escaped, _)).to_string()
 }
 
 #[derive(Debug)]
@@ -402,6 +439,7 @@ impl From<usize> for NumWithPlural {
 #[derive(Serialize, Debug)]
 struct SearchTemplate {
     query: String,
+    kinds: QueryKindSet,
     other_uri: String,
     hide_other: bool,
     error: bool,
@@ -416,16 +454,17 @@ struct SearchTemplate {
 }
 
 impl SearchTemplate {
-    fn new(query: &str, all: bool) -> Self {
+    fn new(query: &str, kinds: QueryKindSet, all: bool) -> Self {
         let query = query.trim();
         let other_uri = if all {
             String::new()
         } else {
-            uri!(search_all(query)).to_string()
+            uri!(search_all(query, &kinds)).to_string()
         };
 
         Self {
             query: String::from(query),
+            kinds,
             other_uri,
             hide_other: !all,
             error: false,
@@ -452,7 +491,7 @@ impl SearchTemplate {
     }
 
     fn search(&mut self, query: Query) {
-        match query.search() {
+        match query.search((&self.kinds).into()) {
             Err(err) => self.error(err),
             Ok((result, kind)) => {
                 // Convert the search results to a ranked page
@@ -482,8 +521,10 @@ impl SearchTemplate {
                         SearchKind::AsSpecified => {
                             // Check for unwanted implicit transliteration
                             if !ranking.good_search && query.implicit_transliteration() {
-                                self.def_uri =
-                                    Some(uri!(search(format!(":{}", self.query))).to_string());
+                                self.def_uri = Some(
+                                    uri!(search(format!(":{}", self.query), &self.kinds))
+                                        .to_string(),
+                                );
                             }
                         }
 
@@ -514,22 +555,17 @@ impl SearchTemplate {
 #[get("/random")]
 pub fn random() -> Template {
     let word = Query::escape(Entry::random().primary_word());
-    search_query(&word, false)
+    search_query(&word, QueryKindSet::default(), false)
 }
 
-#[get("/search?<q>&all")]
-pub fn search_all(q: &str) -> Template {
-    search_query(q, true)
+#[get("/search?all&<q>&<k..>")]
+pub fn search_all(q: &str, k: QueryKindSet) -> Template {
+    search_query(q, k, true)
 }
 
-#[get("/search?<q>")]
-pub fn search(q: &str) -> Template {
-    search_query(q, false)
-}
-
-#[get("/search?q=")]
-pub fn search_empty_query() -> Redirect {
-    Redirect::to(uri!(index()))
+#[get("/search?<q>&<k..>")]
+pub fn search(q: &str, k: QueryKindSet) -> Template {
+    search_query(q, k, false)
 }
 
 #[get("/search")]
@@ -537,10 +573,10 @@ pub fn search_no_query() -> Redirect {
     Redirect::to(uri!(index()))
 }
 
-fn search_query(q: &str, all: bool) -> Template {
+fn search_query(q: &str, k: QueryKindSet, all: bool) -> Template {
     SEARCH_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    let mut search = SearchTemplate::new(q, all);
+    let mut search = SearchTemplate::new(q, k, all);
     match Query::parse(&search.query) {
         Err(err) => search.error(err),
         Ok(query) => search.search(query),
@@ -615,7 +651,7 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
                     let completion = format!(":{}", q);
                     suggestions.push(SuggestResponseEntry {
                         word: ":",
-                        uri: uri!(search(&completion)).to_string(),
+                        uri: uri!(search(&completion, _)).to_string(),
                         completion,
                     });
                 }

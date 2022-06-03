@@ -196,11 +196,11 @@ pub enum RawEntryKind {
     VinaaPeyarChol,
     #[serde(rename = "vpa")]
     VinaaPeyarAdai,
-    #[serde(rename = "ic")]
+    #[serde(rename = "i")]
     IdaiChol,
-    #[serde(rename = "iic")]
+    #[serde(rename = "ii")]
     InaiIdaiChol,
-    #[serde(rename = "vic")]
+    #[serde(rename = "vi")]
     ViliIdaiChol,
 }
 
@@ -364,6 +364,20 @@ impl From<RawEntry> for Entry {
     }
 }
 
+pub const ALL_KINDS: [EntryKind; 11] = [
+    EntryKind::VinaiChol,
+    EntryKind::VinaiAdai,
+    EntryKind::VinaiMutru,
+    EntryKind::ThunaiVinai,
+    EntryKind::PeyarChol,
+    EntryKind::PeyarAdai,
+    EntryKind::SuttuPeyar,
+    EntryKind::VinaaPeyar,
+    EntryKind::IdaiChol,
+    EntryKind::InaiIdaiChol,
+    EntryKind::ViliIdaiChol,
+];
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum EntryKind {
@@ -378,6 +392,26 @@ pub enum EntryKind {
     IdaiChol = 1 << 8,
     InaiIdaiChol = 1 << 9,
     ViliIdaiChol = 1 << 10,
+}
+
+impl EntryKind {
+    pub fn parse(s: &str) -> Option<Self> {
+        use EntryKind::*;
+        match s {
+            "v" => Some(VinaiChol),
+            "va" => Some(VinaiAdai),
+            "vm" => Some(VinaiMutru),
+            "tv" => Some(ThunaiVinai),
+            "p" => Some(PeyarChol),
+            "pa" => Some(PeyarAdai),
+            "sp" => Some(SuttuPeyar),
+            "vp" => Some(VinaaPeyar),
+            "i" => Some(IdaiChol),
+            "ii" => Some(InaiIdaiChol),
+            "vi" => Some(ViliIdaiChol),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

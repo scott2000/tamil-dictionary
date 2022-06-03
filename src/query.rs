@@ -240,7 +240,7 @@ impl Query {
         Ok(query)
     }
 
-    pub fn search(&self) -> Result<(SearchResult, SearchKind), tree::SearchError> {
+    pub fn search(&self, kinds: KindSet) -> Result<(SearchResult, SearchKind), tree::SearchError> {
         let mut intersect = Vec::new();
         let mut difference = Vec::new();
 
@@ -273,7 +273,7 @@ impl Query {
             return Err(tree::SearchError::CommonExclusion);
         }
 
-        let result = SearchResult::filter(intersect, difference, KindSet::empty());
+        let result = SearchResult::filter(intersect, difference, kinds);
 
         // If there are no results, try again as a definition
         if result.is_empty()
@@ -299,7 +299,7 @@ impl Query {
 
             // If successful, return the definition search instead
             if process_definitions().is_ok() {
-                let result = SearchResult::filter(intersect, difference, KindSet::empty());
+                let result = SearchResult::filter(intersect, difference, kinds);
                 return Ok((result, SearchKind::DefSearch));
             }
         }

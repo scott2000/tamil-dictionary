@@ -87,7 +87,6 @@ async fn rocket() -> _ {
                 web::random,
                 web::search_all,
                 web::search,
-                web::search_empty_query,
                 web::search_no_query,
                 web::suggest,
                 web::stats,
