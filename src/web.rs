@@ -345,6 +345,7 @@ struct ResultEntry {
     word: &'static str,
     exact: bool,
     subword: Option<u8>,
+    kind: String,
     sections: Vec<ResultSection>,
 }
 
@@ -366,11 +367,18 @@ impl ResultEntry {
             vec![ResultSection::collapsed(entry)]
         };
 
+        let mut kind = entry.kind_strs.join("/");
+
+        if let Some(hint) = &entry.hint {
+            kind = format!("{} {}", hint, kind);
+        }
+
         Self {
             uri: link(entry.primary_word()),
             word: &entry.word,
             exact,
             subword: entry.subword,
+            kind,
             sections,
         }
     }

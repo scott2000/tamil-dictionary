@@ -112,10 +112,24 @@ impl WordData {
 struct RawEntry {
     word: String,
     sub: Option<u8>,
+    hint: Option<String>,
+    kind: Vec<RawEntryKind>,
     secs: Vec<Vec<Vec<(SegmentKind, String)>>>,
 }
 
 impl RawEntry {
+    fn kind_strs(kind: &[RawEntryKind]) -> Vec<&'static str> {
+        kind.iter().copied().map(RawEntryKind::to_str).collect()
+    }
+
+    fn kinds(kind: &[RawEntryKind]) -> Vec<EntryKind> {
+        kind.iter()
+            .copied()
+            .flat_map(EntryKind::from_raw)
+            .copied()
+            .collect()
+    }
+
     fn words(word: &str) -> impl Iterator<Item = &str> {
         word.split(&[',', ';'][..])
             .map(str::trim)
@@ -156,6 +170,63 @@ impl RawEntry {
 }
 
 #[derive(Deserialize, Copy, Clone, PartialEq, Eq, Debug)]
+pub enum RawEntryKind {
+    #[serde(rename = "v")]
+    VinaiChol,
+    #[serde(rename = "va")]
+    VinaiAdai,
+    #[serde(rename = "vm")]
+    VinaiMutru,
+    #[serde(rename = "tv")]
+    ThunaiVinaiChol,
+    #[serde(rename = "tva")]
+    ThunaiVinaiAdai,
+    #[serde(rename = "tvm")]
+    ThunaiVinaiMutru,
+    #[serde(rename = "p")]
+    PeyarChol,
+    #[serde(rename = "pa")]
+    PeyarAdai,
+    #[serde(rename = "sp")]
+    SuttuPeyarChol,
+    #[serde(rename = "spa")]
+    SuttuPeyarAdai,
+    #[serde(rename = "vp")]
+    VinaaPeyarChol,
+    #[serde(rename = "vpa")]
+    VinaaPeyarAdai,
+    #[serde(rename = "ic")]
+    IdaiChol,
+    #[serde(rename = "iic")]
+    InaiIdaiChol,
+    #[serde(rename = "vic")]
+    ViliIdaiChol,
+}
+
+impl RawEntryKind {
+    pub fn to_str(self) -> &'static str {
+        use RawEntryKind::*;
+        match self {
+            VinaiChol => "வி.",
+            VinaiAdai => "வி. அ.",
+            VinaiMutru => "வி. மு.",
+            ThunaiVinaiChol => "து. வி.",
+            ThunaiVinaiAdai => "து. வி. அ.",
+            ThunaiVinaiMutru => "து. வி. மு.",
+            PeyarChol => "பெ.",
+            PeyarAdai => "பெ. அ.",
+            SuttuPeyarChol => "சு. பெ.",
+            SuttuPeyarAdai => "சு. பெ. அ.",
+            VinaaPeyarChol => "வினா பெ.",
+            VinaaPeyarAdai => "வினா பெ. அ.",
+            IdaiChol => "இ. சொ.",
+            InaiIdaiChol => "இணை இ. சொ.",
+            ViliIdaiChol => "விளி இ. சொ.",
+        }
+    }
+}
+
+#[derive(Deserialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum SegmentKind {
     #[serde(rename = "txt")]
     Text,
@@ -175,6 +246,9 @@ pub struct Entry {
     pub word: Box<str>,
     pub parsed_word: Box<[&'static Word]>,
     pub subword: Option<u8>,
+    pub hint: Option<Box<str>>,
+    pub kind_strs: Box<[&'static str]>,
+    pub kinds: Box<[EntryKind]>,
     pub text: Box<str>,
     pub parsed_text: Box<[&'static Word]>,
     pub word_ranges: Box<[WordRange]>,
@@ -213,7 +287,7 @@ impl From<RawEntry> for Entry {
                     .into_iter()
                     .map(|para| {
                         para.into_iter()
-                            .map(|(kind, s)| {
+                            .flat_map(|(kind, s)| {
                                 let start = text.len();
                                 text.push_str(&s);
                                 let end = text.len();
@@ -271,14 +345,58 @@ impl From<RawEntry> for Entry {
             eprintln!("Warning: unmatched opening parenthesis in {}", raw.word);
         }
 
+        let kind_strs = RawEntry::kind_strs(&raw.kind).into_boxed_slice();
+        let kinds = RawEntry::kinds(&raw.kind).into_boxed_slice();
+
         Self {
             word: raw.word.into_boxed_str(),
             parsed_word,
             subword: raw.sub,
+            hint: raw.hint.map(String::into_boxed_str),
+            kind_strs,
+            kinds,
             text: text.into_boxed_str(),
             parsed_text: parsed_text.into_boxed_slice(),
             word_ranges: word_ranges.into_boxed_slice(),
             sections,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum EntryKind {
+    VinaiChol,
+    VinaiAdai,
+    VinaiMutru,
+    ThunaiVinai,
+    PeyarChol,
+    PeyarAdai,
+    SuttuPeyar,
+    VinaaPeyar,
+    IdaiChol,
+    InaiIdaiChol,
+    ViliIdaiChol,
+}
+
+impl EntryKind {
+    fn from_raw(kind: RawEntryKind) -> &'static [Self] {
+        use RawEntryKind::*;
+        match kind {
+            VinaiChol => &[Self::VinaiChol],
+            VinaiAdai => &[Self::VinaiAdai],
+            VinaiMutru => &[Self::VinaiMutru],
+            ThunaiVinaiChol => &[Self::ThunaiVinai, Self::VinaiChol],
+            ThunaiVinaiAdai => &[Self::ThunaiVinai, Self::VinaiAdai],
+            ThunaiVinaiMutru => &[Self::ThunaiVinai, Self::VinaiMutru],
+            PeyarChol => &[Self::PeyarChol],
+            PeyarAdai => &[Self::PeyarAdai],
+            SuttuPeyarChol => &[Self::SuttuPeyar, Self::PeyarChol],
+            SuttuPeyarAdai => &[Self::SuttuPeyar, Self::PeyarAdai],
+            VinaaPeyarChol => &[Self::VinaaPeyar, Self::PeyarChol],
+            VinaaPeyarAdai => &[Self::VinaaPeyar, Self::PeyarAdai],
+            IdaiChol => &[Self::IdaiChol],
+            InaiIdaiChol => &[Self::InaiIdaiChol, Self::IdaiChol],
+            ViliIdaiChol => &[Self::ViliIdaiChol, Self::IdaiChol],
         }
     }
 }
@@ -295,15 +413,19 @@ pub struct Segment {
 }
 
 impl Segment {
-    pub fn new(kind: SegmentKind, start: usize, end: usize) -> Self {
+    pub fn new(kind: SegmentKind, start: usize, end: usize) -> Option<Self> {
+        if start == end {
+            return None;
+        }
+
         debug_assert!(start < end);
         debug_assert!(end <= u32::MAX as usize);
 
-        Self {
+        Some(Self {
             kind,
             start: start as u32,
             end: end as u32,
-        }
+        })
     }
 
     pub fn kind(&self) -> SegmentKind {
