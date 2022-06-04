@@ -389,8 +389,6 @@ window.addEventListener('load', function() {
     {
       src: [
         document.getElementById('kind-v'),
-        document.getElementById('kind-va'),
-        document.getElementById('kind-vm'),
       ],
       dst: [
         document.getElementById('kind-tv'),

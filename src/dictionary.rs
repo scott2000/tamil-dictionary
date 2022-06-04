@@ -179,11 +179,7 @@ pub enum RawEntryKind {
     #[serde(rename = "vm")]
     VinaiMutru,
     #[serde(rename = "tv")]
-    ThunaiVinaiChol,
-    #[serde(rename = "tva")]
-    ThunaiVinaiAdai,
-    #[serde(rename = "tvm")]
-    ThunaiVinaiMutru,
+    ThunaiVinai,
     #[serde(rename = "p")]
     PeyarChol,
     #[serde(rename = "pa")]
@@ -211,9 +207,7 @@ impl RawEntryKind {
             VinaiChol => "வி.",
             VinaiAdai => "வி.அ.",
             VinaiMutru => "வி.மு.",
-            ThunaiVinaiChol => "து.வி.",
-            ThunaiVinaiAdai => "து.வி.அ.",
-            ThunaiVinaiMutru => "து.வி.மு.",
+            ThunaiVinai => "து.வி.",
             PeyarChol => "பெ.",
             PeyarAdai => "பெ.அ.",
             SuttuPeyarChol => "சு.பெ.",
@@ -458,9 +452,7 @@ impl From<RawEntryKind> for KindSet {
             RawEntryKind::VinaiChol => Self(VinaiChol as u32),
             RawEntryKind::VinaiAdai => Self(VinaiAdai as u32),
             RawEntryKind::VinaiMutru => Self(VinaiMutru as u32),
-            RawEntryKind::ThunaiVinaiChol => Self(ThunaiVinai as u32 | VinaiChol as u32),
-            RawEntryKind::ThunaiVinaiAdai => Self(ThunaiVinai as u32 | VinaiAdai as u32),
-            RawEntryKind::ThunaiVinaiMutru => Self(ThunaiVinai as u32 | VinaiMutru as u32),
+            RawEntryKind::ThunaiVinai => Self(ThunaiVinai as u32 | VinaiChol as u32),
             RawEntryKind::PeyarChol => Self(PeyarChol as u32),
             RawEntryKind::PeyarAdai => Self(PeyarAdai as u32),
             RawEntryKind::SuttuPeyarChol => Self(SuttuPeyar as u32 | PeyarChol as u32),
