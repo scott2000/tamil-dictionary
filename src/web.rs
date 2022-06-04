@@ -459,9 +459,10 @@ impl From<usize> for NumWithPlural {
 
 fn looks_english(s: &str) -> bool {
     lazy_static! {
-        static ref ENGLISH_REGEX: Regex =
-            Regex::new(r#"[kgcstdpbw][lrwsy]|s[ckmnpsty]|[fqx]|[kghcjstdpb]$|ng$|[aeiou].e$"#)
-                .unwrap();
+        static ref ENGLISH_REGEX: Regex = Regex::new(
+            r#"^[td]r|[kgcspbw][lrwsy]|[td][lwsy]|s[ckmnpsty]|[fqx]|[kghcjstdpb]$|ng$|[aeiou].e$"#
+        )
+        .unwrap();
     }
 
     ENGLISH_REGEX.is_match(s)
