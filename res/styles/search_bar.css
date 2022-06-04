@@ -5,7 +5,7 @@
     vertical-align: middle;
 }
 
-#search-bar {
+.search-bar {
     display: flex;
     position: relative;
 }
@@ -24,13 +24,13 @@
     font-size: 16px;
 }
 
-#search-field {
+.search-field {
     flex-grow: 1;
     margin-right: 6px;
     background-color: inherit;
 }
 
-#search-field:focus {
+.search-field:focus {
     box-shadow: 0 0 0 3px var(--highlight-color);
     outline: none;
     color: inherit;
@@ -50,6 +50,12 @@
 #search-button:active {
     background-color: var(--button-active);
     color: inherit;
+}
+
+.search-toggle {
+    font-size: 10pt;
+    text-align: left;
+    margin: 10px 0 5px 0;
 }
 
 #autocomplete {

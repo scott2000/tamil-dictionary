@@ -209,20 +209,20 @@ impl RawEntryKind {
         use RawEntryKind::*;
         match self {
             VinaiChol => "வி.",
-            VinaiAdai => "வி. அ.",
-            VinaiMutru => "வி. மு.",
-            ThunaiVinaiChol => "து. வி.",
-            ThunaiVinaiAdai => "து. வி. அ.",
-            ThunaiVinaiMutru => "து. வி. மு.",
+            VinaiAdai => "வி.அ.",
+            VinaiMutru => "வி.மு.",
+            ThunaiVinaiChol => "து.வி.",
+            ThunaiVinaiAdai => "து.வி.அ.",
+            ThunaiVinaiMutru => "து.வி.மு.",
             PeyarChol => "பெ.",
-            PeyarAdai => "பெ. அ.",
-            SuttuPeyarChol => "சு. பெ.",
-            SuttuPeyarAdai => "சு. பெ. அ.",
+            PeyarAdai => "பெ.அ.",
+            SuttuPeyarChol => "சு.பெ.",
+            SuttuPeyarAdai => "சு.பெ.அ.",
             VinaaPeyarChol => "வினா பெ.",
-            VinaaPeyarAdai => "வினா பெ. அ.",
-            IdaiChol => "இ. சொ.",
-            InaiIdaiChol => "இணை இ. சொ.",
-            ViliIdaiChol => "விளி இ. சொ.",
+            VinaaPeyarAdai => "வினா பெ.அ.",
+            IdaiChol => "இ.சொ.",
+            InaiIdaiChol => "இணை இ.சொ.",
+            ViliIdaiChol => "விளி இ.சொ.",
         }
     }
 }

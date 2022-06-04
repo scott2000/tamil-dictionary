@@ -92,34 +92,55 @@ pub enum SearchKind {
 
 #[derive(Debug)]
 pub struct Query {
-    word_patterns: Vec<Pattern>,
-    definition_patterns: Vec<Pattern>,
-    negative_word_patterns: Vec<Pattern>,
-    negative_definition_patterns: Vec<Pattern>,
+    pos_word: Vec<Pattern>,
+    neg_word: Vec<Pattern>,
+    pos_def: Vec<Pattern>,
+    neg_def: Vec<Pattern>,
+    kinds: KindSet,
 }
 
 impl Query {
-    pub fn parse(s: &str) -> Result<Query, ParseError> {
+    pub fn parse(word: &str, def: &str, kinds: KindSet) -> Result<Query, ParseError> {
         // Make sure the query doesn't exceed the length limit
-        if s.len() > MAX_LEN {
+        if word.len() + def.len() > MAX_LEN {
             return Err(ParseError::LengthExceeded);
         }
 
-        let mut chars = s.chars().peekable();
         let mut query = Self {
-            word_patterns: Vec::new(),
-            definition_patterns: Vec::new(),
-            negative_word_patterns: Vec::new(),
-            negative_definition_patterns: Vec::new(),
+            pos_word: Vec::new(),
+            neg_word: Vec::new(),
+            pos_def: Vec::new(),
+            neg_def: Vec::new(),
+            kinds,
         };
 
-        // Default to parsing word patterns
-        let mut positives = &mut query.word_patterns;
-        let mut negatives = &mut query.negative_word_patterns;
+        Self::parse_into(word, &mut query.pos_word, &mut query.neg_word)?;
+        Self::parse_into(def, &mut query.pos_def, &mut query.neg_def)?;
+
+        let pos_empty = query.pos_word.is_empty() && query.pos_def.is_empty();
+        let neg_empty = query.neg_word.is_empty() && query.neg_def.is_empty();
+
+        match (pos_empty, neg_empty, kinds.is_empty()) {
+            (true, true, true) => {
+                return Err(ParseError::EmptyQuery);
+            }
+            (true, false, true) => {
+                return Err(ParseError::OnlyNegativeWord);
+            }
+            _ => {}
+        }
+
+        Ok(query)
+    }
+
+    fn parse_into(
+        s: &str,
+        pos: &mut Vec<Pattern>,
+        neg: &mut Vec<Pattern>,
+    ) -> Result<(), ParseError> {
+        let mut chars = s.chars().peekable();
 
         // Parse all of the patterns of the query
-        let mut positive_empty = true;
-        let mut negative_empty = true;
         loop {
             // Check for negative patterns
             let mut negative = false;
@@ -144,42 +165,20 @@ impl Query {
                 }
                 mut pat => {
                     if quoted {
-                        // Replace "X" with #(<X>)
-                        pat = Pattern::Exact(Box::new(Pattern::Concat(
-                            Box::new(Pattern::AssertStart),
-                            Box::new(Pattern::Concat(Box::new(pat), Box::new(Pattern::AssertEnd))),
-                        )));
+                        pat = pat.quoted();
                     }
 
                     if negative {
-                        negative_empty = false;
-                        negatives.push(pat);
+                        neg.push(pat);
                     } else {
-                        positive_empty = false;
-                        positives.push(pat);
+                        pos.push(pat);
                     }
                 }
             }
 
             // Check for closing quotes if there were opening quotes
             if quoted {
-                match chars.peek() {
-                    None => {
-                        return Err(ParseError::Missing(SurroundKind::Quote));
-                    }
-                    Some('"') => {
-                        chars.next();
-                    }
-                    Some(' ') => {
-                        return Err(ParseError::SpaceInQuotes);
-                    }
-                    Some('|') => {
-                        return Err(ParseError::SurroundWithParens);
-                    }
-                    Some(&found) => {
-                        return Err(Self::expected_character(SurroundKind::Quote, found));
-                    }
-                }
+                Self::expect_quote(&mut chars)?;
             }
 
             // Check for invalid trailing characters
@@ -187,12 +186,6 @@ impl Query {
                 None => break,
                 Some(' ') => {
                     chars.next();
-                }
-                Some(':') => {
-                    // Switch to parsing definition patterns
-                    chars.next();
-                    positives = &mut query.definition_patterns;
-                    negatives = &mut query.negative_definition_patterns;
                 }
                 Some('|') => {
                     return Err(ParseError::SurroundWithParens);
@@ -218,50 +211,45 @@ impl Query {
             }
         }
 
-        match (positive_empty, negative_empty) {
-            (true, true) => {
-                return Err(ParseError::EmptyQuery);
-            }
-            (true, false) => {
-                // Don't allow negative word patterns by themselves
-                if query.negative_definition_patterns.is_empty() {
-                    return Err(ParseError::OnlyNegativeWord);
-                }
-
-                // If only negative, push a pattern which will match anything
-                query.word_patterns.push(Pattern::Concat(
-                    Box::new(Pattern::AssertStart),
-                    Box::new(Pattern::Set(LetterSet::any())),
-                ));
-            }
-            _ => {}
-        }
-
-        Ok(query)
+        Ok(())
     }
 
-    pub fn search(&self, kinds: KindSet) -> Result<(SearchResult, SearchKind), tree::SearchError> {
+    fn expect_quote(chars: &mut Chars) -> Result<(), ParseError> {
+        match chars.peek() {
+            Some('"') => {
+                chars.next();
+                Ok(())
+            }
+
+            None => Err(ParseError::Missing(SurroundKind::Quote)),
+            Some(' ') => Err(ParseError::SpaceInQuotes),
+            Some('|') => Err(ParseError::SurroundWithParens),
+            Some(&found) => Err(Self::expected_character(SurroundKind::Quote, found)),
+        }
+    }
+
+    pub fn search(&self) -> Result<(SearchResult, SearchKind), tree::SearchError> {
         let mut intersect = Vec::new();
         let mut difference = Vec::new();
 
         // Search using positive word patterns
-        for pat in &self.word_patterns {
+        for pat in &self.pos_word {
             intersect.push(pat.search(tree::search_word(), true, true)?.end()?);
         }
 
         // Search using positive definition patterns
-        for pat in &self.definition_patterns {
+        for pat in &self.pos_def {
             intersect.push(pat.search(tree::search_definition(), true, false)?.end()?);
         }
 
         let mut process_negatives = || {
             // Search using negative word patterns
-            for pat in &self.negative_word_patterns {
+            for pat in &self.neg_word {
                 difference.push(pat.search(tree::search_word(), false, true)?.end()?);
             }
 
             // Search using negative definition patterns
-            for pat in &self.negative_definition_patterns {
+            for pat in &self.neg_def {
                 difference.push(pat.search(tree::search_definition(), false, false)?.end()?);
             }
 
@@ -273,24 +261,21 @@ impl Query {
             return Err(tree::SearchError::CommonExclusion);
         }
 
-        let result = SearchResult::filter(intersect, difference, kinds);
+        let result = SearchResult::filter(intersect, difference, self.kinds);
 
         // If there are no results, try again as a definition
-        if result.is_empty()
-            && self.definition_patterns.is_empty()
-            && self.negative_definition_patterns.is_empty()
-        {
+        if result.is_empty() && self.pos_def.is_empty() && self.neg_def.is_empty() {
             let mut intersect = Vec::new();
             let mut difference = Vec::new();
 
             let mut process_definitions = || -> Result<(), tree::SearchError> {
                 // Search using positive word patterns as definition patterns
-                for pat in &self.word_patterns {
+                for pat in &self.pos_word {
                     intersect.push(pat.search(tree::search_definition(), true, false)?.end()?);
                 }
 
                 // Search using negative words patterns as definition patterns
-                for pat in &self.negative_word_patterns {
+                for pat in &self.neg_word {
                     difference.push(pat.search(tree::search_definition(), false, false)?.end()?);
                 }
 
@@ -299,7 +284,7 @@ impl Query {
 
             // If successful, return the definition search instead
             if process_definitions().is_ok() {
-                let result = SearchResult::filter(intersect, difference, kinds);
+                let result = SearchResult::filter(intersect, difference, self.kinds);
                 return Ok((result, SearchKind::DefSearch));
             }
         }
@@ -308,23 +293,23 @@ impl Query {
     }
 
     pub fn into_pattern(self) -> Option<Pattern> {
-        if self.word_patterns.len() == 1
-            && self.negative_word_patterns.is_empty()
-            && self.definition_patterns.is_empty()
-            && self.negative_definition_patterns.is_empty()
+        if self.pos_word.len() == 1
+            && self.neg_word.is_empty()
+            && self.pos_def.is_empty()
+            && self.neg_def.is_empty()
         {
-            self.word_patterns.into_iter().next()
+            self.pos_word.into_iter().next()
         } else {
             None
         }
     }
 
     pub fn implicit_transliteration(&self) -> bool {
-        if !self.definition_patterns.is_empty() || !self.negative_definition_patterns.is_empty() {
+        if !self.pos_def.is_empty() || !self.neg_def.is_empty() {
             return false;
         }
 
-        self.word_patterns
+        self.pos_word
             .iter()
             .any(|pat| pat.implicit_transliteration())
     }
@@ -398,10 +383,19 @@ pub enum Pattern {
 impl Pattern {
     pub fn parse(s: &str) -> Result<Self, ParseError> {
         if s.len() > MAX_LEN {
-            Err(ParseError::LengthExceeded)
-        } else {
-            let mut chars = s.chars().peekable();
-            Self::parse_term(&mut chars, false)
+            return Err(ParseError::LengthExceeded);
+        }
+
+        let mut chars = s.chars().peekable();
+        let pat = Self::parse_term(&mut chars, true)?;
+        match chars.next() {
+            None => Ok(pat),
+            Some('|') => Err(ParseError::SurroundWithParens),
+            Some('"') => Err(ParseError::Extra(SurroundKind::Quote)),
+            Some(']') => Err(ParseError::Extra(SurroundKind::Bracket)),
+            Some(')') => Err(ParseError::Extra(SurroundKind::Paren)),
+            Some('}') => Err(ParseError::Extra(SurroundKind::Brace)),
+            Some(ch) => Err(Query::invalid_character(ch, ParseError::InvalidCharacter)),
         }
     }
 
@@ -481,6 +475,17 @@ impl Pattern {
 
             _ => false,
         }
+    }
+
+    pub fn quoted(self) -> Self {
+        // Replace "X" with #(<X>)
+        Pattern::Exact(Box::new(Pattern::Concat(
+            Box::new(Pattern::AssertStart),
+            Box::new(Pattern::Concat(
+                Box::new(self),
+                Box::new(Pattern::AssertEnd),
+            )),
+        )))
     }
 
     fn parse_group(chars: &mut Chars) -> Result<Self, ParseError> {

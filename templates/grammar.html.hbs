@@ -31,12 +31,8 @@ search with transliteration using Latin letters (a-z). In definition searches,
 this is disabled by default. Use '%(...)' to enable transliteration.
 
 
-query = patterns? definition*       // Full search query
-
-definition = ':' patterns?          // Definition search
-
-patterns = pattern                  // Single pattern
-         | pattern ' ' patterns     // Patterns separated by spaces
+query = pattern                     // Single pattern
+      | pattern ' ' query           // Patterns separated by spaces
 
 pattern = quote                     // Require in search
         | '-' quote                 // Exclude from search

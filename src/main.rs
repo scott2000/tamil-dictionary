@@ -83,6 +83,7 @@ async fn rocket() -> _ {
             "/",
             routes![
                 web::index,
+                web::advanced,
                 web::grammar,
                 web::random,
                 web::search_all,

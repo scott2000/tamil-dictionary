@@ -242,9 +242,7 @@ impl Search for TreeSearch {
         let mut result = SearchResult::default();
         let mut total_count = 0;
         for branch in self.branches {
-            if branch.prev_letter.is_some() {
-                branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
-            }
+            branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
         }
 
         Ok(result)

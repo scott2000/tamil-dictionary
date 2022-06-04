@@ -6,6 +6,8 @@ use serde::Serialize;
 
 use rand::seq::SliceRandom;
 
+use regex::Regex;
+
 use rocket::http::uri;
 use rocket::http::Status;
 use rocket::response::Redirect;
@@ -139,12 +141,31 @@ pub fn current_example() -> &'static Example {
 #[derive(Serialize, Debug)]
 struct IndexTemplate {
     example: &'static Example,
+    advanced: bool,
 }
 
 #[get("/")]
 pub fn index() -> Template {
     let example = current_example();
-    render_template("index", IndexTemplate { example })
+    render_template(
+        "index",
+        IndexTemplate {
+            example,
+            advanced: false,
+        },
+    )
+}
+
+#[get("/advanced")]
+pub fn advanced() -> Template {
+    let example = current_example();
+    render_template(
+        "index",
+        IndexTemplate {
+            example,
+            advanced: true,
+        },
+    )
 }
 
 #[get("/grammar")]
@@ -168,10 +189,10 @@ pub struct QueryKindSet {
 
 impl uri::fmt::Ignorable<uri::fmt::Query> for QueryKindSet {}
 
-impl<'a> From<&'a QueryKindSet> for KindSet {
+impl QueryKindSet {
     #[rustfmt::skip]
-    fn from(kinds: &'a QueryKindSet) -> Self {
-        let &QueryKindSet { v, va, vm, tv, p, pa, sp, vp, i, ii } = kinds;
+    pub fn to_kind_set(&self) -> KindSet {
+        let &QueryKindSet { v, va, vm, tv, p, pa, sp, vp, i, ii } = self;
 
         [v, va, vm, tv, p, pa, sp, vp, i, ii]
             .into_iter()
@@ -193,7 +214,7 @@ fn link(word: &str) -> String {
 }
 
 fn link_no_escape(escaped: &str) -> String {
-    uri!(search(escaped, _)).to_string()
+    uri!(search(escaped, _, _)).to_string()
 }
 
 #[derive(Debug)]
@@ -436,11 +457,25 @@ impl From<usize> for NumWithPlural {
     }
 }
 
+fn looks_english(s: &str) -> bool {
+    lazy_static! {
+        static ref ENGLISH_REGEX: Regex =
+            Regex::new(r#"[kgcstdpbw][lrwsy]|s[ckmnpsty]|[fqx]|[kghcjstdpb]$|ng$|[aeiou].e$"#)
+                .unwrap();
+    }
+
+    ENGLISH_REGEX.is_match(s)
+}
+
 #[derive(Serialize, Debug)]
-struct SearchTemplate {
-    query: String,
-    kinds: QueryKindSet,
+struct SearchTemplate<'a> {
+    query: &'a str,
+    definition: &'a str,
     other_uri: String,
+    kinds: QueryKindSet,
+    #[serde(skip)]
+    kind_set: KindSet,
+    advanced: bool,
     hide_other: bool,
     error: bool,
     def_uri: Option<String>,
@@ -453,19 +488,28 @@ struct SearchTemplate {
     other_count: NumWithPlural,
 }
 
-impl SearchTemplate {
-    fn new(query: &str, kinds: QueryKindSet, all: bool) -> Self {
+impl<'a> SearchTemplate<'a> {
+    fn new(query: &'a str, definition: &'a str, kinds: QueryKindSet, all: bool) -> Self {
         let query = query.trim();
+        let definition = definition.trim();
         let other_uri = if all {
             String::new()
+        } else if definition.is_empty() {
+            uri!(search_all(query, _, &kinds)).to_string()
         } else {
-            uri!(search_all(query, &kinds)).to_string()
+            uri!(search_all(query, Some(definition), &kinds)).to_string()
         };
 
+        let kind_set = kinds.to_kind_set();
+        let advanced = !definition.is_empty() || !kind_set.is_empty();
+
         Self {
-            query: String::from(query),
-            kinds,
+            query,
+            definition,
             other_uri,
+            kinds,
+            kind_set,
+            advanced,
             hide_other: !all,
             error: false,
             def_uri: None,
@@ -477,6 +521,10 @@ impl SearchTemplate {
             related_count: 0.into(),
             other_count: 0.into(),
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.query.is_empty() && self.definition.is_empty() && self.kind_set.is_empty()
     }
 
     fn error(&mut self, err: impl ToString) {
@@ -491,7 +539,7 @@ impl SearchTemplate {
     }
 
     fn search(&mut self, query: Query) {
-        match query.search((&self.kinds).into()) {
+        match query.search() {
             Err(err) => self.error(err),
             Ok((result, kind)) => {
                 // Convert the search results to a ranked page
@@ -520,11 +568,12 @@ impl SearchTemplate {
                     match kind {
                         SearchKind::AsSpecified => {
                             // Check for unwanted implicit transliteration
-                            if !ranking.good_search && query.implicit_transliteration() {
-                                self.def_uri = Some(
-                                    uri!(search(format!(":{}", self.query), &self.kinds))
-                                        .to_string(),
-                                );
+                            if !self.advanced
+                                && (!ranking.good_search || looks_english(self.query))
+                                && query.implicit_transliteration()
+                            {
+                                let d = Some(format!("{} {}", self.query, self.definition));
+                                self.def_uri = Some(uri!(search("", d, _)).to_string());
                             }
                         }
 
@@ -553,19 +602,19 @@ impl SearchTemplate {
 }
 
 #[get("/random")]
-pub fn random() -> Template {
+pub fn random() -> Result<Template, Redirect> {
     let word = Query::escape(Entry::random().primary_word());
-    search_query(&word, QueryKindSet::default(), false)
+    search_query(&word, "", QueryKindSet::default(), false)
 }
 
-#[get("/search?all&<q>&<k..>")]
-pub fn search_all(q: &str, k: QueryKindSet) -> Template {
-    search_query(q, k, true)
+#[get("/search?all&<q>&<d>&<k..>")]
+pub fn search_all(q: &str, d: Option<&str>, k: QueryKindSet) -> Result<Template, Redirect> {
+    search_query(q, d.unwrap_or(""), k, true)
 }
 
-#[get("/search?<q>&<k..>")]
-pub fn search(q: &str, k: QueryKindSet) -> Template {
-    search_query(q, k, false)
+#[get("/search?<q>&<d>&<k..>")]
+pub fn search(q: &str, d: Option<&str>, k: QueryKindSet) -> Result<Template, Redirect> {
+    search_query(q, d.unwrap_or(""), k, false)
 }
 
 #[get("/search")]
@@ -573,16 +622,20 @@ pub fn search_no_query() -> Redirect {
     Redirect::to(uri!(index()))
 }
 
-fn search_query(q: &str, k: QueryKindSet, all: bool) -> Template {
+fn search_query(q: &str, d: &str, k: QueryKindSet, all: bool) -> Result<Template, Redirect> {
     SEARCH_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    let mut search = SearchTemplate::new(q, k, all);
-    match Query::parse(&search.query) {
+    let mut search = SearchTemplate::new(q, d, k, all);
+    if search.is_empty() {
+        return Err(Redirect::to(uri!(index())));
+    }
+
+    match Query::parse(search.query, search.definition, search.kind_set) {
         Err(err) => search.error(err),
         Ok(query) => search.search(query),
     }
 
-    render_template("search", search)
+    Ok(render_template("search", search))
 }
 
 #[derive(Serialize)]
@@ -621,43 +674,41 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
     }
 
     // Parse the query into a single pattern
-    if let Ok(parsed_query) = Query::parse(&query) {
-        if let Some(mut pat) = parsed_query.into_pattern() {
-            let mut count = n.min(100);
+    if let Ok(mut pat) = Pattern::parse(&query) {
+        let mut count = n.min(100);
 
-            // If there is implicit transliteration, reserve a row for definition search
-            let add_definition = count > 3 && pat.implicit_transliteration();
+        // If there is implicit transliteration, reserve a row for definition search
+        let add_definition = count > 3 && pat.implicit_transliteration();
+        if add_definition {
+            count -= 1;
+        }
+
+        // Make the pattern more general if there was a trailing "a"
+        if append_a {
+            pat = Pattern::Concat(
+                Box::new(pat),
+                Box::new(Pattern::Alternative(
+                    Box::new(Pattern::Assert(LetterSet::vowel())),
+                    Box::new(Pattern::MarkExpanded),
+                )),
+            );
+        }
+
+        if let Some(list) = pat.suggest(count) {
+            let mut suggestions: Vec<_> =
+                list.suggestions().map(SuggestResponseEntry::from).collect();
+
+            // Use ":" to indicate this last row should be used for definition search
             if add_definition {
-                count -= 1;
+                let d = Some(q);
+                suggestions.push(SuggestResponseEntry {
+                    word: ":",
+                    uri: uri!(search("", d, _)).to_string(),
+                    completion: String::from(q),
+                });
             }
 
-            // Make the pattern more general if there was a trailing "a"
-            if append_a {
-                pat = Pattern::Concat(
-                    Box::new(pat),
-                    Box::new(Pattern::Alternative(
-                        Box::new(Pattern::Assert(LetterSet::vowel())),
-                        Box::new(Pattern::MarkExpanded),
-                    )),
-                );
-            }
-
-            if let Some(list) = pat.suggest(count) {
-                let mut suggestions: Vec<_> =
-                    list.suggestions().map(SuggestResponseEntry::from).collect();
-
-                // Use ":" to indicate this last row should be used for definition search
-                if add_definition {
-                    let completion = format!(":{}", q);
-                    suggestions.push(SuggestResponseEntry {
-                        word: ":",
-                        uri: uri!(search(&completion, _)).to_string(),
-                        completion,
-                    });
-                }
-
-                return Json(suggestions);
-            }
+            return Json(suggestions);
         }
     }
 

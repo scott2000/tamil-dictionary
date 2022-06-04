@@ -274,18 +274,13 @@ impl SearchResult {
     }
 
     pub fn filter(intersect: Vec<Self>, difference: Vec<Self>, kinds: KindSet) -> Self {
-        assert!(!intersect.is_empty());
-
         // If the search is exactly one result with no filters, return it
         if intersect.len() == 1 && difference.is_empty() && kinds.is_empty() {
             return intersect.into_iter().next().unwrap();
         }
 
-        // Find the intersection of the positive results
-        let mut intersect_set = intersect[0].map.keys().cloned().collect();
-        for intersect in &intersect[1..] {
-            intersect.entry_intersection(&mut intersect_set);
-        }
+        // Convert an empty set of kinds to match anything
+        let kinds = kinds.to_non_empty();
 
         // Find the union of the negative results
         let difference_set: HashSet<_> = difference
@@ -293,8 +288,16 @@ impl SearchResult {
             .flat_map(|result| result.map.into_keys())
             .collect();
 
-        // Convert an empty set of kinds to match anything
-        let kinds = kinds.to_non_empty();
+        // If the intersection is empty, use entries directly
+        if intersect.is_empty() {
+            return Self::filter_all(difference_set, kinds);
+        }
+
+        // Find the intersection of the positive results
+        let mut intersect_set = intersect[0].map.keys().cloned().collect();
+        for intersect in &intersect[1..] {
+            intersect.entry_intersection(&mut intersect_set);
+        }
 
         // Get a direct slice for the entries array
         let entries: &[Entry] = &ENTRIES;
@@ -320,6 +323,28 @@ impl SearchResult {
         }
 
         intersect_difference
+    }
+
+    fn filter_all(difference_set: HashSet<EntryIndex>, kinds: KindSet) -> Self {
+        // Similar logic to filter(), but with full set of entries
+        let mut result = Self::default();
+        for (i, entry) in ENTRIES.iter().enumerate() {
+            let index = i as EntryIndex;
+
+            if difference_set.contains(&index) {
+                continue;
+            }
+
+            if !entry.kind_set.matches_any(kinds) {
+                continue;
+            }
+
+            let word = WordData::new(NO_WORD, false);
+            let entry = SearchResultEntry::new(word, true, false, false);
+            result.insert_entry(index, entry, true);
+        }
+
+        result
     }
 
     pub fn rank(self) -> SearchRanking {

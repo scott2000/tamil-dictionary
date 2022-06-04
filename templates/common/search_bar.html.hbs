@@ -1,26 +1,43 @@
 <div id="search-box">
     <form autocomplete="off" method="get" action="/search">
-        <div id="search-bar">
-            <input type="text" id="search-field" class="search-input" name="q"
+        <label class="search-adv" for="search-word"
+            {{~#unless advanced}} style="display:none;" {{~/unless~}}>
+            Word Contains:
+        </label>
+        <div class="search-bar">
+            <input type="text" id="search-word" class="search-field search-input" name="q"
                    size="10" title="Type search query" value="{{query}}">
             <input type="submit" id="search-button" class="search-input" value="Search">
             <div id="autocomplete" style="display:none;"></div>
         </div>
-        <div id="search-adv">
-            <p>Filter by Part of Speech:</p>
-            <div id="search-kinds">
-            {{> common/checkbox key="v"  name="Verb"}}
-            {{> common/checkbox key="tv" name="Auxiliary Verb"}}
-            {{> common/checkbox key="p"  name="Noun"}}
-            {{> common/checkbox key="sp" name="Pronoun"}}
-            {{> common/checkbox key="i"  name="Particle"}}
-
-            {{> common/checkbox key="va" name="Adverb"}}
-            {{> common/checkbox key="vm" name="Finite Verb"}}
-            {{> common/checkbox key="pa" name="Adjective"}}
-            {{> common/checkbox key="vp" name="Question Word"}}
-            {{> common/checkbox key="ii" name="Conjunction"}}
+        <p id="search-simpl" class="search-toggle"
+            {{~#if advanced}} style="display:none;" {{~/if~}}>
+            <a id="search-adv-link" href="/advanced">Advanced Search</a>
+        </p>
+        <div class="search-adv"
+            {{~#unless advanced}} style="display:none;" {{~/unless~}}>
+            <br>
+            <label for="search-def">Definition Contains:</label>
+            <div class="search-bar">
+                <input type="text" id="search-def" class="search-field search-input" name="d"
+                       title="Filter by definition" value="{{definition}}"
+                       {{~#unless advanced}} disabled {{~/unless~}}>
             </div>
+            <br>
+            <div id="search-kinds">
+            {{> common/checkbox key="v"  name="வினைச்சொல்"}}
+            {{> common/checkbox key="tv" name="துணைவினை"}}
+            {{> common/checkbox key="p"  name="பெயர்ச்சொல்"}}
+            {{> common/checkbox key="sp" name="சுட்டுப்பெயர்"}}
+            {{> common/checkbox key="i"  name="இடைச்சொல்"}}
+
+            {{> common/checkbox key="va" name="வினையடை"}}
+            {{> common/checkbox key="vm" name="வினைமுற்று"}}
+            {{> common/checkbox key="pa" name="பெயரடை"}}
+            {{> common/checkbox key="vp" name="வினாப்பெயர்"}}
+            {{> common/checkbox key="ii" name="இணையிடை"}}
+            </div>
+            <p class="search-toggle"><a id="search-clear-link" href="#">Basic Search</a></p>
         </div>
     </form>
 </div>

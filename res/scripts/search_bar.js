@@ -4,7 +4,7 @@ window.addEventListener('load', function() {
   const delay = 300;
   const count = 6;
 
-  const searchField = document.getElementById('search-field');
+  const searchWord = document.getElementById('search-word');
   const autocomplete = document.getElementById('autocomplete');
   const cache = new Map();
 
@@ -18,8 +18,19 @@ window.addEventListener('load', function() {
   var originalValue = null;
   var selected = null;
 
+  const searchSimple = document.getElementById('search-simpl');
+  const searchAdvanced = document.getElementsByClassName('search-adv');
+
+  var advanced = searchSimple.style.display === 'none';
+
+  const searchAdvLink = document.getElementById('search-adv-link');
+  const searchClearLink = document.getElementById('search-clear-link');
+
+  const searchDefinition = document.getElementById('search-def');
+  const searchKinds = document.getElementsByClassName('search-kind');
+
   function display() {
-    if (focused && results.length) {
+    if (focused && results.length && !advanced) {
       autocomplete.style.display = 'block';
     } else {
       autocomplete.style.display = 'none';
@@ -34,7 +45,7 @@ window.addEventListener('load', function() {
     if (selected !== null) {
       results[selected].row.classList.remove('suggestion-selected');
     } else {
-      originalValue = searchField.value;
+      originalValue = searchWord.value;
     }
 
     selected = index;
@@ -42,9 +53,9 @@ window.addEventListener('load', function() {
     if (selected !== null) {
       const result = results[selected];
       result.row.classList.add('suggestion-selected');
-      searchField.value = result.completion;
+      searchWord.value = result.completion;
     } else if (originalValue !== null) {
-      searchField.value = originalValue;
+      searchWord.value = originalValue;
     }
   }
 
@@ -85,11 +96,7 @@ window.addEventListener('load', function() {
   }
 
   function isInvalidRequest(query) {
-    if (query[0] === ':') {
-      return true;
-    }
-
-    return query.indexOf(' ') != -1 && query.search(/[\[\](){}]/) == -1;
+    return query.indexOf('"') != -1;
   }
 
   function startRequest(query) {
@@ -155,6 +162,10 @@ window.addEventListener('load', function() {
   }
 
   function setQuery(query, noDelay) {
+    if (advanced) {
+      return;
+    }
+
     query = query.trim();
 
     if (query === currentQuery) {
@@ -180,11 +191,41 @@ window.addEventListener('load', function() {
     }, delay);
   }
 
-  function refreshQuery() {
-    setQuery(searchField.value, false);
+  function showAdvanced() {
+    if (advanced) {
+      return;
+    }
+
+    advanced = true;
+    cancelQuery();
+
+    searchSimple.style.display = 'none';
+    for (const elem of searchAdvanced) {
+      elem.style.display = 'block';
+    }
+    searchDefinition.disabled = false;
   }
 
-  searchField.onfocus = function() {
+  function canTrapColon(query) {
+    return query.search(/[{}]/) == -1;
+  }
+
+  function refreshQuery() {
+    const query = searchWord.value;
+
+    if (query.charAt(query.length - 1) == ':') {
+      if (canTrapColon(query)) {
+        showAdvanced();
+        searchDefinition.focus();
+        searchWord.value = query.slice(0, query.length - 1);
+        return;
+      }
+    }
+
+    setQuery(query, false);
+  }
+
+  searchWord.onfocus = function() {
     focused = true;
     if (currentQuery === null) {
       refreshQuery();
@@ -193,18 +234,18 @@ window.addEventListener('load', function() {
     }
   };
 
-  searchField.onblur = function() {
+  searchWord.onblur = function() {
     focused = false;
     display();
   };
 
-  searchField.oninput = refreshQuery;
+  searchWord.oninput = refreshQuery;
 
-  searchField.addEventListener('compositionupdate', function(event) {
+  searchWord.addEventListener('compositionupdate', function(event) {
     composing = true;
   });
 
-  searchField.addEventListener('compositionend', function(event) {
+  searchWord.addEventListener('compositionend', function(event) {
     setTimeout(function() {
       composing = false;
     }, 0);
@@ -242,14 +283,25 @@ window.addEventListener('load', function() {
     }
 
     const completion = results[selected].completion;
-    searchField.value = completion;
+    searchWord.value = completion;
     setQuery(completion, true);
 
     return true;
   }
 
-  searchField.addEventListener('keydown', function(event) {
-    if (composing || !results.length) {
+  searchWord.addEventListener('keydown', function(event) {
+    if (composing || advanced) {
+      return;
+    }
+
+    if (event.key == ':' && canTrapColon(searchWord.value)) {
+      event.preventDefault();
+      showAdvanced();
+      searchDefinition.focus();
+      return;
+    }
+
+    if (!results.length) {
       return;
     }
 
@@ -289,20 +341,45 @@ window.addEventListener('load', function() {
 
   window.addEventListener('keydown', function(event) {
     if (!focused && event.code === 'Slash') {
-      searchField.focus();
-      searchField.select();
-      searchField.scrollIntoView(false);
+      searchWord.focus();
+      searchWord.select();
+      searchWord.scrollIntoView(false);
       event.preventDefault();
       event.stopPropagation();
     }
   });
 
   window.addEventListener('unload', function() {
-    searchField.value = '';
+    searchWord.value = '';
     setQuery('');
   });
 
-  if (document.activeElement == searchField) {
+  searchAdvLink.onclick = function() {
+    showAdvanced();
+
+    return false;
+  };
+
+  searchClearLink.onclick = function() {
+    searchSimple.style.display = 'block';
+    for (const elem of searchAdvanced) {
+      elem.style.display = 'none';
+    }
+
+    searchDefinition.value = "";
+    searchDefinition.disabled = true;
+    for (const elem of searchKinds) {
+      elem.checked = false;
+      elem.disabled = false;
+    }
+
+    advanced = false;
+    refreshQuery();
+
+    return false;
+  };
+
+  if (document.activeElement == searchWord) {
     focused = true;
     refreshQuery();
   }
