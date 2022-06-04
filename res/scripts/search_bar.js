@@ -379,6 +379,72 @@ window.addEventListener('load', function() {
     return false;
   };
 
+  const checkboxRelations = [
+    {
+      src: [
+        document.getElementById('kind-v'),
+        document.getElementById('kind-va'),
+        document.getElementById('kind-vm'),
+      ],
+      dst: [
+        document.getElementById('kind-tv'),
+      ]
+    },
+    {
+      src: [
+        document.getElementById('kind-p'),
+        document.getElementById('kind-pa'),
+      ],
+      dst: [
+        document.getElementById('kind-sp'),
+        document.getElementById('kind-vp'),
+      ]
+    },
+    {
+      src: [
+        document.getElementById('kind-i'),
+      ],
+      dst: [
+        document.getElementById('kind-ii'),
+      ]
+    },
+  ];
+
+  function checkboxUpdate(relation) {
+    var checked = true;
+    for (const checkbox of relation.src) {
+      if (!checkbox.checked) {
+        checked = false;
+        break;
+      }
+    }
+
+    for (const checkbox of relation.dst) {
+      if (checkbox.disabled == checked) {
+        continue;
+      }
+
+      if (checked) {
+        checkbox.oldState = checkbox.checked;
+        checkbox.checked = true;
+        checkbox.disabled = true;
+      } else {
+        checkbox.disabled = false;
+        checkbox.checked = checkbox.oldState;
+      }
+    }
+  }
+
+  for (const relation of checkboxRelations) {
+    for (const checkbox of relation.src) {
+      checkbox.addEventListener('input', function(event) {
+        checkboxUpdate(relation);
+      });
+    }
+
+    checkboxUpdate(relation);
+  }
+
   if (document.activeElement == searchWord) {
     focused = true;
     refreshQuery();
