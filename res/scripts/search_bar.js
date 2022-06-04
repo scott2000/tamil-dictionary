@@ -72,20 +72,7 @@ window.addEventListener('load', function() {
       row.href = result.uri;
 
       const innerDiv = document.createElement('div');
-
-      if (result.word === ':') {
-        const querySpan = document.createElement('span');
-        querySpan.className = 'suggestion-def-query';
-        querySpan.innerText = result.completion + ' ';
-        innerDiv.appendChild(querySpan);
-
-        const textSpan = document.createElement('span');
-        textSpan.className = 'suggestion-def-text';
-        textSpan.innerText = '(definition search)';
-        innerDiv.appendChild(textSpan);
-      } else {
-        innerDiv.innerText = result.word;
-      }
+      innerDiv.innerText = result.word;
 
       row.appendChild(innerDiv);
       autocomplete.appendChild(row);

@@ -675,13 +675,7 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
 
     // Parse the query into a single pattern
     if let Ok(mut pat) = Pattern::parse(&query) {
-        let mut count = n.min(100);
-
-        // If there is implicit transliteration, reserve a row for definition search
-        let add_definition = count > 3 && pat.implicit_transliteration();
-        if add_definition {
-            count -= 1;
-        }
+        let count = n.min(100);
 
         // Make the pattern more general if there was a trailing "a"
         if append_a {
@@ -695,20 +689,7 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
         }
 
         if let Some(list) = pat.suggest(count) {
-            let mut suggestions: Vec<_> =
-                list.suggestions().map(SuggestResponseEntry::from).collect();
-
-            // Use ":" to indicate this last row should be used for definition search
-            if add_definition {
-                let d = Some(q);
-                suggestions.push(SuggestResponseEntry {
-                    word: ":",
-                    uri: uri!(search("", d, _)).to_string(),
-                    completion: String::from(q),
-                });
-            }
-
-            return Json(suggestions);
+            return Json(list.suggestions().map(SuggestResponseEntry::from).collect());
         }
     }
 

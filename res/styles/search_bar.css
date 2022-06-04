@@ -101,12 +101,3 @@
 .autocomplete-selected > .suggestion:hover > div {
     background-color: var(--overlay-active);
 }
-
-.suggestion-def-query {
-    font-family: 'Mono Specials', sans-serif;
-}
-
-.suggestion-def-text {
-    color: var(--faded-text-color);
-    font-size: 14px;
-}

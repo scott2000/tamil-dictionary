@@ -26,7 +26,6 @@
     --code-border: #d0d0d0;
     --border-color: #a0a0a0;
     --highlight-color: #0030a027;
-    --faded-text-color: #00000060;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,7 +44,6 @@
         --code-border: #404040;
         --border-color: #808080;
         --highlight-color: #b7c0f060;
-        --faded-text-color: #ffffff60;
     }
 }
 
