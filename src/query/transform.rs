@@ -813,9 +813,13 @@ fn transliterate<S: Search>(
                 };
 
                 if start_of_word {
+                    // Also allow any grantha letters as initial
+                    const INITIAL: LetterSet =
+                        LetterSet::tamil_initial().union(LetterSet::grantha());
+
                     // If at the start of the word, allow unlikely valid initial characters
-                    if LetterSet::tamil_initial().intersect(likely).is_empty() {
-                        likely = LetterSet::tamil_initial().intersect(unlikely).union(likely);
+                    if INITIAL.intersect(likely).is_empty() {
+                        likely = INITIAL.intersect(unlikely).union(likely);
                     }
 
                     // If at the start of the word, allow single letters always
