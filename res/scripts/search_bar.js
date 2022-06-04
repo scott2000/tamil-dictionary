@@ -211,13 +211,19 @@ window.addEventListener('load', function() {
   }
 
   function refreshQuery() {
+    if (advanced) {
+      return;
+    }
+
     const query = searchWord.value;
 
     if (query.charAt(query.length - 1) == ':') {
       if (canTrapColon(query)) {
         showAdvanced();
-        searchDefinition.focus();
         searchWord.value = query.slice(0, query.length - 1);
+        setTimeout(function() {
+          searchDefinition.focus();
+        }, 0);
         return;
       }
     }
