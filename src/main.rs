@@ -34,6 +34,7 @@ macro_rules! word {
     }};
 }
 
+pub mod annotate;
 pub mod dictionary;
 pub mod intern;
 pub mod query;

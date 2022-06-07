@@ -118,58 +118,6 @@ struct RawEntry {
     secs: Vec<Vec<Vec<(SegmentKind, String)>>>,
 }
 
-impl RawEntry {
-    fn kind_strs(kind: &[RawEntryKind]) -> Vec<&'static str> {
-        kind.iter().copied().map(RawEntryKind::to_str).collect()
-    }
-
-    fn kind_set(kind: &[RawEntryKind]) -> KindSet {
-        kind.iter()
-            .copied()
-            .map(KindSet::from)
-            .reduce(KindSet::bitor)
-            .unwrap_or(KindSet::empty())
-    }
-
-    fn words(word: &str) -> impl Iterator<Item = &str> {
-        word.split(&[',', ';'][..])
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-    }
-
-    fn parts(word: &str) -> impl Iterator<Item = &str> {
-        word.split(Self::skip_char).filter(|s| !s.is_empty())
-    }
-
-    fn skip_char(ch: char) -> bool {
-        ch.is_ascii() && !ch.is_ascii_alphabetic()
-    }
-
-    fn joined_subwords(word: &str) -> Vec<&'static Word> {
-        // Split the word into parts
-        let mut parts = Self::parts(word);
-
-        // Take the first part as the base word
-        let first = parts.next().expect("word has no parts");
-        let mut parsed = vec![Word::parse_unboxed(first)];
-
-        // Add on all suffixes as necessary
-        for part in parts {
-            let mut result = Vec::new();
-            for word in parsed {
-                result.append(&mut Letter::join(word, &Word::parse(part)));
-            }
-            parsed = result;
-        }
-
-        // Intern the resulting words
-        parsed
-            .into_iter()
-            .map(|word| intern::word(word.into()))
-            .collect()
-    }
-}
-
 #[derive(Deserialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum RawEntryKind {
     #[serde(rename = "v")]
@@ -251,23 +199,71 @@ pub struct Entry {
 }
 
 impl Entry {
+    pub fn words(word: &str) -> impl Iterator<Item = &str> {
+        word.split(&[',', ';'][..])
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
+
+    pub fn joined_subwords(word: &str) -> Vec<Box<Word>> {
+        // Split the word into parts
+        let mut parts = Self::parts(word);
+
+        // Take the first part as the base word
+        let first = parts.next().expect("word has no parts");
+        let mut parsed = vec![Word::parse_unboxed(first)];
+
+        // Add on all suffixes as necessary
+        for part in parts {
+            let mut result = Vec::new();
+            for word in parsed {
+                result.append(&mut Letter::join(word, &Word::parse(part)));
+            }
+            parsed = result;
+        }
+
+        // Intern the resulting words
+        parsed.into_iter().map(|word| word.into()).collect()
+    }
+
     pub fn random() -> &'static Self {
         ENTRIES.choose(&mut rand::thread_rng()).unwrap()
     }
 
     pub fn primary_word(&self) -> &str {
-        RawEntry::words(&self.word).next().unwrap()
+        Self::words(&self.word).next().unwrap()
     }
 
     fn parsed_words(&self) -> impl Iterator<Item = Box<Word>> + '_ {
-        RawEntry::words(&self.word).map(Word::parse)
+        Self::words(&self.word).map(Word::parse)
+    }
+
+    fn kind_strs(kind: &[RawEntryKind]) -> Vec<&'static str> {
+        kind.iter().copied().map(RawEntryKind::to_str).collect()
+    }
+
+    fn kind_set(kind: &[RawEntryKind]) -> KindSet {
+        kind.iter()
+            .copied()
+            .map(KindSet::from)
+            .reduce(KindSet::bitor)
+            .unwrap_or(KindSet::empty())
+    }
+
+    fn parts(word: &str) -> impl Iterator<Item = &str> {
+        word.split(Self::skip_char).filter(|s| !s.is_empty())
+    }
+
+    fn skip_char(ch: char) -> bool {
+        ch.is_ascii() && !ch.is_ascii_alphabetic()
     }
 }
 
 impl From<RawEntry> for Entry {
     fn from(raw: RawEntry) -> Self {
-        let parsed_word: Box<[_]> = RawEntry::words(&raw.word)
-            .flat_map(RawEntry::joined_subwords)
+        let parsed_word: Box<[_]> = Self::words(&raw.word)
+            .flat_map(Self::joined_subwords)
+            .map(intern::word)
             .collect();
 
         assert!(!parsed_word.is_empty());
@@ -308,7 +304,7 @@ impl From<RawEntry> for Entry {
         let mut chars = text.char_indices().peekable();
         loop {
             // Skip non-word characters
-            while let Some((_, ch)) = chars.next_if(|&(_, ch)| RawEntry::skip_char(ch)) {
+            while let Some((_, ch)) = chars.next_if(|&(_, ch)| Self::skip_char(ch)) {
                 match ch {
                     '(' => paren_depth += 1,
                     ')' => {
@@ -324,7 +320,7 @@ impl From<RawEntry> for Entry {
 
             if let Some((start, _)) = chars.next() {
                 // Skip word characters
-                while chars.next_if(|&(_, ch)| !RawEntry::skip_char(ch)).is_some() {}
+                while chars.next_if(|&(_, ch)| !Self::skip_char(ch)).is_some() {}
 
                 let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
 
@@ -340,8 +336,8 @@ impl From<RawEntry> for Entry {
             eprintln!("Warning: unmatched opening parenthesis in {}", raw.word);
         }
 
-        let kind_strs = RawEntry::kind_strs(&raw.kind).into_boxed_slice();
-        let kind_set = RawEntry::kind_set(&raw.kind);
+        let kind_strs = Self::kind_strs(&raw.kind).into_boxed_slice();
+        let kind_set = Self::kind_set(&raw.kind);
 
         Self {
             word: raw.word.into_boxed_str(),
@@ -469,16 +465,16 @@ impl From<RawEntryKind> for KindSet {
 impl BitOr for KindSet {
     type Output = Self;
 
-    fn bitor(self, other: Self) -> Self {
-        Self(self.0 | other.0)
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
     }
 }
 
 impl BitAnd for KindSet {
     type Output = Self;
 
-    fn bitand(self, other: Self) -> Self {
-        Self(self.0 & other.0)
+    fn bitand(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
     }
 }
 

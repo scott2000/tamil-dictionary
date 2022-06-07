@@ -558,7 +558,7 @@ fn check_final<S: Search>(
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
-    const FINAL_TRANSFORM: LetterSet = letterset![M, RetroL, AlveolarL, AlveolarN];
+    const FINAL_TRANSFORM: LetterSet = letterset![M, RetroL, AlveolarL, AlveolarN, R];
 
     if letters.remaining_count() != 1 || !lt.is_vowel() || !FINAL_TRANSFORM.matches(next) {
         return Ok(false);
@@ -566,39 +566,38 @@ fn check_final<S: Search>(
 
     letters.adv();
     let with_vowel = search.literal(word![lt]);
-    let final_m = || -> Result<S, S::Error> {
-        with_vowel
-            .matching(letterset![Ng, Ny, N])?
-            .marking_expanded()
-            .joining(&with_vowel.literal(word![M]))
-    };
-
-    // Check for final "am"
-    if let (Letter::A, Letter::M) = (lt, next) {
-        if letters.index > 4 {
-            // Allow entire "am" to be removed since the word is long
-            *search = search
-                .asserting_next(LetterSet::vowel())
-                .marking_expanded()
-                .freezing()
-                .joining(&final_m()?)?;
-
-            return Ok(true);
-        } else if letters.index > 2 {
-            // Only allow final "m" to be dropped, and only before another word
-            *search = with_vowel
-                .asserting_next(LetterSet::tamil_initial())
-                .marking_expanded()
-                .freezing()
-                .joining(&final_m()?)?;
-
-            return Ok(true);
-        }
-    }
 
     *search = match next {
         // Final "m"
-        Letter::M => final_m()?,
+        Letter::M => {
+            let final_m = with_vowel
+                .matching(letterset![Ng, Ny, N])?
+                .marking_expanded()
+                .joining(&with_vowel.literal(word![M]))?;
+
+            // Final "am"
+            if lt == Letter::A {
+                if letters.index > 4 {
+                    // Allow entire "am" to be removed since the word is long
+                    search
+                        .asserting_next(LetterSet::vowel())
+                        .marking_expanded()
+                        .freezing()
+                        .joining(&final_m)?
+                } else if letters.index > 2 {
+                    // Only allow final "m" to be dropped, and only before another word
+                    with_vowel
+                        .asserting_next(LetterSet::tamil_initial())
+                        .marking_expanded()
+                        .freezing()
+                        .joining(&final_m)?
+                } else {
+                    final_m
+                }
+            } else {
+                final_m
+            }
+        }
 
         // Final retroflex "l"
         Letter::RetroL => with_vowel.literal(word![next]).joining(
@@ -627,14 +626,36 @@ fn check_final<S: Search>(
         )?,
 
         // Final alveolar "n"
-        Letter::AlveolarN => with_vowel.literal(word![next]).joining(
+        Letter::AlveolarN => {
+            let with_kcp = with_vowel.literal(word![next]).joining(
+                &with_vowel
+                    .literal(word![AlveolarR])
+                    .asserting_next(KCP)
+                    .marking_expanded(),
+            )?;
+
+            // Final "an"
+            if lt == Letter::A {
+                with_kcp.joining(
+                    &with_vowel
+                        .literal(word![R])
+                        .asserting_end()
+                        .marking_expanded(),
+                )?
+            } else {
+                with_kcp
+            }
+        }
+
+        // Final "ar"
+        Letter::R if lt == Letter::A => with_vowel.literal(word![next]).joining(
             &with_vowel
-                .literal(word![AlveolarR])
-                .asserting_next(KCP)
+                .literal(word![AlveolarN])
+                .asserting_end()
                 .marking_expanded(),
         )?,
 
-        _ => unreachable!(),
+        _ => with_vowel.literal(word![next]),
     };
 
     Ok(true)

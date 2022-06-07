@@ -578,6 +578,38 @@ impl Word {
         self.iter().any(|lt| lts.matches(lt))
     }
 
+    pub fn starts_with(&self, prefix: &Self) -> bool {
+        self.0.starts_with(&prefix.0)
+    }
+
+    pub fn ends_with(&self, suffix: &Self) -> bool {
+        self.0.ends_with(&suffix.0)
+    }
+
+    pub fn strip_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
+        if !self.starts_with(prefix) {
+            return None;
+        }
+
+        Some(&self[prefix.len()..])
+    }
+
+    pub fn strip_suffix<'a>(&'a self, suffix: &Self) -> Option<&'a Self> {
+        if !self.ends_with(suffix) {
+            return None;
+        }
+
+        Some(&self[..(self.len() - suffix.len())])
+    }
+
+    pub fn replace_prefix(&self, prefix: &Self, new: &Self) -> Option<Box<Self>> {
+        Some(new + self.strip_prefix(prefix)?)
+    }
+
+    pub fn replace_suffix(&self, suffix: &Self, new: &Self) -> Option<Box<Self>> {
+        Some(self.strip_suffix(suffix)? + new)
+    }
+
     pub fn take_prefix<'a, 'b>(&'a self, prefix: &'b Self) -> Option<&'a Self> {
         if prefix.len() > self.len() {
             return None;
@@ -589,7 +621,7 @@ impl Word {
             }
         }
 
-        Some(&self[0..prefix.len()])
+        Some(&self[..prefix.len()])
     }
 
     pub fn parse(s: &str) -> Box<Word> {
@@ -965,6 +997,17 @@ impl Index<usize> for Word {
 impl IndexMut<usize> for Word {
     fn index_mut(&mut self, index: usize) -> &mut Letter {
         self.0.index_mut(index)
+    }
+}
+
+impl<'a> Add for &'a Word {
+    type Output = Box<Word>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut vec = Vec::with_capacity(self.len() + rhs.len());
+        vec.extend_from_slice(&self.0);
+        vec.extend_from_slice(&rhs.0);
+        vec.into()
     }
 }
 
