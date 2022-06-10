@@ -1,18 +1,18 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::BufReader;
 
 use serde::Deserialize;
 
-use crate::dictionary::{Entry, EntryKind, ENTRIES};
+use crate::dictionary::{Entry, EntryIndex, EntryKind, ENTRIES};
 use crate::intern;
-use crate::tamil::{Letter, Word};
+use crate::tamil::{Letter, LetterSet, Word};
 
 type Ves = HashMap<String, BTreeSet<&'static Word>>;
 
 type Verbs = HashMap<(String, Option<u8>), Vec<String>>;
 
-pub type Stems = HashMap<Box<Word>, StemData>;
+pub type Stems = HashMap<Box<Word>, Vec<StemData>>;
 
 lazy_static! {
     pub static ref STEMS: Stems = {
@@ -28,9 +28,9 @@ lazy_static! {
             .expect("verbs parse error");
 
         // Vinaiyecham map for dealing with suffixes
-        let mut ves: Ves = HashMap::new();
+        let mut ves = Ves::new();
 
-        let mut verbs: Verbs = HashMap::new();
+        let mut verbs = Verbs::new();
 
         for mut verb in verb_list {
             for ve in verb.ve.iter_mut() {
@@ -56,7 +56,7 @@ lazy_static! {
             verbs.insert((verb.word, verb.sub), verb.ve);
         }
 
-        let mut stems: Stems = HashMap::new();
+        let mut stems = Stems::new();
         for entry in ENTRIES.iter() {
             StemData::parse(&mut stems, &ves, &verbs, entry);
         }
@@ -186,14 +186,18 @@ impl StemKind {
     ) {
         for word in Entry::joined_subwords(word) {
             for (word, stem) in self.stem_word(&word) {
-                stems.insert(
-                    stem.into(),
-                    StemData {
-                        word,
-                        entry,
-                        kind: self.finalize(ves, verbs, entry, word),
-                    },
-                );
+                let stem = stem.into();
+                let data = StemData {
+                    word,
+                    entry,
+                    kind: self.finalize(ves, verbs, entry, word),
+                };
+
+                if let Some(datas) = stems.get_mut(&stem) {
+                    datas.push(data);
+                } else {
+                    stems.insert(stem, vec![data]);
+                }
             }
         }
     }
@@ -307,5 +311,487 @@ impl VerbData {
 
             _ => panic!("invalid vinaiyecham: {}", ve),
         }
+    }
+}
+
+// TODO: remove pub for all of these
+
+type Choices = Vec<EntryIndex>;
+
+type ChoiceMap = BTreeMap<(usize, bool), Vec<Choices>>;
+
+pub fn all_choices(full_word: &Word) -> Vec<Choices> {
+    let map = ChoiceMap::new();
+    map.insert((0, false), vec![Vec::new()]);
+
+    // TODO: remove has_u here, instead handle when finalizing ExpandChoice
+
+    // TODO: use pop_first when stabilized! (nightly: map_first_last)
+    while let Some((&(end, has_u), _)) = map.iter().next() {
+        let after = choices_after(full_word, end, has_u);
+
+        for choices in map.remove(&(end, has_u)).unwrap() {
+            for choice in after.iter() {
+                let key = (choice.end, choice.has_u);
+
+                let mut choices = choices.clone();
+                choices.push(choice.entry);
+
+                if let Some(vec) = map.get_mut(&key) {
+                    vec.push(choices);
+                } else {
+                    map.insert(key, vec![choices]);
+                }
+            }
+        }
+    }
+
+    Vec::new()
+}
+
+pub fn choices_after(full_word: &Word, start: usize, has_u: bool) -> Vec<Choice> {
+    let mut choices = Vec::new();
+
+    for mut end in (start + 1)..=full_word.len() {
+        let ex = Expand::new(full_word, start);
+        let stem = &full_word[start..end];
+        ex.evaluate(&mut choices);
+        todo!();
+    }
+
+    choices
+}
+
+pub struct Choice {
+    pub end: usize,
+    pub entry: EntryIndex,
+    pub has_u: bool,
+}
+
+#[derive(Clone)]
+pub struct Expand<'a> {
+    pub full_word: &'a Word,
+    pub start: usize,
+    pub choices: Vec<ExpandChoice>,
+}
+
+impl<'a> Expand<'a> {
+    pub fn new(full_word: &'a Word, start: usize) -> Self {
+        Self {
+            full_word,
+            start,
+            choices: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, choice: ExpandChoice) {
+        self.choices.push(choice);
+    }
+
+    pub fn evaluate(&mut self, results: &mut Vec<Choice>) {
+        while let Some(choice) = self.choices.pop() {
+            if let Some(choice) = choice.step(self) {
+                results.push(choice);
+            }
+        }
+    }
+
+    fn matching(
+        &self,
+        mut end: usize,
+        may_double: bool,
+        mut has_u: bool,
+        mut suffix: &Word,
+    ) -> Option<(usize, bool)> {
+        use Letter::*;
+
+        if suffix.is_empty() {
+            return Some((end, has_u));
+        }
+
+        let word = self.full_word;
+
+        // Handle kutrial ugaram on current word
+        if has_u {
+            if suffix.start_matches(LetterSet::vowel()) {
+                // If starts with vowel, either ignore U or add joining V
+                if word.get_range(end, end + 2) == Some(word![U, V]) {
+                    end += 2;
+                }
+            } else {
+                // If starts with consonant, U must be present
+                if word.get(end)? != U {
+                    return None;
+                }
+
+                end += 1;
+            }
+
+            has_u = false;
+        }
+
+        if suffix.start_matches(LetterSet::vowel()) {
+            if let Some(prev) = end.checked_sub(1).and_then(|i| word.get(i)) {
+                if LetterSet::vowel().matches(prev) {
+                    // Handle insertion of Y and V glides
+                    let glide = if letterset![I, LongI, E, LongE, Ai].matches(prev) {
+                        Y
+                    } else {
+                        V
+                    };
+
+                    if word.get(end) == Some(glide) {
+                        end += 1;
+                    }
+                } else if may_double && word.get(end) == Some(prev) {
+                    // Handle doubling of final consonant
+                    end += 1;
+                }
+            }
+        }
+
+        // Handle kutrial ugaram on suffix
+        if let Some(new_suffix) = suffix.strip_suffix(word![U]) {
+            suffix = new_suffix;
+            has_u = true;
+        }
+
+        // Match all other letters in suffix
+        for lt in suffix.iter() {
+            if word.get(end)? != lt {
+                return None;
+            }
+
+            end += 1;
+        }
+
+        // If there is a non-vowel next, then it clearly can't have a U there
+        if has_u && word.matches(end, LetterSet::vowel().complement()) {
+            return None;
+        }
+
+        Some((end, has_u))
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum ExpandState {
+    AdverbStem,
+    InfinitiveStem,
+    Negative,
+    Infinitive,
+    TenseStem,
+    FutureStem,
+    SpecialA,
+    SpecialB,
+    SpecialC,
+    GeneralStem,
+    GeneralStemA,
+    GeneralStemI,
+    GeneralStemE,
+    GeneralStemO,
+    GeneralStemNgal,
+    GeneralStemPlural,
+    Plural,
+    Oblique,
+    Case,
+    Irundhu,
+    MaybeAdjective,
+    AdjectiveStem,
+    AdjectiveStemVa,
+    AdjectiveStemAdhu,
+    Em,
+    Part,
+    Done,
+}
+
+#[derive(Copy, Clone)]
+pub struct ExpandChoice {
+    pub end: usize,
+    pub entry: EntryIndex,
+    pub is_start: bool,
+    pub has_u: bool,
+    pub state: ExpandState,
+}
+
+impl ExpandChoice {
+    pub fn matched<'a>(&self, ex: &Expand<'a>) -> &'a Word {
+        &ex.full_word[ex.start..self.end]
+    }
+
+    pub fn last(&self, ex: &Expand) -> Option<Letter> {
+        if self.has_u {
+            return Some(Letter::U);
+        }
+
+        self.matched(ex).last()
+    }
+
+    pub fn end_matches(&self, ex: &Expand, suffix: LetterSet) -> bool {
+        if self.has_u {
+            return suffix.matches(Letter::U);
+        }
+
+        self.matched(ex).end_matches(suffix)
+    }
+
+    pub fn ends_with(&self, ex: &Expand, mut suffix: &Word) -> bool {
+        if self.has_u {
+            if let Some(new_suffix) = suffix.strip_suffix(word![U]) {
+                suffix = new_suffix;
+            } else {
+                return false;
+            }
+        }
+
+        self.matched(ex).ends_with(suffix)
+    }
+
+    pub fn goto(&self, ex: &mut Expand, states: &[ExpandState]) {
+        for &state in states {
+            ex.push(Self {
+                is_start: false,
+                state,
+                ..*self
+            });
+        }
+    }
+
+    pub fn add_goto(&self, ex: &mut Expand, suffix: &Word, states: &[ExpandState]) {
+        if let Some((end, has_u)) = ex.matching(self.end, self.is_start, self.has_u, suffix) {
+            Self {
+                end,
+                has_u,
+                ..*self
+            }
+            .goto(ex, states);
+        }
+    }
+
+    pub fn step(&self, ex: &mut Expand) -> Option<Choice> {
+        use ExpandState::*;
+        use Letter::*;
+
+        match self.state {
+            AdverbStem => match self.last(ex) {
+                Some(U) => self.goto(ex, &[TenseStem, SpecialA]),
+
+                Some(I) => {
+                    self.add_goto(ex, word![AlveolarN], &[TenseStem, SpecialB]);
+                    self.add_goto(ex, word![Y, A], &[AdjectiveStem, Done]);
+                    self.add_goto(ex, word![AlveolarR, AlveolarR, U], &[Done]);
+                }
+
+                _ => {
+                    self.add_goto(ex, word![AlveolarN], &[TenseStem, SpecialB]);
+                    self.add_goto(ex, word![Y, I, AlveolarR, AlveolarR, U], &[Done]);
+                    self.add_goto(ex, word![Y, I, AlveolarN], &[TenseStem, SpecialB]);
+                }
+            },
+
+            InfinitiveStem => {
+                if self.ends_with(ex, word![K, U]) {
+                    self.add_goto(ex, word![I, AlveolarR, U], &[TenseStem]);
+                    self.add_goto(
+                        ex,
+                        word![I, AlveolarN, AlveolarR, U],
+                        &[TenseStem, SpecialA],
+                    );
+                } else {
+                    self.add_goto(ex, word![K, I, AlveolarR, U], &[TenseStem]);
+                    self.add_goto(
+                        ex,
+                        word![K, I, AlveolarN, AlveolarR, U],
+                        &[TenseStem, SpecialA],
+                    );
+                }
+
+                if self.end_matches(ex, letterset![R, Zh]) {
+                    self.add_goto(ex, word![U, K, I, AlveolarR, U], &[TenseStem]);
+                    self.add_goto(
+                        ex,
+                        word![U, K, I, AlveolarN, AlveolarR, U],
+                        &[TenseStem, SpecialA],
+                    );
+                }
+
+                self.add_goto(ex, word![Ai], &[Oblique]);
+                self.add_goto(ex, word![LongA], &[Negative]);
+                self.add_goto(ex, word![U, M], &[Part]);
+                self.add_goto(ex, word![A], &[Infinitive]);
+            }
+
+            Negative => {
+                self.goto(ex, &[Done]);
+
+                self.add_goto(ex, word![M, Ai], &[Oblique]);
+                self.add_goto(ex, word![M, A, AlveolarL], &[Oblique]);
+                self.add_goto(ex, word![T, A], &[AdjectiveStem, Done]);
+                self.add_goto(ex, word![T, U], &[Em]);
+            }
+
+            Infinitive => {
+                self.goto(ex, &[Em]);
+
+                self.add_goto(ex, word![AlveolarL], &[Oblique]);
+                self.add_goto(ex, word![RetroT, RetroT, U, M], &[Em]);
+                self.add_goto(ex, word![AlveolarL, LongA, M], &[Em]);
+            }
+
+            TenseStem => {
+                self.goto(ex, &[GeneralStem]);
+                self.add_goto(ex, word![A], &[AdjectiveStem, Done]);
+            }
+
+            FutureStem => {
+                self.goto(ex, &[GeneralStem, SpecialA, SpecialB]);
+                self.add_goto(ex, word![A], &[AdjectiveStem]);
+            }
+
+            SpecialA => {
+                self.add_goto(ex, word![A, AlveolarN, A], &[SpecialC]);
+            }
+
+            SpecialB => {
+                self.add_goto(ex, word![A], &[SpecialC]);
+            }
+
+            SpecialC => {
+                self.goto(ex, &[Part]);
+
+                self.add_goto(ex, word![RetroL], &[Part]);
+                self.add_goto(ex, word![AlveolarN], &[Part]);
+                self.add_goto(ex, word![R], &[Part]);
+            }
+
+            GeneralStem => {
+                self.add_goto(ex, word![LongO], &[GeneralStemO]);
+                self.add_goto(ex, word![LongE], &[GeneralStemE]);
+                self.add_goto(ex, word![LongI], &[GeneralStemI, GeneralStemNgal]);
+                self.add_goto(ex, word![LongA], &[GeneralStemA, GeneralStemNgal]);
+
+                self.add_goto(ex, word![A, T, U], &[Part, GeneralStemNgal]);
+            }
+
+            GeneralStemA => {
+                self.add_goto(ex, word![Y], &[Part]);
+                self.add_goto(ex, word![AlveolarN], &[Part]);
+                self.add_goto(ex, word![AlveolarL], &[Part]);
+                self.add_goto(ex, word![R], &[Part, GeneralStemPlural]);
+            }
+
+            GeneralStemI => {
+                self.add_goto(ex, word![R], &[Part, GeneralStemPlural]);
+            }
+
+            GeneralStemE => {
+                self.add_goto(ex, word![M], &[Part]);
+                self.add_goto(ex, word![AlveolarN], &[Part]);
+            }
+
+            GeneralStemO => {
+                self.add_goto(ex, word![RetroL], &[Oblique]);
+                self.add_goto(ex, word![AlveolarN], &[Oblique]);
+                self.add_goto(ex, word![R], &[Oblique]);
+                self.add_goto(ex, word![M], &[Part]);
+            }
+
+            GeneralStemNgal => {
+                self.goto(ex, &[GeneralStemPlural]);
+                self.add_goto(ex, word![Ng], &[GeneralStemPlural]);
+            }
+
+            GeneralStemPlural => {
+                self.add_goto(ex, word![K, A, RetroL], &[Part]);
+            }
+
+            Plural => {
+                self.goto(ex, &[Oblique]);
+                self.add_goto(ex, word![K, A, RetroL], &[Oblique]);
+            }
+
+            Oblique => {
+                self.goto(ex, &[Case]);
+                self.add_goto(ex, word![I, AlveolarN], &[Case]);
+            }
+
+            Case => {
+                self.goto(ex, &[Em]);
+
+                self.add_goto(ex, word![Ai], &[Em]);
+
+                self.add_goto(ex, word![K, LongU, RetroT, A], &[Em]);
+                self.add_goto(ex, word![U, RetroT, AlveolarN], &[Em]);
+                self.add_goto(ex, word![LongO, RetroT, U], &[Em]);
+                self.add_goto(ex, word![LongA, AlveolarL], &[Em]);
+
+                self.add_goto(ex, word![K, K, U], &[Em]);
+                if !self.end_matches(ex, letterset![I, LongI, Ai]) {
+                    self.add_goto(ex, word![U, K, K, U], &[Em]);
+                }
+
+                self.add_goto(ex, word![I, AlveolarL], &[Irundhu]);
+                self.add_goto(ex, word![I, RetroT, A, M], &[Irundhu]);
+                self.add_goto(ex, word![K, I, RetroT, RetroT, LongE], &[Irundhu]);
+            }
+
+            Irundhu => {
+                self.goto(ex, &[Em]);
+                self.add_goto(ex, word![I, R, U, N, T, U], &[MaybeAdjective]);
+            }
+
+            MaybeAdjective => {
+                self.goto(ex, &[Em]);
+                self.add_goto(ex, word![A], &[AdjectiveStem, Done]);
+            }
+
+            AdjectiveStem => {
+                if !self.ends_with(ex, word![V, A]) {
+                    self.add_goto(ex, word![V, A], &[AdjectiveStemVa]);
+                }
+
+                self.add_goto(ex, word![T, U], &[AdjectiveStemAdhu]);
+            }
+
+            AdjectiveStemVa => {
+                self.add_goto(ex, word![Ai], &[Em]);
+                self.add_goto(ex, word![Ai, K, A, RetroL], &[Oblique]);
+                self.add_goto(ex, word![AlveolarR, AlveolarR, U], &[Oblique]);
+
+                self.add_goto(ex, word![RetroL], &[Oblique]);
+                self.add_goto(ex, word![AlveolarN], &[Oblique]);
+                self.add_goto(ex, word![R], &[Plural]);
+            }
+
+            AdjectiveStemAdhu => {
+                self.goto(ex, &[Case]);
+
+                self.add_goto(ex, word![A, AlveolarN], &[Case]);
+                self.add_goto(ex, word![A, AlveolarR, K, U], &[Em]);
+            }
+
+            Em => {
+                self.goto(ex, &[Part]);
+                self.add_goto(ex, word![U, M], &[Part]);
+            }
+
+            Part => {
+                self.goto(ex, &[Done]);
+
+                self.add_goto(ex, word![LongA], &[Part]);
+                self.add_goto(ex, word![LongE], &[Part]);
+                self.add_goto(ex, word![LongO], &[Part]);
+            }
+
+            Done => {
+                return Some(Choice {
+                    end: self.end,
+                    entry: self.entry,
+                    has_u: self.has_u,
+                })
+            }
+        }
+
+        None
     }
 }

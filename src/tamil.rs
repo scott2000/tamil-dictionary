@@ -378,6 +378,10 @@ impl LetterSet {
         Self(self.0 & other.0)
     }
 
+    pub const fn difference(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+
     const fn range(start: u8, end: u8) -> Self {
         if end < start {
             Self::empty()
@@ -559,15 +563,19 @@ impl Word {
     }
 
     pub fn first(&self) -> Option<Letter> {
-        self.0.first().cloned()
+        self.0.first().copied()
     }
 
     pub fn last(&self) -> Option<Letter> {
-        self.0.last().cloned()
+        self.0.last().copied()
     }
 
     pub fn get(&self, index: usize) -> Option<Letter> {
         self.0.get(index).copied()
+    }
+
+    pub fn get_range(&self, start: usize, end: usize) -> Option<&Self> {
+        self.0.get(start..end).map(|slice| slice.into())
     }
 
     pub fn iter(&self) -> WordIter {
@@ -576,6 +584,30 @@ impl Word {
 
     pub fn contains(&self, lts: LetterSet) -> bool {
         self.iter().any(|lt| lts.matches(lt))
+    }
+
+    pub fn matches(&self, index: usize, lts: LetterSet) -> bool {
+        if let Some(&lt) = self.0.get(index) {
+            lts.matches(lt)
+        } else {
+            false
+        }
+    }
+
+    pub fn start_matches(&self, prefix: LetterSet) -> bool {
+        if let Some(&lt) = self.0.first() {
+            prefix.matches(lt)
+        } else {
+            false
+        }
+    }
+
+    pub fn end_matches(&self, suffix: LetterSet) -> bool {
+        if let Some(&lt) = self.0.last() {
+            suffix.matches(lt)
+        } else {
+            false
+        }
     }
 
     pub fn starts_with(&self, prefix: &Self) -> bool {
