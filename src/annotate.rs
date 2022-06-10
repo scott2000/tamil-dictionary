@@ -318,29 +318,25 @@ impl VerbData {
 
 type Choices = Vec<EntryIndex>;
 
-type ChoiceMap = BTreeMap<(usize, bool), Vec<Choices>>;
+type ChoiceMap = BTreeMap<usize, Vec<Choices>>;
 
 pub fn all_choices(full_word: &Word) -> Vec<Choices> {
     let map = ChoiceMap::new();
-    map.insert((0, false), vec![Vec::new()]);
-
-    // TODO: remove has_u here, instead handle when finalizing ExpandChoice
+    map.insert(0, vec![Vec::new()]);
 
     // TODO: use pop_first when stabilized! (nightly: map_first_last)
-    while let Some((&(end, has_u), _)) = map.iter().next() {
-        let after = choices_after(full_word, end, has_u);
+    while let Some((&end, _)) = map.iter().next() {
+        let after = choices_after(full_word, end);
 
-        for choices in map.remove(&(end, has_u)).unwrap() {
+        for choices in map.remove(&end).unwrap() {
             for choice in after.iter() {
-                let key = (choice.end, choice.has_u);
-
                 let mut choices = choices.clone();
                 choices.push(choice.entry);
 
-                if let Some(vec) = map.get_mut(&key) {
+                if let Some(vec) = map.get_mut(&choice.end) {
                     vec.push(choices);
                 } else {
-                    map.insert(key, vec![choices]);
+                    map.insert(choice.end, vec![choices]);
                 }
             }
         }
@@ -349,7 +345,7 @@ pub fn all_choices(full_word: &Word) -> Vec<Choices> {
     Vec::new()
 }
 
-pub fn choices_after(full_word: &Word, start: usize, has_u: bool) -> Vec<Choice> {
+pub fn choices_after(full_word: &Word, start: usize) -> Vec<Choice> {
     let mut choices = Vec::new();
 
     for mut end in (start + 1)..=full_word.len() {
@@ -365,7 +361,6 @@ pub fn choices_after(full_word: &Word, start: usize, has_u: bool) -> Vec<Choice>
 pub struct Choice {
     pub end: usize,
     pub entry: EntryIndex,
-    pub has_u: bool,
 }
 
 #[derive(Clone)]
@@ -394,83 +389,6 @@ impl<'a> Expand<'a> {
                 results.push(choice);
             }
         }
-    }
-
-    fn matching(
-        &self,
-        mut end: usize,
-        may_double: bool,
-        mut has_u: bool,
-        mut suffix: &Word,
-    ) -> Option<(usize, bool)> {
-        use Letter::*;
-
-        if suffix.is_empty() {
-            return Some((end, has_u));
-        }
-
-        let word = self.full_word;
-
-        // Handle kutrial ugaram on current word
-        if has_u {
-            if suffix.start_matches(LetterSet::vowel()) {
-                // If starts with vowel, either ignore U or add joining V
-                if word.get_range(end, end + 2) == Some(word![U, V]) {
-                    end += 2;
-                }
-            } else {
-                // If starts with consonant, U must be present
-                if word.get(end)? != U {
-                    return None;
-                }
-
-                end += 1;
-            }
-
-            has_u = false;
-        }
-
-        if suffix.start_matches(LetterSet::vowel()) {
-            if let Some(prev) = end.checked_sub(1).and_then(|i| word.get(i)) {
-                if LetterSet::vowel().matches(prev) {
-                    // Handle insertion of Y and V glides
-                    let glide = if letterset![I, LongI, E, LongE, Ai].matches(prev) {
-                        Y
-                    } else {
-                        V
-                    };
-
-                    if word.get(end) == Some(glide) {
-                        end += 1;
-                    }
-                } else if may_double && word.get(end) == Some(prev) {
-                    // Handle doubling of final consonant
-                    end += 1;
-                }
-            }
-        }
-
-        // Handle kutrial ugaram on suffix
-        if let Some(new_suffix) = suffix.strip_suffix(word![U]) {
-            suffix = new_suffix;
-            has_u = true;
-        }
-
-        // Match all other letters in suffix
-        for lt in suffix.iter() {
-            if word.get(end)? != lt {
-                return None;
-            }
-
-            end += 1;
-        }
-
-        // If there is a non-vowel next, then it clearly can't have a U there
-        if has_u && word.matches(end, LetterSet::vowel().complement()) {
-            return None;
-        }
-
-        Some((end, has_u))
     }
 }
 
@@ -510,7 +428,7 @@ pub struct ExpandChoice {
     pub end: usize,
     pub entry: EntryIndex,
     pub is_start: bool,
-    pub has_u: bool,
+    pub has_implicit_u: bool,
     pub state: ExpandState,
 }
 
@@ -520,7 +438,7 @@ impl ExpandChoice {
     }
 
     pub fn last(&self, ex: &Expand) -> Option<Letter> {
-        if self.has_u {
+        if self.has_implicit_u {
             return Some(Letter::U);
         }
 
@@ -528,7 +446,7 @@ impl ExpandChoice {
     }
 
     pub fn end_matches(&self, ex: &Expand, suffix: LetterSet) -> bool {
-        if self.has_u {
+        if self.has_implicit_u {
             return suffix.matches(Letter::U);
         }
 
@@ -536,7 +454,7 @@ impl ExpandChoice {
     }
 
     pub fn ends_with(&self, ex: &Expand, mut suffix: &Word) -> bool {
-        if self.has_u {
+        if self.has_implicit_u {
             if let Some(new_suffix) = suffix.strip_suffix(word![U]) {
                 suffix = new_suffix;
             } else {
@@ -558,13 +476,68 @@ impl ExpandChoice {
     }
 
     pub fn add_goto(&self, ex: &mut Expand, suffix: &Word, states: &[ExpandState]) {
-        if let Some((end, has_u)) = ex.matching(self.end, self.is_start, self.has_u, suffix) {
-            Self {
-                end,
-                has_u,
-                ..*self
+        use Letter::*;
+
+        if suffix.is_empty() {
+            self.goto(ex, states);
+            return;
+        }
+
+        // Remove trailing U from suffix
+        self.has_implicit_u = if let Some(new_suffix) = suffix.strip_suffix(word![U]) {
+            suffix = new_suffix;
+            true
+        } else {
+            false
+        };
+
+        // Match all other letters in suffix
+        let word = ex.full_word;
+        for lt in suffix.iter() {
+            if word.get(self.end) != Some(lt) {
+                return;
             }
-            .goto(ex, states);
+
+            self.end += 1;
+        }
+
+        // Add shortest match (without final U, glide insertion, or doubling)
+        self.goto(ex, states);
+
+        // Add match with final U
+        if self.has_implicit_u {
+            if word.get(self.end) != Some(U) {
+                return;
+            }
+
+            self.end += 1;
+            self.has_implicit_u = false;
+            self.goto(ex, states);
+        }
+
+        // The remaining cases all require this to be true
+        if !word.matches(self.end + 1, LetterSet::vowel()) {
+            return;
+        }
+
+        let prev = word[self.end - 1];
+
+        if LetterSet::vowel().matches(prev) {
+            // Handle insertion of Y and V glides
+            let glide = if letterset![I, LongI, E, LongE, Ai].matches(prev) {
+                Y
+            } else {
+                V
+            };
+
+            if word.get(self.end) == Some(glide) {
+                self.end += 1;
+                self.goto(ex, states);
+            }
+        } else if self.is_start && word.get(self.end) == Some(prev) {
+            // Handle doubling of final consonant
+            self.end += 1;
+            self.goto(ex, states);
         }
     }
 
@@ -787,8 +760,7 @@ impl ExpandChoice {
                 return Some(Choice {
                     end: self.end,
                     entry: self.entry,
-                    has_u: self.has_u,
-                })
+                });
             }
         }
 
