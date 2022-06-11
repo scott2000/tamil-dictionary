@@ -4,75 +4,11 @@ use std::io::BufReader;
 
 use serde::Deserialize;
 
-use crate::dictionary::{Entry, EntryIndex, EntryKind, ENTRIES};
+use crate::dictionary::{Entry, EntryIndex, EntryKind, KindSet, ENTRIES};
 use crate::intern;
 use crate::tamil::{Letter, LetterSet, Word};
 
 use ExpandState::*;
-
-type Ves = HashMap<String, BTreeSet<&'static Word>>;
-
-type Verbs = HashMap<(String, Option<u8>), Vec<String>>;
-
-pub type Stems = HashMap<Box<Word>, Vec<StemData>>;
-
-lazy_static! {
-    pub static ref STEMS: Stems = {
-        lazy_static::initialize(&ENTRIES);
-        eprintln!("Loading verbs...");
-
-        let file = match File::open("verbs.json") {
-            Ok(file) => file,
-            Err(_) => return HashMap::new(),
-        };
-
-        let verb_list: Vec<RawVerbData> = serde_json::from_reader(BufReader::new(file))
-            .expect("verbs parse error");
-
-        // Vinaiyecham map for dealing with suffixes
-        let mut ves = Ves::new();
-
-        let mut verbs = Verbs::new();
-
-        for mut verb in verb_list {
-            for ve in verb.ve.iter_mut() {
-                if ve.starts_with('-') {
-                    continue;
-                }
-
-                if let Some(index) = verb.word.rfind(' ') {
-                    ve.insert_str(0, &verb.word[..=index]);
-                    continue;
-                }
-
-                let word = intern::word(Word::parse(&verb.word));
-                if let Some(set) = ves.get_mut(ve) {
-                    set.insert(word);
-                } else {
-                    let mut set = BTreeSet::new();
-                    set.insert(word);
-                    ves.insert(ve.clone(), set);
-                }
-            }
-
-            verbs.insert((verb.word, verb.sub), verb.ve);
-        }
-
-        let mut stems = Stems::new();
-        for entry in ENTRIES.iter() {
-            StemData::parse(&mut StemState {
-                stems: &mut stems,
-                ves: &ves,
-                verbs: &verbs,
-                entry,
-            });
-        }
-
-        intern::done();
-
-        stems
-    };
-}
 
 pub fn normalize(mut word: &Word) -> Box<Word> {
     use Letter::*;
@@ -125,6 +61,170 @@ pub fn normalize(mut word: &Word) -> Box<Word> {
     letters.into()
 }
 
+struct SpecialWord {
+    if_matches: KindSet,
+    then_insert: Vec<(&'static Word, &'static [ExpandState])>,
+}
+
+type Specials = HashMap<&'static Word, SpecialWord>;
+
+fn get_specials() -> Specials {
+    use EntryKind::*;
+    use ExpandState::*;
+
+    let mut map = Specials::new();
+
+    let pronouns: &[&Word] = &[
+        word![Y, LongA, AlveolarN],
+        word![N, LongA, AlveolarN],
+        word![Y, LongA, M],
+        word![N, LongA, M],
+        word![N, LongA, Ng, K, A, RetroL],
+        word![N, LongI],
+        word![N, LongI, R],
+        word![N, LongI, Ng, K, A, RetroL],
+        word![T, LongA, AlveolarN],
+        word![T, LongA, M],
+        word![T, LongA, Ng, K, A, RetroL],
+    ];
+
+    for &pronoun in pronouns {
+        map.insert(
+            pronoun,
+            SpecialWord {
+                if_matches: KindSet::single(SuttuPeyar),
+                then_insert: vec![(pronoun, &[Emphasis])],
+            },
+        );
+    }
+
+    let special_pronoun_bases: &[&Word] = &[
+        word![E, AlveolarN],
+        word![E, M],
+        word![N, A, M],
+        word![U, AlveolarN],
+        word![U, M],
+        word![T, A, AlveolarN],
+        word![T, A, M],
+    ];
+
+    for &base in special_pronoun_bases {
+        map.insert(
+            base,
+            SpecialWord {
+                if_matches: KindSet::single(PeyarChol),
+                then_insert: vec![
+                    (base, &[CaseNoKu]),
+                    (intern::word(base + word![A, K, K, U]), &[Emphasis]),
+                ],
+            },
+        );
+    }
+
+    let avai_pronouns: &[&Word] = &[
+        word![A, V, Ai],
+        word![I, V, Ai],
+        word![E, V, Ai],
+        word![Y, LongA, V, Ai],
+    ];
+
+    for &avai in avai_pronouns {
+        let without_vai = &avai[..(avai.len() - 2)];
+
+        map.insert(
+            avai,
+            SpecialWord {
+                if_matches: KindSet::single(SuttuPeyar) | KindSet::single(VinaaPeyar),
+                then_insert: vec![(without_vai, &[AdjectiveStemAvai])],
+            },
+        );
+    }
+
+    let vowel_adjectives: &[&Word] = &[word![A], word![I], word![E]];
+
+    for &vowel in vowel_adjectives {
+        map.insert(
+            vowel,
+            SpecialWord {
+                if_matches: KindSet::single(SuttuPeyar) | KindSet::single(VinaaPeyar),
+                then_insert: vec![(vowel, &[VowelAdjective])],
+            },
+        );
+    }
+
+    let aana = word![LongA, N, A];
+
+    map.insert(
+        aana,
+        SpecialWord {
+            if_matches: KindSet::single(IdaiChol),
+            then_insert: vec![(aana, &[AdjectiveStem, Done])],
+        },
+    );
+
+    let ulla = word![U, RetroL, RetroL, A];
+    let ullu = word![U, RetroL, RetroL, U];
+
+    map.insert(
+        ulla,
+        SpecialWord {
+            if_matches: KindSet::any(),
+            then_insert: vec![(ullu, &[TenseStem, SpecialA, SpecialB])],
+        },
+    );
+
+    let ellaam = word![E, AlveolarL, AlveolarL, LongA, M];
+    let ellaa = word![E, AlveolarL, AlveolarL, LongA];
+    let ellaavatru = word![E, AlveolarL, AlveolarL, LongA, V, A, AlveolarR, AlveolarR, U];
+
+    map.insert(
+        ellaam,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            then_insert: vec![
+                (ellaam, &[Emphasis]),
+                (ellaa, &[Done]),
+                (ellaavatru, &[Oblique]),
+            ],
+        },
+    );
+
+    let ellaarum = word![E, AlveolarL, AlveolarL, LongA, R, U, M];
+    let ellaar = word![E, AlveolarL, AlveolarL, LongA, R];
+
+    map.insert(
+        ellaarum,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            then_insert: vec![(ellaar, &[Oblique])],
+        },
+    );
+
+    let ellorum = word![E, AlveolarL, AlveolarL, LongO, R, U, M];
+    let ellor = word![E, AlveolarL, AlveolarL, LongO, R];
+
+    map.insert(
+        ellorum,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            then_insert: vec![(ellor, &[Oblique])],
+        },
+    );
+
+    let maattu = word![M, LongA, RetroT, RetroT, U];
+    let maattaa = word![M, LongA, RetroT, RetroT, LongA];
+
+    map.insert(
+        maattu,
+        SpecialWord {
+            if_matches: KindSet::single(ThunaiVinai),
+            then_insert: vec![(maattu, &[GeneralStem, SpecialA]), (maattaa, &[Negative])],
+        },
+    );
+
+    map
+}
+
 #[derive(Deserialize)]
 struct RawVerbData {
     word: String,
@@ -132,10 +232,78 @@ struct RawVerbData {
     ve: Vec<String>,
 }
 
-struct StemState<'a, 'b, 'c> {
+type Ves = HashMap<String, BTreeSet<&'static Word>>;
+
+type Verbs = HashMap<(String, Option<u8>), Vec<String>>;
+
+type Stems = HashMap<&'static Word, Vec<StemData>>;
+
+lazy_static! {
+    static ref STEMS: Stems = {
+        lazy_static::initialize(&ENTRIES);
+        eprintln!("Loading verbs...");
+
+        let file = match File::open("verbs.json") {
+            Ok(file) => file,
+            Err(_) => return HashMap::new(),
+        };
+
+        let verb_list: Vec<RawVerbData> = serde_json::from_reader(BufReader::new(file))
+            .expect("verbs parse error");
+
+        // Vinaiyecham map for dealing with suffixes
+        let mut ves = Ves::new();
+
+        let mut verbs = Verbs::new();
+
+        for mut verb in verb_list {
+            for ve in verb.ve.iter_mut() {
+                if ve.starts_with('-') {
+                    continue;
+                }
+
+                if let Some(index) = verb.word.rfind(' ') {
+                    ve.insert_str(0, &verb.word[..=index]);
+                    continue;
+                }
+
+                let word = intern::word(Word::parse(&verb.word));
+                if let Some(set) = ves.get_mut(ve) {
+                    set.insert(word);
+                } else {
+                    let mut set = BTreeSet::new();
+                    set.insert(word);
+                    ves.insert(ve.clone(), set);
+                }
+            }
+
+            verbs.insert((verb.word, verb.sub), verb.ve);
+        }
+
+        let specials = get_specials();
+
+        let mut stems = Stems::new();
+        for entry in ENTRIES.iter() {
+            StemData::parse(&mut StemState {
+                stems: &mut stems,
+                ves: &ves,
+                verbs: &verbs,
+                specials: &specials,
+                entry,
+            });
+        }
+
+        intern::done();
+
+        stems
+    };
+}
+
+struct StemState<'a> {
     stems: &'a mut Stems,
-    ves: &'b Ves,
-    verbs: &'c Verbs,
+    ves: &'a Ves,
+    verbs: &'a Verbs,
+    specials: &'a Specials,
     entry: &'static Entry,
 }
 
@@ -159,6 +327,21 @@ impl StemData {
         use EntryKind::*;
 
         let entry = state.entry;
+
+        // Check for special words
+        if !entry.word.contains(' ') {
+            let word: &Word = &Word::parse(&entry.word);
+            if let Some(special) = state.specials.get(word) {
+                if entry.kind_set.matches_any(special.if_matches) {
+                    for (word, insert) in special.then_insert.iter() {
+                        Self::insert(state, word, insert);
+                    }
+
+                    return;
+                }
+            }
+        }
+
         let words: Vec<_> = Entry::words(&entry.word).collect();
 
         let callback = if entry.kind_set.matches(PeyarAdai) {
@@ -175,7 +358,7 @@ impl StemData {
             Self::stem_adverb
         } else if entry.kind_set.matches(VinaiChol) {
             Self::stem_verb
-        } else if entry.kind_set.matches(PeyarChol) && !entry.kind_set.matches(SuttuPeyar) {
+        } else if entry.kind_set.matches(PeyarChol) {
             Self::stem_noun
         } else {
             Self::stem_other
@@ -225,7 +408,7 @@ impl StemData {
                     Self::stem_verb_infinitive(state, &parsed, strong);
 
                     // Special case for words with doubling last letter, joining letters
-                    if !strong && word.last() != Some(U) {
+                    if !strong && parsed.starts_with(word) {
                         Self::insert(state, word, &[InfinitiveStem]);
                         Self::insert(state, &(word + word![V, U]), &[FutureStem]);
                         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
@@ -356,7 +539,6 @@ impl StemData {
             stem = new_stem;
         }
 
-        let stem = stem.into();
         let entry = state.entry;
         if let Some(vec) = state.stems.get_mut(&stem) {
             for &state in states {
@@ -388,7 +570,7 @@ impl ShortestOnly {
         }
     }
 
-    fn singleton(elem: Choices) -> Self {
+    fn single(elem: Choices) -> Self {
         Self {
             shortest: elem.len(),
             choices: vec![elem],
@@ -441,7 +623,7 @@ pub fn all_choices(full_word: &Word) -> Vec<Choices> {
                 if let Some(vec) = map.get_mut(&choice.end) {
                     vec.push(choices);
                 } else {
-                    map.insert(choice.end, ShortestOnly::singleton(choices));
+                    map.insert(choice.end, ShortestOnly::single(choices));
                 }
             }
         }
@@ -527,13 +709,15 @@ pub enum ExpandState {
     Plural,
     Oblique,
     Case,
+    CaseNoKu,
     Irundhu,
     MaybeAdjective,
     AdjectiveStem,
     AdjectiveStemVa,
-    AdjectiveStemAdhu,
+    AdjectiveStemAvai,
     Emphasis,
     Particle,
+    VowelAdjective,
     Done,
 }
 
@@ -842,22 +1026,41 @@ impl ExpandChoice {
 
             Oblique => {
                 self.goto(ex, &[Case]);
+
+                if self.ends_with(ex, word![T, U])
+                    && (self.ends_with(ex, word![A, T, U])
+                        || self.ends_with(ex, word![I, T, U])
+                        || self.ends_with(ex, word![U, T, U])
+                        || self.ends_with(ex, word![E, T, U]))
+                {
+                    self.add_goto(ex, word![A, AlveolarN], &[Case]);
+                    self.add_goto(ex, word![A, AlveolarL, K, U], &[Emphasis]);
+                }
+
                 self.add_goto(ex, word![I, AlveolarN], &[Case]);
+                self.add_goto(ex, word![I, AlveolarL, K, U], &[Emphasis]);
             }
 
             Case => {
-                self.goto(ex, &[Emphasis]);
-
-                self.add_goto(ex, word![Ai], &[Emphasis]);
-
-                self.add_goto(ex, word![U, RetroT, AlveolarN], &[Emphasis]);
-                self.add_goto(ex, word![LongO, RetroT, U], &[Emphasis]);
-                self.add_goto(ex, word![LongA, AlveolarL], &[Emphasis]);
+                self.goto(ex, &[CaseNoKu]);
 
                 self.add_goto(ex, word![K, K, U], &[Emphasis]);
                 if !self.end_matches(ex, letterset![I, LongI, Ai]) {
                     self.add_goto(ex, word![U, K, K, U], &[Emphasis]);
                 }
+            }
+
+            CaseNoKu => {
+                self.goto(ex, &[Emphasis]);
+
+                self.add_goto(ex, word![Ai], &[Emphasis]);
+
+                self.add_goto(ex, word![A, T, U], &[Oblique]);
+                self.add_goto(ex, word![U, RetroT, Ai, Y, A], &[AdjectiveStem, Done]);
+
+                self.add_goto(ex, word![U, RetroT, AlveolarN], &[Emphasis]);
+                self.add_goto(ex, word![LongO, RetroT, U], &[Emphasis]);
+                self.add_goto(ex, word![LongA, AlveolarL], &[Emphasis]);
 
                 self.add_goto(ex, word![I, AlveolarL], &[Irundhu]);
                 self.add_goto(ex, word![I, RetroT, A, M], &[Irundhu]);
@@ -875,27 +1078,24 @@ impl ExpandChoice {
 
             AdjectiveStem => {
                 if !self.ends_with(ex, word![V, A]) {
+                    self.goto(ex, &[AdjectiveStemAvai]);
+
                     self.add_goto(ex, word![V, A], &[AdjectiveStemVa]);
                 }
 
-                self.add_goto(ex, word![T, U], &[AdjectiveStemAdhu]);
+                self.add_goto(ex, word![T, U], &[Oblique]);
             }
 
             AdjectiveStemVa => {
-                self.add_goto(ex, word![Ai], &[Emphasis]);
-                self.add_goto(ex, word![Ai, K, A, RetroL], &[Oblique]);
-                self.add_goto(ex, word![AlveolarR, AlveolarR, U], &[Oblique]);
-
                 self.add_goto(ex, word![RetroL], &[Oblique]);
                 self.add_goto(ex, word![AlveolarN], &[Oblique]);
                 self.add_goto(ex, word![R], &[Plural]);
             }
 
-            AdjectiveStemAdhu => {
-                self.goto(ex, &[Case]);
-
-                self.add_goto(ex, word![A, AlveolarN], &[Case]);
-                self.add_goto(ex, word![A, AlveolarR, K, U], &[Emphasis]);
+            AdjectiveStemAvai => {
+                self.add_goto(ex, word![V, Ai], &[Emphasis]);
+                self.add_goto(ex, word![V, Ai, K, A, RetroL], &[Oblique]);
+                self.add_goto(ex, word![V, A, AlveolarR, AlveolarR, U], &[Oblique]);
             }
 
             Emphasis => {
@@ -905,10 +1105,41 @@ impl ExpandChoice {
 
             Particle => {
                 self.goto(ex, &[Done]);
+                self.add_goto(ex, word![LongA], &[Done]);
+            }
 
-                self.add_goto(ex, word![LongA], &[Particle]);
-                self.add_goto(ex, word![LongE], &[Particle]);
-                self.add_goto(ex, word![LongO], &[Particle]);
+            VowelAdjective => {
+                if self.end + 3 >= ex.full_word.len() {
+                    return;
+                }
+
+                let word = &ENTRIES[self.entry as usize].word;
+
+                let next = ex.full_word[self.end];
+                let after = ex.full_word[self.end + 1];
+                if after == Y {
+                    if next == V {
+                        // Remove only first V
+                        results.push(Choice {
+                            end: self.end + 1,
+                            word,
+                        });
+                    }
+                } else if next == after {
+                    if next == V {
+                        // Remove both V's in case it was a vowel
+                        results.push(Choice {
+                            end: self.end + 2,
+                            word,
+                        });
+                    }
+
+                    // Remove only first of doubled letters
+                    results.push(Choice {
+                        end: self.end + 1,
+                        word,
+                    });
+                }
             }
 
             Done => {
