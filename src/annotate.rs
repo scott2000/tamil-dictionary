@@ -554,7 +554,7 @@ impl StemData {
     }
 }
 
-pub type Choices = Vec<&'static str>;
+pub type Choices = Vec<BTreeSet<EntryIndex>>;
 
 #[derive(Clone)]
 struct ShortestOnly {
@@ -597,7 +597,7 @@ impl ShortestOnly {
     }
 }
 
-pub fn all_choices(full_word: &Word) -> Vec<Choices> {
+pub fn best_choices(full_word: &Word) -> Vec<Choices> {
     let full_word = &normalize(full_word);
 
     let mut map: BTreeMap<usize, ShortestOnly> = BTreeMap::new();
@@ -609,21 +609,18 @@ pub fn all_choices(full_word: &Word) -> Vec<Choices> {
 
         let choices = map.remove(&end).unwrap();
         if end == full_word.len() {
-            let mut choices = choices.into_vec();
-            choices.sort();
-            choices.dedup();
-            return choices;
+            return choices.into_vec();
         }
 
         for choices in choices.into_vec() {
-            for choice in after.iter() {
+            for (end, choice) in after.iter() {
                 let mut choices = choices.clone();
-                choices.push(choice.word);
+                choices.push(choice.clone());
 
-                if let Some(vec) = map.get_mut(&choice.end) {
+                if let Some(vec) = map.get_mut(end) {
                     vec.push(choices);
                 } else {
-                    map.insert(choice.end, ShortestOnly::single(choices));
+                    map.insert(*end, ShortestOnly::single(choices));
                 }
             }
         }
@@ -632,10 +629,10 @@ pub fn all_choices(full_word: &Word) -> Vec<Choices> {
     Vec::new()
 }
 
-fn choices_after(full_word: &Word, start: usize) -> Vec<Choice> {
+fn choices_after(full_word: &Word, start: usize) -> BTreeMap<usize, BTreeSet<EntryIndex>> {
     let stems: &Stems = &STEMS;
 
-    let mut choices = Vec::new();
+    let mut results = BTreeMap::new();
 
     for end in ((start + 1)..=full_word.len()).rev() {
         let stem = &full_word[start..end];
@@ -644,17 +641,17 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<Choice> {
             for data in datas {
                 ExpandChoice::insert_new(&mut ex, data);
             }
-            ex.evaluate(&mut choices);
+            ex.evaluate(&mut results);
         }
     }
 
-    choices
+    results
 }
 
 #[derive(Clone, Debug)]
 pub struct Choice {
     pub end: usize,
-    pub word: &'static str,
+    pub entry: EntryIndex,
 }
 
 #[derive(Clone, Debug)]
@@ -677,7 +674,7 @@ impl<'a> Expand<'a> {
         self.choices.push(choice);
     }
 
-    pub fn evaluate(&mut self, results: &mut Vec<Choice>) {
+    pub fn evaluate(&mut self, results: &mut BTreeMap<usize, BTreeSet<EntryIndex>>) {
         while let Some(choice) = self.choices.pop() {
             choice.step(self, results);
         }
@@ -853,7 +850,19 @@ impl ExpandChoice {
         }
     }
 
-    pub fn step(&self, ex: &mut Expand, results: &mut Vec<Choice>) {
+    pub fn result(&self, results: &mut BTreeMap<usize, BTreeSet<EntryIndex>>, inc: usize) {
+        let end = self.end + inc;
+
+        if let Some(set) = results.get_mut(&end) {
+            set.insert(self.entry);
+        } else {
+            let mut set = BTreeSet::new();
+            set.insert(self.entry);
+            results.insert(end, set);
+        }
+    }
+
+    pub fn step(&self, ex: &mut Expand, results: &mut BTreeMap<usize, BTreeSet<EntryIndex>>) {
         use Letter::*;
 
         match self.state {
@@ -1113,42 +1122,26 @@ impl ExpandChoice {
                     return;
                 }
 
-                let word = &ENTRIES[self.entry as usize].word;
-
                 let next = ex.full_word[self.end];
                 let after = ex.full_word[self.end + 1];
                 if after == Y {
                     if next == V {
                         // Remove only first V
-                        results.push(Choice {
-                            end: self.end + 1,
-                            word,
-                        });
+                        self.result(results, 1);
                     }
                 } else if next == after {
                     if next == V {
                         // Remove both V's in case it was a vowel
-                        results.push(Choice {
-                            end: self.end + 2,
-                            word,
-                        });
+                        self.result(results, 2);
                     }
 
                     // Remove only first of doubled letters
-                    results.push(Choice {
-                        end: self.end + 1,
-                        word,
-                    });
+                    self.result(results, 1);
                 }
             }
 
             Done => {
-                let word = &ENTRIES[self.entry as usize].word;
-
-                results.push(Choice {
-                    end: self.end,
-                    word,
-                });
+                self.result(results, 0);
 
                 if let Some(next) = ex.full_word.get(self.end) {
                     if !LetterSet::vallinam().matches(next) {
@@ -1164,10 +1157,7 @@ impl ExpandChoice {
                         return;
                     }
 
-                    results.push(Choice {
-                        end: self.end + 1,
-                        word,
-                    });
+                    self.result(results, 1);
                 }
             }
         }
