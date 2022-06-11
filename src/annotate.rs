@@ -1,6 +1,8 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::BufReader;
+use std::rc::Rc;
 
 use serde::Deserialize;
 
@@ -554,11 +556,12 @@ impl StemData {
     }
 }
 
-pub type Choices = Vec<BTreeSet<EntryIndex>>;
+pub type Choices = Vec<Rc<Choice>>;
 
 #[derive(Clone)]
 struct ShortestOnly {
     shortest: usize,
+    unlikely: usize,
     choices: Vec<Choices>,
 }
 
@@ -566,29 +569,54 @@ impl ShortestOnly {
     fn new() -> Self {
         Self {
             shortest: 0,
+            unlikely: 0,
             choices: vec![Vec::new()],
         }
+    }
+
+    fn count_unlikely(elem: &Choices) -> usize {
+        elem.iter().filter(|choice| choice.unlikely).count()
     }
 
     fn single(elem: Choices) -> Self {
         Self {
             shortest: elem.len(),
+            unlikely: Self::count_unlikely(&elem),
             choices: vec![elem],
         }
     }
 
     fn push(&mut self, elem: Choices) {
         let len = elem.len();
+
         if len > self.shortest {
             return;
         }
 
-        if len < self.shortest {
-            self.shortest = len;
-            self.choices = vec![elem];
-            return;
+        // Must be at least as short here
+
+        let unlikely = Self::count_unlikely(&elem);
+
+        if len == self.shortest {
+            match unlikely.cmp(&self.unlikely) {
+                Ordering::Less => {}
+
+                Ordering::Equal => {
+                    self.choices.push(elem);
+                    return;
+                }
+
+                Ordering::Greater => {
+                    return;
+                }
+            }
         }
 
+        // Must either be shorter, or same length but less unlikely
+
+        self.shortest = len;
+        self.unlikely = unlikely;
+        self.choices.clear();
         self.choices.push(elem);
     }
 
@@ -629,7 +657,7 @@ pub fn best_choices(full_word: &Word) -> Vec<Choices> {
     Vec::new()
 }
 
-fn choices_after(full_word: &Word, start: usize) -> BTreeMap<usize, BTreeSet<EntryIndex>> {
+fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
     let stems: &Stems = &STEMS;
 
     let mut results = BTreeMap::new();
@@ -646,12 +674,39 @@ fn choices_after(full_word: &Word, start: usize) -> BTreeMap<usize, BTreeSet<Ent
     }
 
     results
+        .into_iter()
+        .map(|(end, choice)| (end, Rc::new(choice)))
+        .collect()
 }
 
-#[derive(Clone, Debug)]
 pub struct Choice {
-    pub end: usize,
-    pub entry: EntryIndex,
+    pub unlikely: bool,
+    pub entries: BTreeSet<EntryIndex>,
+}
+
+impl Choice {
+    pub fn new(entry: EntryIndex, unlikely: bool) -> Self {
+        let mut entries = BTreeSet::new();
+        entries.insert(entry);
+
+        Self { unlikely, entries }
+    }
+
+    pub fn push(&mut self, entry: EntryIndex, unlikely: bool) {
+        match (self.unlikely, unlikely) {
+            (true, true) | (false, false) => {
+                self.entries.insert(entry);
+            }
+
+            (true, false) => {
+                self.unlikely = false;
+                self.entries.clear();
+                self.entries.insert(entry);
+            }
+
+            (false, true) => {}
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -674,7 +729,7 @@ impl<'a> Expand<'a> {
         self.choices.push(choice);
     }
 
-    pub fn evaluate(&mut self, results: &mut BTreeMap<usize, BTreeSet<EntryIndex>>) {
+    pub fn evaluate(&mut self, results: &mut BTreeMap<usize, Choice>) {
         while let Some(choice) = self.choices.pop() {
             choice.step(self, results);
         }
@@ -724,6 +779,7 @@ struct ExpandChoice {
     entry: EntryIndex,
     is_start: bool,
     has_implicit_u: bool,
+    unlikely: bool,
     state: ExpandState,
 }
 
@@ -734,17 +790,18 @@ impl ExpandChoice {
             entry: data.entry,
             is_start: true,
             has_implicit_u: false,
+            unlikely: false,
             state: Done,
         };
 
         choice.add_goto(ex, data.root, &[data.state]);
     }
 
-    pub fn matched<'a>(&self, ex: &Expand<'a>) -> &'a Word {
+    fn matched<'a>(&self, ex: &Expand<'a>) -> &'a Word {
         &ex.full_word[ex.start..self.end]
     }
 
-    pub fn last(&self, ex: &Expand) -> Option<Letter> {
+    fn last(&self, ex: &Expand) -> Option<Letter> {
         if self.has_implicit_u {
             return Some(Letter::U);
         }
@@ -752,7 +809,7 @@ impl ExpandChoice {
         self.matched(ex).last()
     }
 
-    pub fn end_matches(&self, ex: &Expand, suffix: LetterSet) -> bool {
+    fn end_matches(&self, ex: &Expand, suffix: LetterSet) -> bool {
         if self.has_implicit_u {
             return suffix.matches(Letter::U);
         }
@@ -760,7 +817,7 @@ impl ExpandChoice {
         self.matched(ex).end_matches(suffix)
     }
 
-    pub fn ends_with(&self, ex: &Expand, mut suffix: &Word) -> bool {
+    fn ends_with(&self, ex: &Expand, mut suffix: &Word) -> bool {
         if self.has_implicit_u {
             if let Some(new_suffix) = suffix.strip_suffix(word![U]) {
                 suffix = new_suffix;
@@ -772,7 +829,7 @@ impl ExpandChoice {
         self.matched(ex).ends_with(suffix)
     }
 
-    pub fn goto(&self, ex: &mut Expand, states: &[ExpandState]) {
+    fn goto(&self, ex: &mut Expand, states: &[ExpandState]) {
         for &state in states {
             ex.push(Self {
                 is_start: false,
@@ -782,7 +839,7 @@ impl ExpandChoice {
         }
     }
 
-    pub fn add_goto(mut self, ex: &mut Expand, mut suffix: &Word, states: &[ExpandState]) {
+    fn add_goto(mut self, ex: &mut Expand, mut suffix: &Word, states: &[ExpandState]) {
         use Letter::*;
 
         if suffix.is_empty() {
@@ -850,19 +907,22 @@ impl ExpandChoice {
         }
     }
 
-    pub fn result(&self, results: &mut BTreeMap<usize, BTreeSet<EntryIndex>>, inc: usize) {
+    fn unlikely(mut self) -> Self {
+        self.unlikely = true;
+        self
+    }
+
+    fn result(&self, results: &mut BTreeMap<usize, Choice>, inc: usize) {
         let end = self.end + inc;
 
         if let Some(set) = results.get_mut(&end) {
-            set.insert(self.entry);
+            set.push(self.entry, self.unlikely);
         } else {
-            let mut set = BTreeSet::new();
-            set.insert(self.entry);
-            results.insert(end, set);
+            results.insert(end, Choice::new(self.entry, self.unlikely));
         }
     }
 
-    pub fn step(&self, ex: &mut Expand, results: &mut BTreeMap<usize, BTreeSet<EntryIndex>>) {
+    pub fn step(&self, ex: &mut Expand, results: &mut BTreeMap<usize, Choice>) {
         use Letter::*;
 
         match self.state {
@@ -870,22 +930,26 @@ impl ExpandChoice {
                 self.goto(ex, &[VerbStem]);
 
                 if !self.end_matches(ex, LetterSet::vowel()) {
-                    self.add_goto(ex, word![U, T, A, AlveolarL], &[Oblique]);
+                    self.unlikely()
+                        .add_goto(ex, word![U, T, A, AlveolarL], &[Oblique]);
                 }
 
-                self.add_goto(ex, word![T, A, AlveolarL], &[Oblique]);
+                self.unlikely()
+                    .add_goto(ex, word![T, A, AlveolarL], &[Oblique]);
             }
 
             StrongVerb => {
                 self.goto(ex, &[VerbStem]);
 
-                self.add_goto(ex, word![T, T, A, AlveolarL], &[Oblique]);
+                self.unlikely()
+                    .add_goto(ex, word![T, T, A, AlveolarL], &[Oblique]);
             }
 
             VerbStem => {
                 self.goto(ex, &[Emphasis]);
 
-                self.add_goto(ex, word![K, A], &[Done]);
+                self.unlikely().add_goto(ex, word![K, A], &[Done]);
+
                 self.add_goto(ex, word![M, K, A, RetroL], &[Particle]);
                 self.add_goto(ex, word![U, M, K, A, RetroL], &[Particle]);
             }
@@ -894,29 +958,31 @@ impl ExpandChoice {
                 Some(U) => self.goto(ex, &[PastStem, SpecialA]),
 
                 Some(I) => {
-                    self.add_goto(ex, word![AlveolarN], &[PastStem, SpecialB]);
-                    self.add_goto(ex, word![Y, A], &[AdjectiveStem, Done]);
                     self.add_goto(ex, word![AlveolarR, AlveolarR, U], &[Done]);
+                    self.add_goto(ex, word![Y, A], &[AdjectiveStem, Done]);
+                    self.add_goto(ex, word![AlveolarN], &[PastStem, SpecialB]);
                 }
 
                 _ => {
-                    self.add_goto(ex, word![AlveolarN], &[PastStem, SpecialB]);
+                    self.unlikely()
+                        .add_goto(ex, word![Y, I, AlveolarN], &[PastStem, SpecialB]);
+
                     self.add_goto(ex, word![Y, I, AlveolarR, AlveolarR, U], &[Done]);
-                    self.add_goto(ex, word![Y, I, AlveolarN], &[PastStem, SpecialB]);
+                    self.add_goto(ex, word![AlveolarN], &[PastStem, SpecialB]);
                 }
             },
 
             InfinitiveStem => {
                 if self.ends_with(ex, word![K, U]) {
                     self.add_goto(ex, word![I, AlveolarR, U], &[TenseStem]);
-                    self.add_goto(
+                    self.unlikely().add_goto(
                         ex,
                         word![I, AlveolarN, AlveolarR, U],
                         &[TenseStem, SpecialA],
                     );
                 } else {
                     self.add_goto(ex, word![K, I, AlveolarR, U], &[TenseStem]);
-                    self.add_goto(
+                    self.unlikely().add_goto(
                         ex,
                         word![K, I, AlveolarN, AlveolarR, U],
                         &[TenseStem, SpecialA],
@@ -925,14 +991,15 @@ impl ExpandChoice {
 
                 if self.end_matches(ex, letterset![R, Zh]) {
                     self.add_goto(ex, word![U, K, I, AlveolarR, U], &[TenseStem]);
-                    self.add_goto(
+                    self.unlikely().add_goto(
                         ex,
                         word![U, K, I, AlveolarN, AlveolarR, U],
                         &[TenseStem, SpecialA],
                     );
                 }
 
-                self.add_goto(ex, word![Ai], &[Oblique]);
+                self.unlikely().add_goto(ex, word![Ai], &[Oblique]);
+
                 self.add_goto(ex, word![LongA], &[Negative]);
                 self.add_goto(ex, word![U, M], &[Particle]);
             }
@@ -940,7 +1007,8 @@ impl ExpandChoice {
             Negative => {
                 self.goto(ex, &[Done]);
 
-                self.add_goto(ex, word![M, Ai], &[Oblique]);
+                self.unlikely().add_goto(ex, word![M, Ai], &[Oblique]);
+
                 self.add_goto(ex, word![M, A, AlveolarL], &[Oblique]);
                 self.add_goto(ex, word![T, A], &[AdjectiveStem, Done]);
                 self.add_goto(ex, word![T, U], &[Emphasis]);
@@ -949,7 +1017,8 @@ impl ExpandChoice {
             Infinitive => {
                 self.goto(ex, &[Emphasis]);
 
-                self.add_goto(ex, word![AlveolarL], &[Oblique]);
+                self.unlikely().add_goto(ex, word![AlveolarL], &[Oblique]);
+
                 self.add_goto(ex, word![RetroT, RetroT, U, M], &[Emphasis]);
                 self.add_goto(ex, word![AlveolarL, LongA, M], &[Emphasis]);
             }
@@ -980,8 +1049,9 @@ impl ExpandChoice {
             SpecialC => {
                 self.goto(ex, &[Particle]);
 
-                self.add_goto(ex, word![RetroL], &[Particle]);
-                self.add_goto(ex, word![AlveolarN], &[Particle]);
+                self.unlikely().add_goto(ex, word![RetroL], &[Particle]);
+                self.unlikely().add_goto(ex, word![AlveolarN], &[Particle]);
+
                 self.add_goto(ex, word![R], &[Particle]);
             }
 
@@ -1006,20 +1076,22 @@ impl ExpandChoice {
             }
 
             GeneralStemE => {
-                self.add_goto(ex, word![M], &[Particle]);
+                self.unlikely().add_goto(ex, word![M], &[Particle]);
+
                 self.add_goto(ex, word![AlveolarN], &[Particle]);
             }
 
             GeneralStemO => {
-                self.add_goto(ex, word![RetroL], &[Oblique]);
-                self.add_goto(ex, word![AlveolarN], &[Oblique]);
+                self.unlikely().add_goto(ex, word![RetroL], &[Oblique]);
+                self.unlikely().add_goto(ex, word![AlveolarN], &[Oblique]);
+
                 self.add_goto(ex, word![R], &[Oblique]);
                 self.add_goto(ex, word![M], &[Particle]);
             }
 
             GeneralStemNgal => {
-                self.goto(ex, &[GeneralStemPlural]);
-                self.add_goto(ex, word![M], &[GeneralStemPlural]);
+                self.unlikely().goto(ex, &[GeneralStemPlural]);
+                self.unlikely().add_goto(ex, word![M], &[GeneralStemPlural]);
             }
 
             GeneralStemPlural => {
@@ -1064,7 +1136,7 @@ impl ExpandChoice {
 
                 self.add_goto(ex, word![Ai], &[Emphasis]);
 
-                self.add_goto(ex, word![A, T, U], &[Oblique]);
+                self.unlikely().add_goto(ex, word![A, T, U], &[Oblique]);
                 self.add_goto(ex, word![U, RetroT, Ai, Y, A], &[AdjectiveStem, Done]);
 
                 self.add_goto(ex, word![U, RetroT, AlveolarN], &[Emphasis]);
