@@ -34,6 +34,11 @@ lazy_static! {
                 .then_with(|| a.subword.cmp(&b.subword))
         });
 
+        // Record the index of each entry
+        for (i, entry) in entries.iter_mut().enumerate() {
+            entry.index = i as EntryIndex;
+        }
+
         eprintln!(" => {} entries", entries.len());
         entries
     };
@@ -189,6 +194,7 @@ pub struct Entry {
     pub word: Box<str>,
     pub parsed_word: Box<[&'static Word]>,
     pub subword: Option<u8>,
+    pub index: EntryIndex,
     pub hint: Option<Box<str>>,
     pub kind_strs: Box<[&'static str]>,
     pub kind_set: KindSet,
@@ -343,6 +349,7 @@ impl From<RawEntry> for Entry {
             word: raw.word.into_boxed_str(),
             parsed_word,
             subword: raw.sub,
+            index: 0,
             hint: raw.hint.map(String::into_boxed_str),
             kind_strs,
             kind_set,
