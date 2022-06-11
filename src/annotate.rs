@@ -224,8 +224,8 @@ impl StemData {
                 A => {
                     Self::stem_verb_infinitive(state, &parsed, strong);
 
-                    // Special case for words with doubling last letter
-                    if !strong && word.end_matches(LetterSet::consonant()) {
+                    // Special case for words with doubling last letter, joining letters
+                    if !strong && word.last() != Some(U) {
                         Self::insert(state, word, &[InfinitiveStem]);
                         Self::insert(state, &(word + word![V, U]), &[FutureStem]);
                         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
@@ -455,7 +455,7 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<Choice> {
 
     let mut choices = Vec::new();
 
-    for end in (start + 1)..=full_word.len() {
+    for end in ((start + 1)..=full_word.len()).rev() {
         let stem = &full_word[start..end];
         if let Some(datas) = stems.get(stem) {
             let mut ex = Expand::new(full_word, start);
@@ -628,7 +628,9 @@ impl ExpandChoice {
         }
 
         // Add shortest match (without final U, glide insertion, or doubling)
-        self.goto(ex, states);
+        if !self.has_implicit_u || word.matches(self.end, LetterSet::vowel()) {
+            self.goto(ex, states);
+        }
 
         // Add match with final U
         if self.has_implicit_u {
@@ -863,7 +865,7 @@ impl ExpandChoice {
 
             Irundhu => {
                 self.goto(ex, &[Emphasis]);
-                self.add_goto(ex, word![I, R, U, N, T, U], &[MaybeAdjective]);
+                self.add_goto(ex, word![I, R, U, M, T, U], &[MaybeAdjective]);
             }
 
             MaybeAdjective => {
@@ -922,7 +924,12 @@ impl ExpandChoice {
                         return;
                     }
 
-                    if ex.full_word.get(self.end + 1) != Some(next) {
+                    if ex
+                        .full_word
+                        .get(self.end + 1)
+                        .map(|lt| lt != next)
+                        .unwrap_or(false)
+                    {
                         return;
                     }
 
