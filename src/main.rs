@@ -72,9 +72,12 @@ async fn rocket() -> _ {
     // Initialize the examples for the front page
     web::current_example();
 
-    // Start building the word and definition trees immediately
-    task::spawn_blocking(search::tree::search_word);
-    task::spawn_blocking(search::tree::search_definition);
+    // Start building the word, definition, and stem data structures
+    task::spawn_blocking(|| {
+        let _ = annotate::supported();
+        let _ = search::tree::search_word();
+        let _ = search::tree::search_definition();
+    });
 
     // Host resources at a path including the version number
     let res_path = format!("/res/{}", version());

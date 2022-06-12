@@ -247,10 +247,13 @@ struct RawVerbData {
     ve: Vec<String>,
 }
 
+// Vinaiyecham map for resolving incomplete information
 type Ves = HashMap<String, BTreeSet<&'static Word>>;
 
+// Verb data indexed by word and subword
 type Verbs = HashMap<(String, Option<u8>), Vec<String>>;
 
+// Map from stems to stem data
 type Stems = HashMap<&'static Word, Vec<StemData>>;
 
 lazy_static! {
@@ -266,22 +269,26 @@ lazy_static! {
         let verb_list: Vec<RawVerbData> = serde_json::from_reader(BufReader::new(file))
             .expect("verbs parse error");
 
-        // Vinaiyecham map for dealing with suffixes
+        eprintln!(" => {} verbs", verb_list.len());
+        eprintln!("Building stems...");
+
+        // Process the raw verb list by creating maps (Ves and Verbs)
         let mut ves = Ves::new();
-
         let mut verbs = Verbs::new();
-
         for mut verb in verb_list {
             for ve in verb.ve.iter_mut() {
+                // Vinaiyechams starting with a hyphen are incomplete
                 if ve.starts_with('-') {
                     continue;
                 }
 
+                // For compount words, only the last word is conjugated
                 if let Some(index) = verb.word.rfind(' ') {
                     ve.insert_str(0, &verb.word[..=index]);
                     continue;
                 }
 
+                // Record this vinaiyecham and the word it came from (in Ves)
                 let word = intern::word(Word::parse(&verb.word));
                 if let Some(set) = ves.get_mut(ve) {
                     set.insert(word);
@@ -292,11 +299,14 @@ lazy_static! {
                 }
             }
 
+            // Remember the vinaiyecham for this word and subword
             verbs.insert((verb.word, verb.sub), verb.ve);
         }
 
+        // Get a map of special words which are expanded differently
         let specials = get_specials();
 
+        // Create a map of stems using all these data structures
         let mut stems = Stems::new();
         for entry in ENTRIES.iter() {
             StemData::parse(&mut StemState {
@@ -308,8 +318,10 @@ lazy_static! {
             });
         }
 
+        // Clear the interning metadata since it won't be used anymore
         intern::done();
 
+        eprintln!(" => {} stems", stems.len());
         stems
     };
 }
@@ -357,9 +369,12 @@ impl StemData {
             }
         }
 
+        // Splt on commas to find individual words
         let words: Vec<_> = Entry::words(&entry.word).collect();
 
+        // Figure out which function to use for stemming
         let callback = if entry.kind_set.matches(PeyarAdai) {
+            // Handle -aaga/-aana and -endru/-endra pairs
             match words.as_slice() {
                 [adv, adj] if entry.kind_set.matches(VinaiAdai) => {
                     Self::stem_subwords(state, adv, Self::stem_adverb);
@@ -379,12 +394,14 @@ impl StemData {
             Self::stem_other
         };
 
+        // Stem each of the words individually
         for word in words {
             Self::stem_subwords(state, word, callback);
         }
     }
 
     fn stem_subwords(state: &mut StemState, word: &str, callback: fn(&mut StemState, &Word)) {
+        // For every possible way to join the words, add a stem
         for word in Entry::joined_subwords(word) {
             callback(state, &word);
         }
@@ -398,10 +415,13 @@ impl StemData {
         let ve = &state.verbs[&key];
         let parsed: Vec<_> = ve.iter().map(|ve| Word::parse(ve)).collect();
 
+        // Usually strong iff infinitive is -ka and adverb is not -i or -y
         let strong = parsed.iter().any(|word| word.ends_with(word![K, A]))
             && !parsed.iter().any(|word| word.end_matches(letterset![I, Y]));
 
+        // Stem each of the vinaiyechams
         for (ve, mut parsed) in ve.iter().zip(parsed) {
+            // If incomplete, use Ves to try to match it with another verb
             if let Some(stripped) = ve.strip_prefix('-') {
                 let mut success = false;
                 for full in &state.ves[stripped] {
@@ -418,6 +438,7 @@ impl StemData {
                 }
             }
 
+            // Use the appropriate stemming method depending on the ending
             match parsed.last().expect("empty vinaiyecham!") {
                 A => {
                     Self::stem_verb_infinitive(state, &parsed, strong);
@@ -429,33 +450,40 @@ impl StemData {
                         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
                     }
                 }
+
                 U | I | Y => Self::stem_verb_adverb(state, &parsed),
+
                 _ => panic!("not a valid vinaiyecham: {}", parsed),
             }
         }
 
+        // If weak, mark as a weak verb and return early
         if !strong {
             Self::insert(state, word, &[WeakVerb]);
             return;
         }
 
+        // Mark as a strong verb
         Self::insert(state, word, &[StrongVerb]);
 
+        // Handle nil => nitral, etc.
         if let Some(word) =
             word.replace_suffix(word![AlveolarL], word![AlveolarR, AlveolarR, A, AlveolarL])
         {
-            Self::insert(state, &word, &[Oblique]);
+            Self::insert(state, &word, &[RareVerbalNoun]);
         }
 
-        if let Some(word) = word.replace_suffix(word![RetroT], word![RetroT, RetroT, A, AlveolarL])
+        // Handle kel => kettal, etc.
+        if let Some(word) = word.replace_suffix(word![RetroL], word![RetroT, RetroT, A, AlveolarL])
         {
-            Self::insert(state, &word, &[Oblique]);
+            Self::insert(state, &word, &[RareVerbalNoun]);
         }
     }
 
     fn stem_verb_infinitive(state: &mut StemState, word: &Word, strong: bool) {
         Self::insert(state, word, &[Infinitive]);
 
+        // Handle weak verbs by replacing final -a with -u
         if !strong {
             let word = word.strip_suffix(word![A]).unwrap();
             Self::insert(state, &(word + word![U]), &[InfinitiveStem]);
@@ -464,12 +492,14 @@ impl StemData {
             return;
         }
 
+        // Handle strong -kka verbs
         if let Some(word) = word.strip_suffix(word![K, K, A]) {
             Self::insert(state, &(word + word![K, K, U]), &[InfinitiveStem]);
             Self::insert(state, &(word + word![P, P, U]), &[FutureStem]);
             return;
         }
 
+        // Handle other strong verbs
         let word = word.strip_suffix(word![K, A]).unwrap();
         Self::insert(state, &(word + word![K, U]), &[InfinitiveStem]);
         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
@@ -478,12 +508,14 @@ impl StemData {
     fn stem_verb_adverb(state: &mut StemState, word: &Word) {
         Self::insert(state, word, &[Emphasis]);
 
+        // If ends in -y, remove it
         if let Some(word) = word.strip_suffix(word![Y]) {
             Self::insert(state, word, &[AdverbStem]);
         } else {
             Self::insert(state, word, &[AdverbStem]);
         }
 
+        // Handle solli => sonn-
         if let Some(word) =
             word.replace_suffix(word![AlveolarL, AlveolarL, I], word![AlveolarN, AlveolarN])
         {
@@ -492,6 +524,7 @@ impl StemData {
     }
 
     fn stem_noun(state: &mut StemState, word: &Word) {
+        // Handle nouns ending in -am
         if word.ends_with(word![A, M]) {
             let base = &word[..(word.len() - 1)];
             Self::insert(state, base, &[Done]);
@@ -503,16 +536,19 @@ impl StemData {
 
         Self::insert(state, word, &[Plural]);
 
+        // Handle nouns ending in -an
         if let Some(word) = word.replace_suffix(word![A, AlveolarN], word![A, R]) {
             Self::insert(state, &word, &[Plural]);
             return;
         }
 
+        // Handle nouns ending in -ar
         if let Some(word) = word.replace_suffix(word![A, R], word![A, AlveolarN]) {
             Self::insert(state, &word, &[Oblique]);
             return;
         }
 
+        // Handle nouns which double a hard consonant
         let replace = word
             .replace_suffix(word![RetroT, U], word![RetroT, RetroT, U])
             .or_else(|| word.replace_suffix(word![AlveolarR, U], word![AlveolarR, AlveolarR, U]));
@@ -526,16 +562,14 @@ impl StemData {
         if word.ends_with(word![A]) {
             Self::insert(state, word, &[AdjectiveStem, Done]);
         } else {
+            // If doesn't end with -a, treat as unknown
             Self::insert(state, word, &[Emphasis]);
         }
     }
 
     fn stem_adverb(state: &mut StemState, word: &Word) {
-        let replace = word
-            .replace_suffix(word![LongA, K, A], word![LongA, Y])
-            .or_else(|| word.replace_suffix(word![LongA, Y], word![LongA, K, A]));
-
-        if let Some(word) = replace {
+        // Handle nouns ending in -aaga
+        if let Some(word) = word.replace_suffix(word![LongA, K, A], word![LongA, Y]) {
             Self::insert(state, &word, &[Emphasis]);
         }
 
@@ -549,11 +583,13 @@ impl StemData {
     fn insert(state: &mut StemState, word: &Word, states: &[ExpandState]) {
         let word = intern::word(normalize(word));
 
+        // Strip final -u since it may disappear
         let mut stem = word;
         if let Some(new_stem) = stem.strip_suffix(word![U]) {
             stem = new_stem;
         }
 
+        // Insert stem into Stems map
         let entry = state.entry;
         if let Some(vec) = state.stems.get_mut(&stem) {
             for &state in states {
@@ -567,6 +603,10 @@ impl StemData {
             state.stems.insert(stem, vec);
         }
     }
+}
+
+pub fn supported() -> bool {
+    !STEMS.is_empty()
 }
 
 pub type Choices = Vec<Rc<Choice>>;
@@ -639,22 +679,27 @@ impl ShortestOnly {
 }
 
 pub fn best_choices(full_word: &Word) -> Vec<Choices> {
+    // Normalize the input word
     let mut full_word = normalize(full_word);
     normalize_final(&mut full_word);
     let full_word = &full_word;
 
+    // Create an empty map
     let mut map: BTreeMap<usize, ShortestOnly> = BTreeMap::new();
     map.insert(0, ShortestOnly::new());
 
+    // Repeatedly expand shortest suffix until matches full word
     // TODO: use pop_first when stabilized (nightly: map_first_last)
     while let Some((&end, _)) = map.iter().next() {
         let after = choices_after(full_word, end);
 
+        // Check for matching full word
         let choices = map.remove(&end).unwrap();
         if end == full_word.len() {
             return choices.into_vec();
         }
 
+        // Add new choices to end of existing choices
         for choices in choices.into_vec() {
             for (end, choice) in after.iter() {
                 let mut choices = choices.clone();
@@ -669,6 +714,7 @@ pub fn best_choices(full_word: &Word) -> Vec<Choices> {
         }
     }
 
+    // Could not match full word
     Vec::new()
 }
 
@@ -677,8 +723,11 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
 
     let mut results = BTreeMap::new();
 
+    // Iterate through all prefixes, starting with longest
     for end in ((start + 1)..=full_word.len()).rev() {
         let stem = &full_word[start..end];
+
+        // If the prefix matches a stem, try to expand that stem
         if let Some(datas) = stems.get(stem) {
             let mut ex = Expand::new(full_word, start);
             for data in datas {
@@ -688,6 +737,7 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
         }
     }
 
+    // Put every choice into an Rc to reduce copying
     results
         .into_iter()
         .map(|(end, choice)| (end, Rc::new(choice)))
@@ -755,6 +805,7 @@ impl<'a> Expand<'a> {
 pub enum ExpandState {
     WeakVerb,
     StrongVerb,
+    RareVerbalNoun,
     VerbStem,
     AdverbStem,
     InfinitiveStem,
@@ -945,19 +996,16 @@ impl ExpandChoice {
                 self.goto(ex, &[VerbStem]);
 
                 if !self.end_matches(ex, LetterSet::vowel()) {
-                    self.unlikely()
-                        .add_goto(ex, word![U, T, A, AlveolarL], &[Oblique]);
+                    self.add_goto(ex, word![U, T, A, AlveolarL], &[RareVerbalNoun]);
                 }
 
-                self.unlikely()
-                    .add_goto(ex, word![T, A, AlveolarL], &[Oblique]);
+                self.add_goto(ex, word![T, A, AlveolarL], &[RareVerbalNoun]);
             }
 
             StrongVerb => {
                 self.goto(ex, &[VerbStem]);
 
-                self.unlikely()
-                    .add_goto(ex, word![T, T, A, AlveolarL], &[Oblique]);
+                self.add_goto(ex, word![T, T, A, AlveolarL], &[RareVerbalNoun]);
             }
 
             VerbStem => {
@@ -1013,7 +1061,7 @@ impl ExpandChoice {
                     );
                 }
 
-                self.unlikely().add_goto(ex, word![Ai], &[Oblique]);
+                self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
 
                 self.add_goto(ex, word![LongA], &[Negative]);
                 self.add_goto(ex, word![U, M], &[Particle]);
@@ -1022,7 +1070,7 @@ impl ExpandChoice {
             Negative => {
                 self.goto(ex, &[Done]);
 
-                self.unlikely().add_goto(ex, word![M, Ai], &[Oblique]);
+                self.add_goto(ex, word![M, Ai], &[RareVerbalNoun]);
 
                 self.add_goto(ex, word![M, A, AlveolarL], &[Oblique]);
                 self.add_goto(ex, word![T, A], &[AdjectiveStem, Done]);
@@ -1032,7 +1080,7 @@ impl ExpandChoice {
             Infinitive => {
                 self.goto(ex, &[Emphasis]);
 
-                self.unlikely().add_goto(ex, word![AlveolarL], &[Oblique]);
+                self.add_goto(ex, word![AlveolarL], &[RareVerbalNoun]);
 
                 self.add_goto(ex, word![RetroT, RetroT, U, M], &[Emphasis]);
                 self.add_goto(ex, word![AlveolarL, LongA, M], &[Emphasis]);
@@ -1111,6 +1159,10 @@ impl ExpandChoice {
 
             GeneralStemPlural => {
                 self.add_goto(ex, word![K, A, RetroL], &[Particle]);
+            }
+
+            RareVerbalNoun => {
+                self.unlikely().goto(ex, &[Oblique]);
             }
 
             Plural => {
