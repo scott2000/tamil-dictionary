@@ -194,7 +194,7 @@ window.addEventListener('load', function() {
   }
 
   function canTrapColon(query) {
-    return query.search(/[{}]/) == -1;
+    return query.search(/[{}]/) === -1;
   }
 
   function refreshQuery() {
@@ -204,15 +204,16 @@ window.addEventListener('load', function() {
 
     const query = searchWord.value;
 
-    if (query.charAt(query.length - 1) == ':') {
-      if (canTrapColon(query)) {
-        showAdvanced();
-        searchWord.value = query.slice(0, query.length - 1);
-        setTimeout(function() {
-          searchDefinition.focus();
-        }, 0);
-        return;
-      }
+    const colonIndex = query.indexOf(':');
+    if (colonIndex !== -1 && canTrapColon(query)) {
+      showAdvanced();
+      searchWord.value = query.slice(0, colonIndex).trim();
+      searchDefinition.value = query.slice(colonIndex + 1).trim();
+      setTimeout(function() {
+        searchDefinition.focus();
+        searchDefinition.setSelectionRange(0, 0);
+      }, 0);
+      return;
     }
 
     setQuery(query, false);
@@ -283,18 +284,7 @@ window.addEventListener('load', function() {
   }
 
   searchWord.addEventListener('keydown', function(event) {
-    if (composing || advanced) {
-      return;
-    }
-
-    if (event.key == ':' && canTrapColon(searchWord.value)) {
-      event.preventDefault();
-      showAdvanced();
-      searchDefinition.focus();
-      return;
-    }
-
-    if (!results.length) {
+    if (composing || advanced || !results.length) {
       return;
     }
 
@@ -359,7 +349,7 @@ window.addEventListener('load', function() {
       elem.style.display = 'none';
     }
 
-    searchDefinition.value = "";
+    searchDefinition.value = '';
     searchDefinition.disabled = true;
     for (const elem of searchKinds) {
       elem.checked = false;
@@ -411,7 +401,7 @@ window.addEventListener('load', function() {
     }
 
     for (const checkbox of relation.dst) {
-      if (checkbox.disabled == checked) {
+      if (checkbox.disabled === checked) {
         continue;
       }
 
@@ -436,7 +426,7 @@ window.addEventListener('load', function() {
     checkboxUpdate(relation);
   }
 
-  if (document.activeElement == searchWord) {
+  if (document.activeElement === searchWord) {
     focused = true;
     refreshQuery();
   }
