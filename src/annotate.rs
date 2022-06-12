@@ -303,6 +303,11 @@ lazy_static! {
 
                 // For compount words, only the last word is conjugated
                 if let Some(index) = verb.word.rfind(' ') {
+                    // Make sure that there aren't multiple parts
+                    if verb.word.contains(&[',', ';']) {
+                        panic!("compound verb cannot be conjugated: {}", verb.word);
+                    }
+
                     ve.insert_str(0, &verb.word[..=index]);
                     continue;
                 }
