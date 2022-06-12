@@ -600,6 +600,50 @@ impl<'a> SearchTemplate<'a> {
             }
         }
     }
+
+    fn explicit(&mut self, results: &BTreeSet<EntryIndex>) {
+        let count = results.len();
+        if count == 0 {
+            self.message("No results found.");
+            return;
+        }
+
+        let entries: &[Entry] = &ENTRIES;
+
+        let results = results
+            .iter()
+            .map(|&index| SearchRankingEntry {
+                entry: &entries[index as usize],
+                words: BTreeSet::new(),
+                exact: true,
+            })
+            .collect();
+
+        self.best_count = count.into();
+        self.best = ResultEntry::render_all(results, true);
+        self.hide_other = true;
+
+        RESULT_COUNT.fetch_add(count as u64, Ordering::Relaxed);
+    }
+}
+
+#[get("/entries?<ids>")]
+pub fn entries(ids: &str) -> Template {
+    SEARCH_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    let entry_count = ENTRIES.len();
+
+    let set = ids
+        .split(',')
+        .map(str::trim)
+        .filter_map(|id| id.parse().ok())
+        .filter(|&id| (id as usize) < entry_count)
+        .collect();
+
+    let mut search = SearchTemplate::new("", "", QueryKindSet::default(), false);
+    search.explicit(&set);
+
+    render_template("search", search)
 }
 
 #[get("/random")]

@@ -86,6 +86,7 @@ async fn rocket() -> _ {
                 web::index,
                 web::advanced,
                 web::grammar,
+                web::entries,
                 web::random,
                 web::search_all,
                 web::search,
