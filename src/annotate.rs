@@ -52,12 +52,31 @@ pub fn normalize(mut word: &Word) -> Box<Word> {
             }
         }
 
-        if lt == Au {
-            letters.extend_from_slice(&[A, V, U]);
-            continue;
-        }
+        match lt {
+            Au => letters.extend_from_slice(&[A, V, U]),
 
-        letters.push(lt);
+            Aaydham => {}
+
+            J => letters.push(Ch),
+
+            Sh => {
+                if iter.peek_matches(LetterSet::vowel()) {
+                    letters.push(RetroT);
+                } else {
+                    letters.extend_from_slice(&[RetroT, U]);
+                }
+            }
+
+            S => {
+                if iter.peek_matches(LetterSet::vowel()) {
+                    letters.push(Ch);
+                } else {
+                    letters.extend_from_slice(&[Ch, U]);
+                }
+            }
+
+            _ => letters.push(lt),
+        }
     }
 
     letters.into()

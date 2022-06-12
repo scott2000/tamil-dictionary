@@ -847,6 +847,10 @@ impl<'a> WordIter<'a> {
         self.word.get(self.index + 1)
     }
 
+    pub fn peek_matches(&self, lts: LetterSet) -> bool {
+        self.word.matches(self.index, lts)
+    }
+
     pub fn adv(&mut self) {
         self.index += 1;
         debug_assert!(self.index <= self.word.len());
