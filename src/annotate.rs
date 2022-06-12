@@ -57,6 +57,16 @@ pub fn normalize(mut word: &Word) -> Box<Word> {
 
             Aaydham => {}
 
+            K if iter.peek() == Some(Sh) => {
+                iter.next();
+
+                if iter.peek_matches(LetterSet::vowel()) {
+                    letters.extend_from_slice(&[RetroT, Ch]);
+                } else {
+                    letters.extend_from_slice(&[RetroT, Ch, U]);
+                }
+            }
+
             J => letters.push(Ch),
 
             Sh => {
@@ -550,11 +560,7 @@ impl StemData {
     fn stem_noun(state: &mut StemState, word: &Word) {
         // Handle nouns ending in -am
         if word.ends_with(word![A, M]) {
-            let base = &word[..(word.len() - 1)];
-            Self::insert(state, base, &[Done]);
-            Self::insert(state, &(base + word![T, T, U]), &[Oblique]);
-            Self::insert(state, &(base + word![Ng, K, A, RetroL]), &[Oblique]);
-            Self::insert(state, word, &[Emphasis]);
+            Self::insert(state, &word[..(word.len() - 1)], &[NounWithAm]);
             return;
         }
 
@@ -613,6 +619,11 @@ impl StemData {
             stem = new_stem;
         }
 
+        // Make sure the stem is valid
+        if !is_possible_stem_start(stem) {
+            panic!("invalid stem: {}", stem);
+        }
+
         // Insert stem into Stems map
         let entry = state.entry;
         if let Some(vec) = state.stems.get_mut(&stem) {
@@ -635,7 +646,7 @@ pub fn supported() -> bool {
 
 pub type Choices = Vec<Rc<Choice>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ShortestOnly {
     shortest: usize,
     unlikely: usize,
@@ -715,8 +726,6 @@ pub fn best_choices(full_word: &Word) -> Vec<Choices> {
     // Repeatedly expand shortest suffix until matches full word
     // TODO: use pop_first when stabilized (nightly: map_first_last)
     while let Some((&end, _)) = map.iter().next() {
-        let after = choices_after(full_word, end);
-
         // Check for matching full word
         let choices = map.remove(&end).unwrap();
         if end == full_word.len() {
@@ -724,6 +733,7 @@ pub fn best_choices(full_word: &Word) -> Vec<Choices> {
         }
 
         // Add new choices to end of existing choices
+        let after = choices_after(full_word, end);
         for choices in choices.into_vec() {
             for (end, choice) in after.iter() {
                 let mut choices = choices.clone();
@@ -743,6 +753,11 @@ pub fn best_choices(full_word: &Word) -> Vec<Choices> {
 }
 
 fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
+    // If the stem starts with an invalid combination, don't search at all
+    if !is_possible_stem_start(&full_word[start..]) {
+        return Vec::new();
+    }
+
     let stems: &Stems = &STEMS;
 
     let mut results = BTreeMap::new();
@@ -750,6 +765,11 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
     // Iterate through all prefixes, starting with longest
     for end in ((start + 1)..=full_word.len()).rev() {
         let stem = &full_word[start..end];
+
+        // Stems never end with U since it is removed
+        if stem.ends_with(word![U]) {
+            continue;
+        }
 
         // If the prefix matches a stem, try to expand that stem
         if let Some(datas) = stems.get(stem) {
@@ -768,6 +788,32 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
         .collect()
 }
 
+fn is_possible_stem_start(stem: &Word) -> bool {
+    // Stems starting with a vowel are valid
+    if stem.start_matches(LetterSet::vowel()) {
+        return true;
+    }
+
+    // Stems starting with these consonants are invalid
+    if stem.start_matches(letterset![RetroN, Zh, RetroL, AlveolarR, AlveolarN]) {
+        return false;
+    }
+
+    // Stems with a vowel in their second position are also valid
+    if stem.matches(1, LetterSet::vowel()) {
+        return true;
+    }
+
+    // Stems starting with tch- are actually ksh-, which is valid
+    if stem.starts_with(word![RetroT, Ch]) {
+        return true;
+    }
+
+    // Double consonant at start is not valid
+    false
+}
+
+#[derive(Debug)]
 pub struct Choice {
     pub unlikely: bool,
     pub entries: BTreeSet<EntryIndex>,
@@ -848,6 +894,7 @@ pub enum ExpandState {
     GeneralStemO,
     GeneralStemNgal,
     GeneralStemPlural,
+    NounWithAm,
     Plural,
     Oblique,
     Case,
@@ -969,6 +1016,11 @@ impl ExpandChoice {
             self.end += 1;
             self.has_implicit_u = false;
             self.goto(ex, states);
+
+            // If not at start, don't permit a joining V
+            if !self.is_start {
+                return;
+            }
         }
 
         // The remaining cases all require this to be true
@@ -1187,6 +1239,14 @@ impl ExpandChoice {
 
             RareVerbalNoun => {
                 self.unlikely().goto(ex, &[Oblique]);
+            }
+
+            NounWithAm => {
+                self.goto(ex, &[Done]);
+
+                self.add_goto(ex, word![M], &[Emphasis]);
+                self.add_goto(ex, word![M, K, A, RetroL], &[Oblique]);
+                self.add_goto(ex, word![T, T, U], &[Oblique]);
             }
 
             Plural => {
