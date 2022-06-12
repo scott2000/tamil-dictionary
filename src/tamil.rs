@@ -570,6 +570,14 @@ impl Word {
         self.0.last().copied()
     }
 
+    pub fn first_mut(&mut self) -> Option<&mut Letter> {
+        self.0.first_mut()
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut Letter> {
+        self.0.last_mut()
+    }
+
     pub fn get(&self, index: usize) -> Option<Letter> {
         self.0.get(index).copied()
     }

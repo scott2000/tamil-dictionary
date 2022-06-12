@@ -63,6 +63,19 @@ pub fn normalize(mut word: &Word) -> Box<Word> {
     letters.into()
 }
 
+pub fn normalize_final(word: &mut Word) {
+    use Letter::*;
+
+    if let Some(lt) = word.last_mut() {
+        match lt {
+            Ng | Ny | N => *lt = M,
+            RetroT => *lt = RetroL,
+            AlveolarR => *lt = AlveolarL,
+            _ => {}
+        }
+    }
+}
+
 struct SpecialWord {
     if_matches: KindSet,
     then_insert: Vec<(&'static Word, &'static [ExpandState])>,
@@ -626,7 +639,9 @@ impl ShortestOnly {
 }
 
 pub fn best_choices(full_word: &Word) -> Vec<Choices> {
-    let full_word = &normalize(full_word);
+    let mut full_word = normalize(full_word);
+    normalize_final(&mut full_word);
+    let full_word = &full_word;
 
     let mut map: BTreeMap<usize, ShortestOnly> = BTreeMap::new();
     map.insert(0, ShortestOnly::new());
@@ -1190,7 +1205,10 @@ impl ExpandChoice {
             }
 
             VowelAdjective => {
-                if self.end + 3 >= ex.full_word.len() {
+                if self.end + 1 >= ex.full_word.len() {
+                    self.goto(ex, &[Done]);
+                    return;
+                } else if self.end + 3 >= ex.full_word.len() {
                     return;
                 }
 
