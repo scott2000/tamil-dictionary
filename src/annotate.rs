@@ -598,6 +598,17 @@ impl StemData {
     }
 
     fn stem_adjective(state: &mut StemState, word: &Word) {
+        // Handle adjectives ending in -endra
+        if let Some(word) = word.strip_suffix(word![E, AlveolarN, AlveolarR, A]) {
+            Self::insert(state, &(word + word![E, AlveolarN, P, A]), &[AdjectiveStem]);
+
+            Self::insert(
+                state,
+                &(word + word![E, AlveolarN, AlveolarN, U, M]),
+                &[Done],
+            );
+        }
+
         if word.ends_with(word![A]) {
             Self::insert(state, word, &[Adjective]);
         } else {
