@@ -607,12 +607,27 @@ impl StemData {
     }
 
     fn stem_adverb(state: &mut StemState, word: &Word) {
-        // Handle nouns ending in -aaga
+        Self::insert(state, word, &[Emphasis]);
+
+        if word.len() <= 3 {
+            return;
+        }
+
+        // Handle adverbs ending in -aaga
         if let Some(word) = word.replace_suffix(word![LongA, K, A], word![LongA, Y]) {
             Self::insert(state, &word, &[Emphasis]);
         }
 
-        Self::insert(state, word, &[Emphasis]);
+        if word.len() <= 4 {
+            return;
+        }
+
+        // Handle adverbs ending in -endru
+        if let Some(word) =
+            word.replace_suffix(word![E, AlveolarN, AlveolarR, U], word![E, AlveolarN, A])
+        {
+            Self::insert(state, &word, &[Emphasis]);
+        }
     }
 
     fn stem_other(state: &mut StemState, word: &Word) {
