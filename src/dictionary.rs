@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::BufReader;
-use std::ops::*;
 
 use rand::seq::SliceRandom;
 
@@ -252,7 +251,7 @@ impl Entry {
         kind.iter()
             .copied()
             .map(KindSet::from)
-            .reduce(KindSet::bitor)
+            .reduce(KindSet::union)
             .unwrap_or(KindSet::empty())
     }
 
@@ -446,6 +445,14 @@ impl KindSet {
     pub const fn matches_any(self, other: Self) -> bool {
         (self.0 & other.0) != 0
     }
+
+    pub const fn union(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+
+    pub const fn intersect(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
+    }
 }
 
 impl From<RawEntryKind> for KindSet {
@@ -466,22 +473,6 @@ impl From<RawEntryKind> for KindSet {
             RawEntryKind::InaiIdaiChol => Self(InaiIdaiChol as u32 | IdaiChol as u32),
             RawEntryKind::ViliIdaiChol => Self(ViliIdaiChol as u32 | IdaiChol as u32),
         }
-    }
-}
-
-impl BitOr for KindSet {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl BitAnd for KindSet {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self {
-        Self(self.0 & rhs.0)
     }
 }
 

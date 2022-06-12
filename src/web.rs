@@ -204,7 +204,7 @@ impl QueryKindSet {
                     None
                 }
             })
-            .reduce(std::ops::BitOr::bitor)
+            .reduce(KindSet::union)
             .unwrap_or(KindSet::empty())
     }
 }

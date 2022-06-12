@@ -105,6 +105,9 @@ pub fn normalize_final(word: &mut Word) {
     }
 }
 
+const PRONOUN: KindSet =
+    KindSet::single(EntryKind::SuttuPeyar).union(KindSet::single(EntryKind::VinaaPeyar));
+
 struct SpecialWord {
     if_matches: KindSet,
     then_insert: Vec<(&'static Word, &'static [ExpandState])>,
@@ -178,7 +181,7 @@ fn get_specials() -> Specials {
         map.insert(
             avai,
             SpecialWord {
-                if_matches: KindSet::single(SuttuPeyar) | KindSet::single(VinaaPeyar),
+                if_matches: PRONOUN,
                 then_insert: vec![(without_vai, &[AdjectiveStemAvai])],
             },
         );
@@ -190,7 +193,7 @@ fn get_specials() -> Specials {
         map.insert(
             vowel,
             SpecialWord {
-                if_matches: KindSet::single(SuttuPeyar) | KindSet::single(VinaaPeyar),
+                if_matches: PRONOUN,
                 then_insert: vec![(vowel, &[VowelAdjective])],
             },
         );
@@ -422,6 +425,8 @@ impl StemData {
             Self::stem_adverb
         } else if entry.kind_set.matches(VinaiChol) {
             Self::stem_verb
+        } else if entry.kind_set.matches_any(PRONOUN) {
+            Self::stem_pronoun
         } else if entry.kind_set.matches(PeyarChol) {
             Self::stem_noun
         } else {
@@ -588,6 +593,10 @@ impl StemData {
         }
     }
 
+    fn stem_pronoun(state: &mut StemState, word: &Word) {
+        Self::insert(state, word, &[Oblique]);
+    }
+
     fn stem_adjective(state: &mut StemState, word: &Word) {
         if word.ends_with(word![A]) {
             Self::insert(state, word, &[AdjectiveStem, Done]);
@@ -714,10 +723,19 @@ impl ShortestOnly {
 }
 
 pub fn best_choices(full_word: &Word) -> Vec<Choices> {
+    // Words should not have more than 100 letters
+    const MAX_LEN: usize = 100;
+
+    // Words should not have more than 10 segments
+    const MAX_SEG_COUNT: usize = 10;
+
     // Normalize the input word
     let mut full_word = normalize(full_word);
     normalize_final(&mut full_word);
     let full_word = &full_word;
+    if full_word.len() > MAX_LEN {
+        return Vec::new();
+    }
 
     // Create an empty map
     let mut map: BTreeMap<usize, ShortestOnly> = BTreeMap::new();
@@ -732,9 +750,27 @@ pub fn best_choices(full_word: &Word) -> Vec<Choices> {
             return choices.into_vec();
         }
 
+        // Compute the maximum length that may still be useful
+        let max_len = map
+            .get(&full_word.len())
+            .map(|s| s.shortest)
+            .unwrap_or(MAX_SEG_COUNT);
+
+        // If the shortest choice is over the maximum length, all are
+        if choices.shortest >= max_len {
+            continue;
+        }
+
+        // Discard any choices which are over the maximum length
+        let mut choices = choices.into_vec();
+        choices.retain(|choice| choice.len() < max_len);
+        if choices.is_empty() {
+            continue;
+        }
+
         // Add new choices to end of existing choices
         let after = choices_after(full_word, end);
-        for choices in choices.into_vec() {
+        for choices in choices {
             for (end, choice) in after.iter() {
                 let mut choices = choices.clone();
                 choices.push(choice.clone());
@@ -768,6 +804,11 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
 
         // Stems never end with U since it is removed
         if stem.ends_with(word![U]) {
+            continue;
+        }
+
+        // No need to look up a single consonant
+        if stem.len() == 1 && stem.start_matches(LetterSet::consonant()) {
             continue;
         }
 
