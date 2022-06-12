@@ -205,7 +205,7 @@ fn get_specials() -> Specials {
         aana,
         SpecialWord {
             if_matches: KindSet::single(IdaiChol),
-            then_insert: vec![(aana, &[AdjectiveStem, Done])],
+            then_insert: vec![(aana, &[Adjective])],
         },
     );
 
@@ -599,7 +599,7 @@ impl StemData {
 
     fn stem_adjective(state: &mut StemState, word: &Word) {
         if word.ends_with(word![A]) {
-            Self::insert(state, word, &[AdjectiveStem, Done]);
+            Self::insert(state, word, &[Adjective]);
         } else {
             // If doesn't end with -a, treat as unknown
             Self::insert(state, word, &[Emphasis]);
@@ -957,6 +957,7 @@ pub enum ExpandState {
     CaseNoKu,
     Irundhu,
     MaybeAdjective,
+    Adjective,
     AdjectiveStem,
     AdjectiveStemVa,
     AdjectiveStemAvai,
@@ -1154,7 +1155,7 @@ impl ExpandChoice {
 
                 Some(I) => {
                     self.add_goto(ex, word![AlveolarR, AlveolarR, U], &[Done]);
-                    self.add_goto(ex, word![Y, A], &[AdjectiveStem, Done]);
+                    self.add_goto(ex, word![Y, A], &[Adjective]);
                     self.add_goto(ex, word![AlveolarN], &[PastStem, SpecialB]);
                 }
 
@@ -1211,7 +1212,7 @@ impl ExpandChoice {
                 self.add_goto(ex, word![M, Ai], &[RareVerbalNoun]);
 
                 self.add_goto(ex, word![M, A, AlveolarL], &[Oblique]);
-                self.add_goto(ex, word![T, A], &[AdjectiveStem, Done]);
+                self.add_goto(ex, word![T, A], &[Adjective]);
                 self.add_goto(ex, word![T, U], &[Emphasis]);
             }
 
@@ -1231,7 +1232,7 @@ impl ExpandChoice {
 
             TenseStem => {
                 self.goto(ex, &[GeneralStem]);
-                self.add_goto(ex, word![A], &[AdjectiveStem, Done]);
+                self.add_goto(ex, word![A], &[Adjective]);
             }
 
             FutureStem => {
@@ -1350,7 +1351,7 @@ impl ExpandChoice {
                 self.add_goto(ex, word![Ai], &[Emphasis]);
 
                 self.unlikely().add_goto(ex, word![A, T, U], &[Oblique]);
-                self.add_goto(ex, word![U, RetroT, Ai, Y, A], &[AdjectiveStem, Done]);
+                self.add_goto(ex, word![U, RetroT, Ai, Y, A], &[Adjective]);
 
                 self.add_goto(ex, word![U, RetroT, AlveolarN], &[Emphasis]);
                 self.add_goto(ex, word![LongO, RetroT, U], &[Emphasis]);
@@ -1367,7 +1368,11 @@ impl ExpandChoice {
 
             MaybeAdjective => {
                 self.goto(ex, &[Emphasis]);
-                self.add_goto(ex, word![A], &[AdjectiveStem, Done]);
+                self.add_goto(ex, word![A], &[Adjective]);
+            }
+
+            Adjective => {
+                self.goto(ex, &[AdjectiveStem, Done]);
             }
 
             AdjectiveStem => {
