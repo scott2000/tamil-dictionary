@@ -1200,7 +1200,13 @@ impl ExpandChoice {
             }
 
             Negative => {
-                self.goto(ex, &[Done]);
+                self.unlikely().goto(ex, &[Done]);
+
+                self.add_goto(
+                    ex,
+                    word![V, I, RetroT, RetroT, LongA, AlveolarL],
+                    &[Emphasis],
+                );
 
                 self.add_goto(ex, word![M, Ai], &[RareVerbalNoun]);
 
