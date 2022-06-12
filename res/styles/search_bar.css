@@ -26,7 +26,6 @@
 
 .search-field {
     flex-grow: 1;
-    margin-right: 6px;
     background-color: inherit;
 }
 
@@ -34,6 +33,10 @@
     box-shadow: 0 0 0 3px var(--highlight-color);
     outline: none;
     color: inherit;
+}
+
+#search-word {
+    margin-right: 6px;
 }
 
 #search-button {
