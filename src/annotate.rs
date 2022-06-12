@@ -1393,7 +1393,11 @@ impl ExpandChoice {
 
             Particle => {
                 self.goto(ex, &[Done]);
-                self.add_goto(ex, word![LongA], &[Done]);
+
+                // Mark as unlikely to allow fixed words to get a chance
+                self.unlikely().add_goto(ex, word![LongA], &[Done]);
+                self.unlikely().add_goto(ex, word![LongE], &[Done]);
+                self.unlikely().add_goto(ex, word![LongO], &[Done]);
             }
 
             VowelAdjective => {
