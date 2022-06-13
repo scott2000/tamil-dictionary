@@ -12,6 +12,7 @@ rand = "0.8.4"
 regex = "1"
 unicode_names2 = "0.5.0"
 num_enum = "0.5.3"
+seahash = "4.1.0"
 
 [dependencies.rocket]
 version = "0.5.0-rc.2"

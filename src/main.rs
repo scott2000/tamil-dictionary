@@ -3,10 +3,13 @@ extern crate rocket;
 #[macro_use]
 extern crate lazy_static;
 
+use std::hash::BuildHasherDefault;
 use std::time::{Duration, Instant};
 
 use rocket::fs::{relative, FileServer};
 use rocket_dyn_templates::Template;
+
+use seahash::SeaHasher;
 
 use tokio::task;
 
@@ -41,6 +44,9 @@ pub mod query;
 pub mod search;
 pub mod tamil;
 pub mod web;
+
+pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<SeaHasher>>;
+pub type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<SeaHasher>>;
 
 pub fn uptime() -> Duration {
     lazy_static! {

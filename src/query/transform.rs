@@ -1,17 +1,13 @@
-use std::collections::HashMap;
 use std::mem;
 
 use crate::search::Search;
 use crate::tamil::{Letter, LetterSet, Word, WordIter};
+use crate::HashMap;
 
 #[derive(Default, Debug)]
 pub struct Joins(HashMap<(Letter, Letter), Vec<(LetterSet, LetterSet)>>);
 
 impl Joins {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn insert(&mut self, from: (Letter, Letter), to: (LetterSet, LetterSet)) {
         debug_assert!(letterset![from.0, from.1]
             .union(to.0.union(to.1))
@@ -44,7 +40,7 @@ impl Joins {
 
 lazy_static! {
     pub static ref JOINS: Joins = {
-        let mut joins = Joins::new();
+        let mut joins = Joins::default();
 
         for right in letterset![K, Ch, P].iter() {
             // (RetroL, Vallinam)

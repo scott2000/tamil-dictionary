@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::fmt::{self, Debug, Display};
 use std::ops::*;
+
+use crate::HashSet;
 
 use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 

@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::rc::Rc;
@@ -7,8 +7,8 @@ use std::rc::Rc;
 use serde::Deserialize;
 
 use crate::dictionary::{Entry, EntryIndex, EntryKind, KindSet, ENTRIES};
-use crate::intern;
 use crate::tamil::{Letter, LetterSet, Word};
+use crate::{intern, HashMap};
 
 use ExpandState::*;
 
@@ -113,7 +113,7 @@ fn get_specials() -> Specials {
     use EntryKind::*;
     use ExpandState::*;
 
-    let mut map = Specials::new();
+    let mut map = Specials::default();
 
     let pronouns: &[&Word] = &[
         word![Y, LongA, AlveolarN],
@@ -289,7 +289,7 @@ lazy_static! {
 
         let file = match File::open("verbs.json") {
             Ok(file) => file,
-            Err(_) => return HashMap::new(),
+            Err(_) => return HashMap::default(),
         };
 
         let verb_list: Vec<RawVerbData> = serde_json::from_reader(BufReader::new(file))
@@ -299,8 +299,8 @@ lazy_static! {
         eprintln!("Building stems...");
 
         // Process the raw verb list by creating maps (Ves and Verbs)
-        let mut ves = Ves::new();
-        let mut verbs = Verbs::new();
+        let mut ves = Ves::default();
+        let mut verbs = Verbs::default();
         for mut verb in verb_list {
             for ve in verb.ve.iter_mut() {
                 // Vinaiyechams starting with a hyphen are incomplete
@@ -338,7 +338,7 @@ lazy_static! {
         let specials = get_specials();
 
         // Create a map of stems using all these data structures
-        let mut stems = Stems::new();
+        let mut stems = Stems::default();
         for entry in ENTRIES.iter() {
             StemData::parse(&mut StemState {
                 stems: &mut stems,

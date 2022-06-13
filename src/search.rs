@@ -1,7 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::dictionary::{Entry, EntryIndex, Loc, WordData, WordIndex, ENTRIES, NO_WORD};
 use crate::tamil::{Letter, LetterSet, Word};
+use crate::HashSet;
 
 pub use crate::dictionary::KindSet;
 
@@ -74,9 +75,9 @@ impl SuggestionList {
     pub fn new(count_requested: u32) -> Self {
         Self {
             count_requested,
-            seen_leaves: HashSet::new(),
-            seen_branches: HashSet::new(),
-            seen_expanded: HashSet::new(),
+            seen_leaves: HashSet::default(),
+            seen_branches: HashSet::default(),
+            seen_expanded: HashSet::default(),
             from_leaves: BTreeSet::new(),
             from_branches: BTreeSet::new(),
             from_expanded: BTreeSet::new(),
@@ -151,8 +152,8 @@ impl SuggestionList {
 
         // If the number of leaf suggestions reaches the limit, clear the branch suggestions
         if from_leaf && set.len() == self.count_requested as usize {
-            self.seen_branches = HashSet::new();
-            self.seen_expanded = HashSet::new();
+            self.seen_branches = HashSet::default();
+            self.seen_expanded = HashSet::default();
             self.from_branches = BTreeSet::new();
             self.from_expanded = BTreeSet::new();
         }
