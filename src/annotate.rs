@@ -744,7 +744,30 @@ impl ShortestOnly {
     }
 }
 
-pub fn best_choices(full_word: &Word) -> Vec<Choices> {
+pub fn joined_groups(full_word: &Word) -> Vec<Choices> {
+    let groups = best_groups(full_word);
+
+    if groups.len() <= 1 {
+        return groups;
+    }
+
+    let mut map: BTreeMap<Vec<usize>, Choices> = BTreeMap::new();
+    for choices in groups {
+        let ends = choices.iter().map(|choice| choice.letter_end).collect();
+
+        if let Some(existing) = map.get_mut(&ends) {
+            for (a, b) in existing.iter_mut().zip(choices) {
+                *a = a.union(&b);
+            }
+        } else {
+            map.insert(ends, choices);
+        }
+    }
+
+    map.into_iter().map(|(_, choices)| choices).collect()
+}
+
+pub fn best_groups(full_word: &Word) -> Vec<Choices> {
     // Words should not have more than 100 letters
     const MAX_LEN: usize = 100;
 
@@ -878,16 +901,21 @@ fn is_possible_stem_start(stem: &Word) -> bool {
 
 #[derive(Debug)]
 pub struct Choice {
+    pub letter_end: usize,
     pub unlikely: bool,
     pub entries: BTreeSet<EntryIndex>,
 }
 
 impl Choice {
-    pub fn new(entry: EntryIndex, unlikely: bool) -> Self {
+    pub fn new(entry: EntryIndex, letter_end: usize, unlikely: bool) -> Self {
         let mut entries = BTreeSet::new();
         entries.insert(entry);
 
-        Self { unlikely, entries }
+        Self {
+            letter_end,
+            unlikely,
+            entries,
+        }
     }
 
     pub fn push(&mut self, entry: EntryIndex, unlikely: bool) {
@@ -904,6 +932,16 @@ impl Choice {
 
             (false, true) => {}
         }
+    }
+
+    pub fn union(&self, other: &Self) -> Rc<Self> {
+        debug_assert!(self.letter_end == other.letter_end);
+
+        Rc::new(Self {
+            letter_end: self.letter_end,
+            unlikely: self.unlikely && other.unlikely,
+            entries: &self.entries | &other.entries,
+        })
     }
 }
 
@@ -1123,13 +1161,21 @@ impl ExpandChoice {
         self
     }
 
-    fn result(&self, results: &mut BTreeMap<usize, Choice>, inc: usize) {
+    fn result(&self, ex: &Expand, results: &mut BTreeMap<usize, Choice>, inc: usize) {
         let end = self.end + inc;
 
         if let Some(set) = results.get_mut(&end) {
             set.push(self.entry, self.unlikely);
         } else {
-            results.insert(end, Choice::new(self.entry, self.unlikely));
+            let word = ex.full_word;
+            let mut letter_end = end;
+            if word.matches(end - 1, LetterSet::consonant())
+                && word.matches(end, LetterSet::vowel())
+            {
+                letter_end -= 1;
+            }
+
+            results.insert(end, Choice::new(self.entry, letter_end, self.unlikely));
         }
     }
 
@@ -1444,16 +1490,16 @@ impl ExpandChoice {
                 if after == Y {
                     if next == V {
                         // Remove only first V
-                        self.result(results, 1);
+                        self.result(ex, results, 1);
                     }
                 } else if next == after {
                     if next == V {
                         // Remove both V's in case it was a vowel
-                        self.result(results, 2);
+                        self.result(ex, results, 2);
                     }
 
                     // Remove only first of doubled letters
-                    self.result(results, 1);
+                    self.result(ex, results, 1);
                 }
             }
 
@@ -1463,7 +1509,7 @@ impl ExpandChoice {
                     self.unlikely = true;
                 }
 
-                self.result(results, 0);
+                self.result(ex, results, 0);
 
                 if let Some(next) = ex.full_word.get(self.end) {
                     if !LetterSet::vallinam().matches(next) {
@@ -1474,7 +1520,7 @@ impl ExpandChoice {
                         return;
                     }
 
-                    self.result(results, 1);
+                    self.result(ex, results, 1);
                 }
             }
         }
