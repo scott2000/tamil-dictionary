@@ -747,10 +747,12 @@ impl ShortestOnly {
 pub fn joined_groups(full_word: &Word) -> Vec<Choices> {
     let groups = best_groups(full_word);
 
+    // If only one grouping is found, just return it
     if groups.len() <= 1 {
         return groups;
     }
 
+    // Merge any groupings with the same letter boundaries
     let mut map: BTreeMap<Vec<usize>, Choices> = BTreeMap::new();
     for choices in groups {
         let ends = choices.iter().map(|choice| choice.letter_end).collect();
@@ -764,7 +766,8 @@ pub fn joined_groups(full_word: &Word) -> Vec<Choices> {
         }
     }
 
-    map.into_iter().map(|(_, choices)| choices).collect()
+    // Prefer longer words first
+    map.into_iter().rev().map(|(_, choices)| choices).collect()
 }
 
 pub fn best_groups(full_word: &Word) -> Vec<Choices> {
