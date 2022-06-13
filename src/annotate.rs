@@ -369,14 +369,16 @@ struct StemState<'a> {
 pub struct StemData {
     pub root: &'static Word,
     pub entry: EntryIndex,
+    pub not_start: bool,
     pub state: ExpandState,
 }
 
 impl StemData {
     pub fn new(entry: &'static Entry, root: &'static Word, state: ExpandState) -> Self {
         Self {
-            entry: entry.index,
             root,
+            entry: entry.index,
+            not_start: entry.word.starts_with('-'),
             state,
         }
     }
@@ -933,6 +935,7 @@ impl<'a> Expand<'a> {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum ExpandState {
     WeakVerb,
     StrongVerb,
@@ -990,7 +993,7 @@ impl ExpandChoice {
             entry: data.entry,
             is_start: true,
             has_implicit_u: false,
-            unlikely: false,
+            unlikely: ex.start == 0 && data.not_start,
             likely_end: false,
             state: Done,
         };
