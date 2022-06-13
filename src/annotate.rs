@@ -1232,8 +1232,9 @@ impl ExpandChoice {
                 self.add_goto(ex, word![AlveolarL], &[RareVerbalNoun]);
 
                 self.likely_end = true;
-                self.add_goto(ex, word![RetroT, RetroT, U, M], &[Emphasis]);
-                self.add_goto(ex, word![AlveolarL, LongA, M], &[Emphasis]);
+                self.add_goto(ex, word![I, AlveolarL, AlveolarL, Ai], &[Particle]);
+                self.add_goto(ex, word![RetroT, RetroT, U, M], &[Particle]);
+                self.add_goto(ex, word![AlveolarL, LongA, M], &[Particle]);
             }
 
             PastStem => {
