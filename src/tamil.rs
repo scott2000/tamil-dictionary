@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::{self, Debug, Display};
 use std::ops::*;
 
@@ -9,29 +9,59 @@ pub const PULLI: char = '\u{bcd}';
 pub const COMBINING_LA: char = '\u{bd7}';
 pub const OM: char = '\u{bd0}';
 
+macro_rules! gen_map {
+    ($to_char:ident, $from_char:ident, $start:ident, $end:ident, [$($ch:literal),+ $(,)?] $($ex:tt)*) => {
+        const $to_char: &'static [char; Letter::$end as usize + 1 - Letter::$start as usize] = &[$($ch),+];
+
+        gen_map!(@ $from_char, Letter::$start, [$($ch)+], [] $($ex)*);
+    };
+
+    (@ $from_char:ident, $index:expr, [$ch:literal $($rest:literal)*], [$($to:tt)*] $($ex:tt)*) => {
+        gen_map!(@ $from_char, $index + 1, [$($rest)*], [$($to)*, $ch Letter::from_unchecked($index)] $($ex)*);
+    };
+
+    (@ $from_char:ident, $index:expr, [], [$($to:tt)*] $($ex:tt)*) => {
+        gen_map!(@ @ $from_char, [$($ex)* $($to)*]);
+    };
+
+    (@ @ $from_char:ident, [$(, $ch:literal $index:expr)+]) => {
+        #[inline]
+        fn $from_char(ch: char) -> Option<Letter> {
+            unsafe {
+                match ch {
+                    $(
+                        $ch => Some($index),
+                    )*
+                    _ => None,
+                }
+            }
+        }
+    }
+}
+
 #[rustfmt::skip]
-const TAMIL_VOWELS: &[char] = &[
+gen_map!(TAMIL_VOWELS, parse_vowel, VOWEL_START, VOWEL_END, [
     'அ', 'ஆ',
     'இ', 'ஈ',
     'உ', 'ஊ',
     'எ', 'ஏ', 'ஐ',
     'ஒ', 'ஓ', 'ஔ',
-];
+]);
 
 #[rustfmt::skip]
-const TAMIL_VOWEL_SIGNS: &[char] = &[
+gen_map!(TAMIL_VOWEL_SIGNS, parse_vowel_sign, VOWEL_SIGN_START, VOWEL_SIGN_END, [
     '\u{bbe}',
     '\u{bbf}', '\u{bc0}',
     '\u{bc1}', '\u{bc2}',
     '\u{bc6}', '\u{bc7}', '\u{bc8}',
     '\u{bca}', '\u{bcb}', '\u{bcc}',
-];
+]);
 
 const AAYDHAM: char = 'ஃ';
 const GRANTHA_SSH: char = 'ஶ';
 
 #[rustfmt::skip]
-const TAMIL_CONSONANTS: &[char] = &[
+gen_map!(TAMIL_CONSONANTS, parse_consonant, CONSONANT_START, CONSONANT_END, [
     'க', 'ங',
     'ச', 'ஞ',
     'ட', 'ண',
@@ -40,30 +70,16 @@ const TAMIL_CONSONANTS: &[char] = &[
     'ய', 'ர', 'ல', 'வ', 'ழ', 'ள',
     'ற', 'ன',
     'ஜ', 'ஷ', 'ஸ', 'ஹ',
-];
+], 'ஶ' Letter::S);
 
 #[rustfmt::skip]
 lazy_static! {
-    static ref TAMIL_VOWEL_MAP: HashMap<char, Letter> = {
-        to_map(Letter::VOWEL_START, Letter::VOWEL_END, TAMIL_VOWELS)
-    };
-
-    static ref TAMIL_VOWEL_SIGN_MAP: HashMap<char, Letter> = {
-        to_map(Letter::VOWEL_SIGN_START, Letter::VOWEL_SIGN_END, TAMIL_VOWEL_SIGNS)
-    };
-
-    static ref TAMIL_CONSONANT_MAP: HashMap<char, Letter> = {
-        let mut map = to_map(Letter::CONSONANT_START, Letter::CONSONANT_END, TAMIL_CONSONANTS);
-        map.insert(GRANTHA_SSH, Letter::S);
-        map
-    };
-
     static ref VALID_LETTERS: HashSet<char> = {
         TAMIL_VOWELS
             .iter()
             .chain(TAMIL_VOWEL_SIGNS)
             .chain(TAMIL_CONSONANTS)
-            .cloned()
+            .copied()
             .chain([AAYDHAM, GRANTHA_SSH, PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
             .chain('a'..='z')
             .chain('A'..='Z')
@@ -71,18 +87,8 @@ lazy_static! {
     };
 }
 
-fn to_map(start: u8, end: u8, chars: &'static [char]) -> HashMap<char, Letter> {
-    debug_assert_eq!(chars.len(), end as usize + 1 - start as usize);
-
-    chars
-        .iter()
-        .copied()
-        .zip((start..=end).map(Letter::expect_from))
-        .collect()
-}
-
 pub fn is_consonant(ch: char) -> bool {
-    TAMIL_CONSONANT_MAP.contains_key(&ch)
+    parse_consonant(ch).is_some()
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -168,10 +174,7 @@ impl Letter {
             AAYDHAM => Some(Self::Aaydham),
             _ => {
                 // Don't include vowel signs as they can't stand on their own
-                TAMIL_VOWEL_MAP
-                    .get(&ch)
-                    .or_else(|| TAMIL_CONSONANT_MAP.get(&ch))
-                    .copied()
+                parse_consonant(ch).or_else(|| parse_vowel(ch))
             }
         }
     }
@@ -739,12 +742,12 @@ impl Word {
                 }
 
                 _ => {
-                    if let Some(&n) = TAMIL_VOWEL_MAP.get(&ch) {
-                        word.push(n);
-                    } else if let Some(&n) = TAMIL_CONSONANT_MAP.get(&ch) {
-                        word.push(n);
+                    if let Some(lt) = parse_vowel(ch) {
+                        word.push(lt);
+                    } else if let Some(lt) = parse_consonant(ch) {
+                        word.push(lt);
                         word.push(Letter::A);
-                    } else if let Some(&n) = TAMIL_VOWEL_SIGN_MAP.get(&ch) {
+                    } else if let Some(lt) = parse_vowel_sign(ch) {
                         match word.pop() {
                             None => {}
 
@@ -752,13 +755,13 @@ impl Word {
                             Some(Letter::A) => {}
 
                             // Convert short 'e' + 'aa' into short 'o'
-                            Some(Letter::E) if n == Letter::LongA => {
+                            Some(Letter::E) if lt == Letter::LongA => {
                                 word.push(Letter::O);
                                 continue;
                             }
 
                             // Convert long 'e' + 'aa' into long 'o'
-                            Some(Letter::LongE) if n == Letter::LongA => {
+                            Some(Letter::LongE) if lt == Letter::LongA => {
                                 word.push(Letter::LongO);
                                 continue;
                             }
@@ -766,7 +769,7 @@ impl Word {
                             Some(x) => word.push(x),
                         }
 
-                        word.push(n);
+                        word.push(lt);
                     }
                 }
             }

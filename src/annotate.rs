@@ -15,21 +15,16 @@ use ExpandState::*;
 pub fn normalize(mut word: &Word) -> Box<Word> {
     use Letter::*;
 
-    lazy_static! {
-        static ref NORMALIZE: HashMap<(Letter, Letter), (Letter, Letter)> = {
-            let mut map = HashMap::new();
-
-            map.insert((Ng, K), (M, K));
-            map.insert((Ny, Ch), (M, Ch));
-            map.insert((N, T), (M, T));
-
-            for right in [K, Ch, P] {
-                map.insert((RetroT, right), (RetroL, right));
-                map.insert((AlveolarR, right), (AlveolarL, right));
-            }
-
-            map
-        };
+    #[inline]
+    fn normalize_map(left: Letter, right: Letter) -> Option<(Letter, Letter)> {
+        match (left, right) {
+            (Ng, K) => Some((M, K)),
+            (Ny, Ch) => Some((M, Ch)),
+            (N, T) => Some((M, T)),
+            (RetroT, K | Ch | P) => Some((RetroL, right)),
+            (AlveolarR, K | Ch | P) => Some((AlveolarL, right)),
+            _ => None,
+        }
     }
 
     let mut letters = Vec::with_capacity(word.len());
@@ -39,13 +34,12 @@ pub fn normalize(mut word: &Word) -> Box<Word> {
         word = &word[3..];
     }
 
-    let normalize: &HashMap<_, _> = &NORMALIZE;
     let mut iter = word.iter();
     while let Some(lt) = iter.next() {
         use Letter::*;
 
         if let Some(next) = iter.peek() {
-            if let Some(&(lt, next)) = normalize.get(&(lt, next)) {
+            if let Some((lt, next)) = normalize_map(lt, next) {
                 iter.next();
                 letters.extend_from_slice(&[lt, next]);
                 continue;
