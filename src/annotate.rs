@@ -979,6 +979,7 @@ struct ExpandChoice {
     is_start: bool,
     has_implicit_u: bool,
     unlikely: bool,
+    likely_end: bool,
     state: ExpandState,
 }
 
@@ -990,12 +991,14 @@ impl ExpandChoice {
             is_start: true,
             has_implicit_u: false,
             unlikely: false,
+            likely_end: false,
             state: Done,
         };
 
         choice.add_goto(ex, data.root, &[data.state]);
     }
 
+    #[inline]
     fn matched<'a>(&self, ex: &Expand<'a>) -> &'a Word {
         &ex.full_word[ex.start..self.end]
     }
@@ -1111,6 +1114,7 @@ impl ExpandChoice {
         }
     }
 
+    #[inline]
     fn unlikely(mut self) -> Self {
         self.unlikely = true;
         self
@@ -1126,7 +1130,7 @@ impl ExpandChoice {
         }
     }
 
-    pub fn step(&self, ex: &mut Expand, results: &mut BTreeMap<usize, Choice>) {
+    pub fn step(mut self, ex: &mut Expand, results: &mut BTreeMap<usize, Choice>) {
         use Letter::*;
 
         match self.state {
@@ -1147,6 +1151,7 @@ impl ExpandChoice {
             }
 
             VerbStem => {
+                self.likely_end = true;
                 self.goto(ex, &[Emphasis]);
 
                 self.unlikely().add_goto(ex, word![K, A], &[Done]);
@@ -1226,6 +1231,7 @@ impl ExpandChoice {
 
                 self.add_goto(ex, word![AlveolarL], &[RareVerbalNoun]);
 
+                self.likely_end = true;
                 self.add_goto(ex, word![RetroT, RetroT, U, M], &[Emphasis]);
                 self.add_goto(ex, word![AlveolarL, LongA, M], &[Emphasis]);
             }
@@ -1254,6 +1260,7 @@ impl ExpandChoice {
             }
 
             SpecialC => {
+                self.likely_end = true;
                 self.goto(ex, &[Particle]);
 
                 self.unlikely().add_goto(ex, word![RetroL], &[Particle]);
@@ -1263,6 +1270,7 @@ impl ExpandChoice {
             }
 
             GeneralStem => {
+                self.likely_end = true;
                 self.add_goto(ex, word![LongO], &[GeneralStemO]);
                 self.add_goto(ex, word![LongE], &[GeneralStemE]);
                 self.add_goto(ex, word![LongI], &[GeneralStemI, GeneralStemNgal]);
@@ -1297,8 +1305,9 @@ impl ExpandChoice {
             }
 
             GeneralStemNgal => {
-                self.unlikely().goto(ex, &[GeneralStemPlural]);
-                self.unlikely().add_goto(ex, word![M], &[GeneralStemPlural]);
+                self.unlikely = true;
+                self.goto(ex, &[GeneralStemPlural]);
+                self.add_goto(ex, word![M], &[GeneralStemPlural]);
             }
 
             GeneralStemPlural => {
@@ -1306,7 +1315,8 @@ impl ExpandChoice {
             }
 
             RareVerbalNoun => {
-                self.unlikely().goto(ex, &[Oblique]);
+                self.unlikely = true;
+                self.goto(ex, &[Oblique]);
             }
 
             NounWithAm => {
@@ -1411,9 +1421,10 @@ impl ExpandChoice {
                 self.goto(ex, &[Done]);
 
                 // Mark as unlikely to allow fixed words to get a chance
-                self.unlikely().add_goto(ex, word![LongA], &[Done]);
-                self.unlikely().add_goto(ex, word![LongE], &[Done]);
-                self.unlikely().add_goto(ex, word![LongO], &[Done]);
+                self.unlikely = true;
+                self.add_goto(ex, word![LongA], &[Done]);
+                self.add_goto(ex, word![LongE], &[Done]);
+                self.add_goto(ex, word![LongO], &[Done]);
             }
 
             VowelAdjective => {
@@ -1443,6 +1454,11 @@ impl ExpandChoice {
             }
 
             Done => {
+                // If expecting to end a word but not at end, mark as unlikely
+                if self.likely_end && self.end != ex.full_word.len() {
+                    self.unlikely = true;
+                }
+
                 self.result(results, 0);
 
                 if let Some(next) = ex.full_word.get(self.end) {
@@ -1450,12 +1466,7 @@ impl ExpandChoice {
                         return;
                     }
 
-                    if ex
-                        .full_word
-                        .get(self.end + 1)
-                        .map(|lt| lt != next)
-                        .unwrap_or(false)
-                    {
+                    if ex.full_word.get(self.end + 1) != Some(next) {
                         return;
                     }
 
