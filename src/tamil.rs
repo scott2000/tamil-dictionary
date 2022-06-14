@@ -168,6 +168,10 @@ impl Letter {
         VALID_LETTERS.contains(&ch)
     }
 
+    pub fn is_tamil(ch: char) -> bool {
+        !ch.is_ascii() && VALID_LETTERS.contains(&ch)
+    }
+
     pub fn parse(ch: char) -> Option<Self> {
         match ch {
             'a'..='z' => Some(Self::LatinA.offset(ch as u8 - b'a')),

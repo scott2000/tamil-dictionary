@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
 use std::fs::File;
 use std::io::BufReader;
 use std::rc::Rc;
@@ -11,6 +12,73 @@ use crate::tamil::{Letter, LetterSet, Word};
 use crate::{intern, HashMap};
 
 use ExpandState::*;
+
+#[derive(Debug)]
+pub enum TextSegment<'a, T> {
+    NonTamil(&'a str),
+    Tamil(Box<Word>, T),
+}
+
+impl<'a> TextSegment<'a, ()> {
+    pub fn parse(text: &'a str) -> impl Iterator<Item = TextSegment<'a, ()>> {
+        let mut chars = text.char_indices().peekable();
+
+        // Create an iterator using a closure to process the characters
+        std::iter::from_fn(move || {
+            let (start, ch) = chars.next()?;
+            let is_tamil = Letter::is_tamil(ch);
+
+            // Get a chunk of similar text
+            let mut end = text.len();
+            while let Some(&(index, ch)) = chars.peek() {
+                if Letter::is_tamil(ch) != is_tamil {
+                    end = index;
+                    break;
+                }
+
+                chars.next();
+            }
+
+            let word = &text[start..end];
+
+            if is_tamil {
+                Some(Self::Tamil(Word::parse(word), ()))
+            } else {
+                Some(Self::NonTamil(word))
+            }
+        })
+    }
+
+    pub fn group(self) -> Vec<TextSegment<'a, Option<Rc<Choice>>>> {
+        match self {
+            Self::NonTamil(word) => vec![TextSegment::NonTamil(word)],
+
+            Self::Tamil(word, ()) => {
+                // Split the words into groups
+                let groups = joined_groups(&word);
+
+                // Only take the first group, if there is one
+                if let Some(choices) = groups.into_iter().next() {
+                    choices
+                        .into_iter()
+                        .scan(0, |index, choice| {
+                            // Find the start and end of this segment
+                            let start = *index;
+                            let end = choice.letter_end;
+                            *index = end;
+
+                            // Return just that segment, along with the corresponding choice
+                            let word = &word[start..end];
+                            Some(TextSegment::Tamil(word.into(), Some(choice)))
+                        })
+                        .collect()
+                } else {
+                    vec![TextSegment::Tamil(word, None)]
+                }
+            }
+        }
+    }
+}
 
 pub fn normalize(mut word: &Word) -> Box<Word> {
     use Letter::*;
@@ -98,6 +166,9 @@ pub fn normalize_final(word: &mut Word) {
         }
     }
 }
+
+const ADVERB: KindSet =
+    KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::InaiIdaiChol));
 
 const PRONOUN: KindSet =
     KindSet::single(EntryKind::SuttuPeyar).union(KindSet::single(EntryKind::VinaaPeyar));
@@ -370,15 +441,22 @@ pub struct StemData {
     pub root: &'static Word,
     pub entry: EntryIndex,
     pub not_start: bool,
+    pub unlikely: bool,
     pub state: ExpandState,
 }
 
 impl StemData {
-    pub fn new(entry: &'static Entry, root: &'static Word, state: ExpandState) -> Self {
+    pub fn new(
+        entry: &'static Entry,
+        root: &'static Word,
+        unlikely: bool,
+        state: ExpandState,
+    ) -> Self {
         Self {
             root,
             entry: entry.index,
             not_start: entry.word.starts_with('-'),
+            unlikely,
             state,
         }
     }
@@ -417,7 +495,7 @@ impl StemData {
                 }
                 _ => Self::stem_adjective,
             }
-        } else if entry.kind_set.matches(VinaiAdai) {
+        } else if entry.kind_set.matches_any(ADVERB) {
             Self::stem_adverb
         } else if entry.kind_set.matches(VinaiChol) {
             Self::stem_verb
@@ -425,6 +503,8 @@ impl StemData {
             Self::stem_pronoun
         } else if entry.kind_set.matches(PeyarChol) {
             Self::stem_noun
+        } else if entry.kind_set.matches(IdaiChol) {
+            Self::stem_particle
         } else {
             Self::stem_other
         };
@@ -558,24 +638,39 @@ impl StemData {
         }
     }
 
+    fn stem_particle(state: &mut StemState, word: &Word) {
+        if word.ends_with(word![K, A]) {
+            Self::stem_adverb(state, word);
+        } else if word.ends_with(word![A]) {
+            Self::stem_adjective(state, word);
+        } else {
+            Self::stem_noun_with_unlikely(state, word, true);
+            Self::stem_other(state, word);
+        }
+    }
+
     fn stem_noun(state: &mut StemState, word: &Word) {
+        Self::stem_noun_with_unlikely(state, word, false);
+    }
+
+    fn stem_noun_with_unlikely(state: &mut StemState, word: &Word, unlikely: bool) {
         // Handle nouns ending in -am
         if word.ends_with(word![A, M]) {
-            Self::insert(state, &word[..(word.len() - 1)], &[NounWithAm]);
+            Self::insert_with_unlikely(state, &word[..(word.len() - 1)], unlikely, &[NounWithAm]);
             return;
         }
 
-        Self::insert(state, word, &[Plural]);
+        Self::insert_with_unlikely(state, word, unlikely, &[Plural]);
 
         // Handle nouns ending in -an
         if let Some(word) = word.replace_suffix(word![A, AlveolarN], word![A, R]) {
-            Self::insert(state, &word, &[Plural]);
+            Self::insert_with_unlikely(state, &word, unlikely, &[Plural]);
             return;
         }
 
         // Handle nouns ending in -ar
         if let Some(word) = word.replace_suffix(word![A, R], word![A, AlveolarN]) {
-            Self::insert(state, &word, &[Oblique]);
+            Self::insert_with_unlikely(state, &word, unlikely, &[Oblique]);
             return;
         }
 
@@ -585,7 +680,7 @@ impl StemData {
             .or_else(|| word.replace_suffix(word![AlveolarR, U], word![AlveolarR, AlveolarR, U]));
 
         if let Some(word) = replace {
-            Self::insert(state, &word, &[Oblique]);
+            Self::insert_with_unlikely(state, &word, unlikely, &[Oblique]);
         }
     }
 
@@ -642,6 +737,15 @@ impl StemData {
     }
 
     fn insert(state: &mut StemState, word: &Word, states: &[ExpandState]) {
+        Self::insert_with_unlikely(state, word, false, states);
+    }
+
+    fn insert_with_unlikely(
+        state: &mut StemState,
+        word: &Word,
+        unlikely: bool,
+        states: &[ExpandState],
+    ) {
         let word = intern::word(normalize(word));
 
         // Strip final -u since it may disappear
@@ -659,12 +763,12 @@ impl StemData {
         let entry = state.entry;
         if let Some(vec) = state.stems.get_mut(&stem) {
             for &state in states {
-                vec.push(Self::new(entry, word, state));
+                vec.push(Self::new(entry, word, unlikely, state));
             }
         } else {
             let mut vec = Vec::new();
             for &state in states {
-                vec.push(Self::new(entry, word, state));
+                vec.push(Self::new(entry, word, unlikely, state));
             }
             state.stems.insert(stem, vec);
         }
@@ -883,8 +987,11 @@ fn is_possible_stem_start(stem: &Word) -> bool {
         return true;
     }
 
-    // Stems starting with these consonants are invalid
-    if stem.start_matches(letterset![RetroN, Zh, RetroL, AlveolarR, AlveolarN]) {
+    // Stems starting with these consonants and English letters are invalid
+    const INVALID_START: LetterSet =
+        LetterSet::latin().union(letterset![RetroN, Zh, RetroL, AlveolarR, AlveolarN]);
+
+    if stem.start_matches(INVALID_START) {
         return false;
     }
 
@@ -946,6 +1053,19 @@ impl Choice {
             entries: &self.entries | &other.entries,
         })
     }
+
+    pub fn ids(&self) -> String {
+        let mut buffer = String::new();
+        for id in self.entries.iter() {
+            if !buffer.is_empty() {
+                buffer.push(',');
+            }
+
+            write!(&mut buffer, "{}", id).unwrap();
+        }
+
+        buffer
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1004,6 +1124,7 @@ pub enum ExpandState {
     Oblique,
     Case,
     CaseNoKu,
+    LocativeE,
     Irundhu,
     MaybeAdjective,
     Adjective,
@@ -1034,7 +1155,7 @@ impl ExpandChoice {
             entry: data.entry,
             is_start: true,
             has_implicit_u: false,
-            unlikely: ex.start == 0 && data.not_start,
+            unlikely: data.unlikely || (ex.start == 0 && data.not_start),
             likely_end: false,
             state: Done,
         };
@@ -1425,8 +1546,14 @@ impl ExpandChoice {
                 self.add_goto(ex, word![LongO, RetroT, U], &[Emphasis]);
                 self.add_goto(ex, word![LongA, AlveolarL], &[Emphasis]);
 
-                self.add_goto(ex, word![I, AlveolarL], &[Irundhu]);
+                self.add_goto(ex, word![I, AlveolarL], &[LocativeE]);
                 self.add_goto(ex, word![I, RetroT, A, M], &[Irundhu]);
+            }
+
+            LocativeE => {
+                self.goto(ex, &[Irundhu]);
+
+                self.add_goto(ex, word![LongE], &[Irundhu]);
             }
 
             Irundhu => {
