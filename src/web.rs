@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Serialize;
@@ -8,13 +9,14 @@ use rand::seq::SliceRandom;
 
 use regex::Regex;
 
-use rocket::http::uri;
-use rocket::http::Status;
+use rocket::http::{uri, RawStr, Status};
+use rocket::response::content::RawHtml;
 use rocket::response::Redirect;
 use rocket::serde::json::Json;
 use rocket::Request;
 use rocket_dyn_templates::Template;
 
+use crate::annotate::TextSegment;
 use crate::dictionary::*;
 use crate::query::{Pattern, Query, SearchKind};
 use crate::search::word::WordSearch;
@@ -739,6 +741,39 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
     }
 
     Json(Vec::new())
+}
+
+#[get("/api/annotate/html?<q>")]
+pub fn annotate_html_get(q: &str) -> RawHtml<String> {
+    annotate_html(q)
+}
+
+#[post("/api/annotate/html", data = "<body>")]
+pub fn annotate_html(body: &str) -> RawHtml<String> {
+    let mut html = String::with_capacity(body.len() * 3 / 2);
+    for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
+        match segment {
+            TextSegment::NonTamil(text) => {
+                html.push_str(&RawStr::new(text).html_escape());
+            }
+
+            TextSegment::Tamil(word, None) => {
+                write!(html, "{}", word).unwrap();
+            }
+
+            TextSegment::Tamil(word, Some(choice)) => {
+                write!(
+                    html,
+                    r#"<a href="{}">{}</a>"#,
+                    uri!(entries(choice.ids())),
+                    word,
+                )
+                .unwrap();
+            }
+        }
+    }
+
+    RawHtml(html)
 }
 
 #[get("/api/stats")]

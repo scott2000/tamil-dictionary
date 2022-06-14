@@ -92,14 +92,21 @@ async fn rocket() -> _ {
         .mount(
             "/",
             routes![
+                // Index and other pages
                 web::index,
                 web::advanced,
                 web::grammar,
+
+                // Search pages
                 web::entries,
                 web::random,
                 web::search_all,
                 web::search,
                 web::search_no_query,
+
+                // API endpoints
+                web::annotate_html_get,  // TODO remove this!
+                web::annotate_html,
                 web::suggest,
                 web::stats,
             ],
