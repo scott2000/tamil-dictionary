@@ -106,7 +106,9 @@ async fn rocket() -> _ {
 
                 // API endpoints
                 web::annotate_html_get,  // TODO remove this!
+                web::annotate_json_get,  // TODO remove this!
                 web::annotate_html,
+                web::annotate_json,
                 web::suggest,
                 web::stats,
             ],

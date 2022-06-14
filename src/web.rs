@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Write;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Serialize;
@@ -774,6 +775,53 @@ pub fn annotate_html(body: &str) -> RawHtml<String> {
     }
 
     RawHtml(html)
+}
+
+#[derive(Serialize)]
+pub struct AnnotateResponseEntry<'a> {
+    word: Cow<'a, str>,
+    ids: Option<BTreeSet<EntryIndex>>,
+}
+
+#[get("/api/annotate/json?<q>")]
+pub fn annotate_json_get(q: &str) -> Json<Vec<AnnotateResponseEntry>> {
+    annotate_json(q)
+}
+
+#[post("/api/annotate/json", data = "<body>")]
+pub fn annotate_json(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
+    let mut segments = Vec::new();
+    for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
+        match segment {
+            TextSegment::NonTamil(text) => {
+                segments.push(AnnotateResponseEntry {
+                    word: text.into(),
+                    ids: None,
+                });
+            }
+
+            TextSegment::Tamil(word, None) => {
+                segments.push(AnnotateResponseEntry {
+                    word: word.to_string().into(),
+                    ids: Some(BTreeSet::new()),
+                });
+            }
+
+            TextSegment::Tamil(word, Some(choice)) => {
+                let entries = match Rc::try_unwrap(choice) {
+                    Ok(choice) => choice.entries,
+                    Err(choice) => choice.entries.clone(),
+                };
+
+                segments.push(AnnotateResponseEntry {
+                    word: word.to_string().into(),
+                    ids: Some(entries),
+                });
+            }
+        }
+    }
+
+    Json(segments)
 }
 
 #[get("/api/stats")]
