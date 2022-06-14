@@ -700,6 +700,11 @@ impl StemData {
             );
         }
 
+        // Handle adjectives ending in -aadha
+        if let Some(word) = word.strip_suffix(word![LongA, T, A]) {
+            Self::insert_with_unlikely(state, &(word + word![LongA]), true, &[Done]);
+        }
+
         if word.ends_with(word![A]) {
             Self::insert(state, word, &[Adjective]);
         } else {
