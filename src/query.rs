@@ -9,7 +9,11 @@ use crate::tamil::{Category, Letter, LetterSet, Word, PULLI};
 
 mod transform;
 
+// Queries cannot be more than 512 bytes
 const MAX_LEN: usize = 512;
+
+// There cannot be more than 10 patterns in a query
+const MAX_PATTERNS: usize = 10;
 
 #[derive(Error, Debug)]
 pub enum ParseError {
@@ -117,17 +121,21 @@ impl Query {
         Self::parse_into(word, &mut query.pos_word, &mut query.neg_word)?;
         Self::parse_into(def, &mut query.pos_def, &mut query.neg_def)?;
 
-        let pos_empty = query.pos_word.is_empty() && query.pos_def.is_empty();
-        let neg_empty = query.neg_word.is_empty() && query.neg_def.is_empty();
+        let pos_len = query.pos_word.len() + query.pos_def.len();
+        let neg_len = query.neg_word.len() + query.neg_def.len();
 
-        match (pos_empty, neg_empty, kinds.is_empty()) {
-            (true, true, true) => {
+        // Check for parts which shouldn't be empty
+        if pos_len == 0 && kinds.is_empty() {
+            if neg_len == 0 {
                 return Err(ParseError::EmptyQuery);
-            }
-            (true, false, true) => {
+            } else {
                 return Err(ParseError::OnlyNegativeWord);
             }
-            _ => {}
+        }
+
+        // Make sure there aren't too many patterns
+        if pos_len + neg_len > MAX_PATTERNS {
+            return Err(ParseError::LengthExceeded);
         }
 
         Ok(query)
