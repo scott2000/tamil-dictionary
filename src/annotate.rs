@@ -1656,7 +1656,12 @@ impl ExpandChoice {
                         return;
                     }
 
-                    if ex.full_word.get(self.end + 1) != Some(next) {
+                    if ex
+                        .full_word
+                        .get(self.end + 1)
+                        .map(|lt| lt != next)
+                        .unwrap_or(false)
+                    {
                         return;
                     }
 
