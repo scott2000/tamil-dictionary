@@ -1382,8 +1382,12 @@ impl ExpandChoice {
                     );
                 }
 
-                self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
+                self.unlikely()
+                    .add_goto(ex, word![I, AlveolarL], &[Emphasis]);
+                self.unlikely()
+                    .add_goto(ex, word![I, AlveolarN], &[Emphasis]);
 
+                self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
                 self.add_goto(ex, word![LongA], &[Negative]);
                 self.add_goto(ex, word![U, M], &[Particle]);
             }
