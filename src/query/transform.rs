@@ -522,15 +522,15 @@ fn check_expanded_diphthongs<S: Search>(
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
-    *search = match (lt, next) {
+    *search = match (lt, next, letters.peek_over()) {
         // Check for "ay"
-        (Letter::A, Letter::Y) => search
+        (Letter::A, Letter::Y, _) => search
             .literal(word![Ai])
             .marking_expanded()
             .joining(&search.literal(word![A, Y]))?,
 
         // Check for "avu"
-        (Letter::A, Letter::V) if letters.peek_over() == Some(Letter::U) => {
+        (Letter::A, Letter::V, Some(Letter::U)) => {
             letters.adv();
 
             search
@@ -538,6 +538,12 @@ fn check_expanded_diphthongs<S: Search>(
                 .marking_expanded()
                 .joining(&search.literal(word![A, V, U]))?
         }
+
+        // Check for "avu"
+        (Letter::A, Letter::V, Some(Letter::V)) => search
+            .literal(word![Au])
+            .marking_expanded()
+            .joining(&search.literal(word![A, V]))?,
 
         _ => return Ok(false),
     };

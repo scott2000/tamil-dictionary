@@ -53,9 +53,12 @@ impl<'a> TextSegment<'a, ()> {
         match self {
             Self::NonTamil(word) => vec![TextSegment::NonTamil(word)],
 
-            Self::Tamil(word, ()) => {
+            Self::Tamil(original_word, ()) => {
+                // Normalize the word
+                let word = Normalized::new(&original_word, true);
+
                 // Split the words into groups
-                let groups = joined_groups(&word);
+                let groups = joined_groups(&word.normalized);
 
                 // Only take the first group, if there is one
                 if let Some(choices) = groups.into_iter().next() {
@@ -68,102 +71,147 @@ impl<'a> TextSegment<'a, ()> {
                             *index = end;
 
                             // Return just that segment, along with the corresponding choice
-                            let word = &word[start..end];
+                            let word = word.slice_original(start, end);
                             Some(TextSegment::Tamil(word.into(), Some(choice)))
                         })
                         .collect()
                 } else {
-                    vec![TextSegment::Tamil(word, None)]
+                    vec![TextSegment::Tamil(original_word, None)]
                 }
             }
         }
     }
 }
 
-pub fn normalize(mut word: &Word) -> Box<Word> {
-    use Letter::*;
+#[derive(Debug)]
+pub struct Normalized<'a> {
+    pub original: &'a Word,
+    pub normalized: Box<Word>,
+    // Pairs of (normalized offset, original offset)
+    offsets: Vec<(usize, usize)>,
+}
 
-    #[inline]
-    fn normalize_map(left: Letter, right: Letter) -> Option<(Letter, Letter)> {
-        match (left, right) {
-            (Ng, K) => Some((M, K)),
-            (Ny, Ch) => Some((M, Ch)),
-            (N, T) => Some((M, T)),
-            (RetroT, K | Ch | P) => Some((RetroL, right)),
-            (AlveolarR, K | Ch | P) => Some((AlveolarL, right)),
-            _ => None,
-        }
-    }
-
-    let mut letters = Vec::with_capacity(word.len());
-
-    if word.starts_with(word![A, Y, Y]) {
-        letters.extend_from_slice(&[Ai, Y]);
-        word = &word[3..];
-    }
-
-    let mut iter = word.iter();
-    while let Some(lt) = iter.next() {
+impl<'a> Normalized<'a> {
+    pub fn new(word: &'a Word, fix_last: bool) -> Self {
         use Letter::*;
 
-        if let Some(next) = iter.peek() {
-            if let Some((lt, next)) = normalize_map(lt, next) {
-                iter.next();
-                letters.extend_from_slice(&[lt, next]);
-                continue;
+        #[inline]
+        fn normalize_map(left: Letter, right: Letter) -> Option<(Letter, Letter)> {
+            match (left, right) {
+                (Ng, K) => Some((M, K)),
+                (Ny, Ch) => Some((M, Ch)),
+                (N, T) => Some((M, T)),
+                (RetroT, K | Ch | P) => Some((RetroL, right)),
+                (AlveolarR, K | Ch | P) => Some((AlveolarL, right)),
+                _ => None,
             }
         }
 
-        match lt {
-            Au => letters.extend_from_slice(&[A, V, U]),
+        let mut letters = Vec::with_capacity(word.len());
+        let mut offsets = Vec::new();
+        let mut current_difference: isize = 0;
 
-            Aaydham => {}
+        let mut add_offset = |letters: &Vec<Letter>, diff| {
+            current_difference += diff;
+            let norm_offset = letters.len();
+            let original_offset = (norm_offset as isize) - current_difference;
+            offsets.push((norm_offset, original_offset as usize));
+        };
 
-            K if iter.peek() == Some(Sh) => {
-                iter.next();
+        let mut iter = word.iter();
+        if word.starts_with(word![A, Y, Y]) {
+            letters.push(Ai);
+            add_offset(&letters, -1);
+            letters.push(Y);
+            for _ in 0..3 {
+                iter.adv();
+            }
+        }
 
-                if iter.peek_matches(LetterSet::vowel()) {
-                    letters.extend_from_slice(&[RetroT, Ch]);
-                } else {
-                    letters.extend_from_slice(&[RetroT, Ch, U]);
+        while let Some(lt) = iter.next() {
+            use Letter::*;
+
+            if let Some(next) = iter.peek() {
+                if let Some((lt, next)) = normalize_map(lt, next) {
+                    iter.adv();
+                    letters.extend_from_slice(&[lt, next]);
+                    continue;
                 }
             }
 
-            J => letters.push(Ch),
+            match lt {
+                Au => {
+                    letters.push(A);
+                    add_offset(&letters, 1);
+                    letters.push(V);
+                    add_offset(&letters, 1);
+                    letters.push(U);
+                }
 
-            Sh => {
-                if iter.peek_matches(LetterSet::vowel()) {
+                Aaydham => {}
+
+                K if iter.peek() == Some(Sh) => {
+                    iter.adv();
+
+                    letters.extend_from_slice(&[RetroL, Ch]);
+                    if !iter.peek_matches(LetterSet::vowel()) {
+                        add_offset(&letters, 1);
+                        letters.push(U);
+                    }
+                }
+
+                J => letters.push(Ch),
+
+                Sh => {
                     letters.push(RetroT);
-                } else {
-                    letters.extend_from_slice(&[RetroT, U]);
+                    if !iter.peek_matches(LetterSet::vowel()) {
+                        add_offset(&letters, 1);
+                        letters.push(U);
+                    }
                 }
-            }
 
-            S => {
-                if iter.peek_matches(LetterSet::vowel()) {
+                S => {
                     letters.push(Ch);
-                } else {
-                    letters.extend_from_slice(&[Ch, U]);
+                    if !iter.peek_matches(LetterSet::vowel()) {
+                        add_offset(&letters, 1);
+                        letters.push(U);
+                    }
+                }
+
+                _ => letters.push(lt),
+            }
+        }
+
+        if fix_last {
+            if let Some(lt) = letters.last_mut() {
+                match lt {
+                    Ng | Ny | N => *lt = M,
+                    RetroT => *lt = RetroL,
+                    AlveolarR => *lt = AlveolarL,
+                    _ => {}
                 }
             }
+        }
 
-            _ => letters.push(lt),
+        Self {
+            original: word,
+            normalized: letters.into(),
+            offsets,
         }
     }
 
-    letters.into()
-}
-
-pub fn normalize_final(word: &mut Word) {
-    use Letter::*;
-
-    if let Some(lt) = word.last_mut() {
-        match lt {
-            Ng | Ny | N => *lt = M,
-            RetroT => *lt = RetroL,
-            AlveolarR => *lt = AlveolarL,
-            _ => {}
+    pub fn to_original(&self, normalized_index: usize) -> usize {
+        for &(i, orig) in self.offsets.iter().rev() {
+            if let Some(diff) = normalized_index.checked_sub(i) {
+                return diff + orig;
+            }
         }
+
+        normalized_index
+    }
+
+    pub fn slice_original(&self, start: usize, end: usize) -> &'a Word {
+        &self.original[self.to_original(start)..self.to_original(end)]
     }
 }
 
@@ -550,9 +598,34 @@ impl StemData {
         }
     }
 
+    fn convert_auv_to_avv(word: &Word) -> Option<Box<Word>> {
+        use Letter::*;
+
+        if !word.contains_word(word![Au, V]) {
+            return None;
+        }
+
+        let mut letters = Vec::new();
+        let mut iter = word.iter();
+        while let Some(lt) = iter.next() {
+            if lt == Au && iter.peek() == Some(V) {
+                letters.extend_from_slice(&[A, V]);
+            } else {
+                letters.push(lt);
+            }
+        }
+
+        Some(letters.into())
+    }
+
     fn stem_subwords(state: &mut StemState, word: &str, callback: fn(&mut StemState, &Word)) {
         // For every possible way to join the words, add a stem
         for word in Entry::joined_subwords(word) {
+            // Convert any -auv- to -avv- (as in vauvaal = vavvaal)
+            if let Some(word) = Self::convert_auv_to_avv(&word) {
+                callback(state, &word);
+            }
+
             callback(state, &word);
         }
     }
@@ -801,7 +874,7 @@ impl StemData {
             }
         }
 
-        let word = intern::word(normalize(word));
+        let word = intern::word(Normalized::new(word, false).normalized);
 
         // Strip final -u since it may disappear
         let mut stem = word;
@@ -903,7 +976,7 @@ impl ShortestOnly {
     }
 }
 
-pub fn joined_groups(full_word: &Word) -> Vec<Choices> {
+fn joined_groups(full_word: &Word) -> Vec<Choices> {
     let groups = best_groups(full_word);
 
     // If only one grouping is found, just return it
@@ -929,17 +1002,13 @@ pub fn joined_groups(full_word: &Word) -> Vec<Choices> {
     map.into_iter().rev().map(|(_, choices)| choices).collect()
 }
 
-pub fn best_groups(full_word: &Word) -> Vec<Choices> {
+fn best_groups(full_word: &Word) -> Vec<Choices> {
     // Words should not have more than 100 letters
     const MAX_LEN: usize = 100;
 
     // Words should not have more than 10 segments
     const MAX_SEG_COUNT: usize = 10;
 
-    // Normalize the input word
-    let mut full_word = normalize(full_word);
-    normalize_final(&mut full_word);
-    let full_word = &full_word;
     if full_word.len() > MAX_LEN {
         return Vec::new();
     }
@@ -1047,16 +1116,16 @@ fn is_possible_stem_start(stem: &Word) -> bool {
         LetterSet::latin().union(letterset![RetroN, Zh, RetroL, AlveolarR, AlveolarN]);
 
     if stem.start_matches(INVALID_START) {
+        // Stems starting with lch- are actually ksh-, which is valid
+        if stem.starts_with(word![RetroL, Ch]) {
+            return true;
+        }
+
         return false;
     }
 
     // Stems with a vowel in their second position are also valid
     if stem.matches(1, LetterSet::vowel()) {
-        return true;
-    }
-
-    // Stems starting with tch- are actually ksh-, which is valid
-    if stem.starts_with(word![RetroT, Ch]) {
         return true;
     }
 
@@ -1726,8 +1795,15 @@ impl ExpandChoice {
             }
 
             Done => {
-                // If expecting to end a word but not at end, mark as unlikely
-                if self.likely_end && self.end != ex.full_word.len() {
+                // Mark as unlikely if one of these conditions is met:
+                // 1. Single letter word (e.g. ai)
+                // 2. Two letter word starting with consonant (e.g. mu)
+                // 3. Marked as likely end, but not at end of word
+                let matched = self.matched(ex);
+                if matched.len() == 1
+                    || (matched.len() == 2 && matched.matches(0, LetterSet::consonant()))
+                    || (self.likely_end && self.end != ex.full_word.len())
+                {
                     self.unlikely = true;
                 }
 

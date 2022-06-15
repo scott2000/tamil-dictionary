@@ -602,6 +602,22 @@ impl Word {
         self.iter().any(|lt| lts.matches(lt))
     }
 
+    pub fn contains_word(&self, word: &Self) -> bool {
+        let this_len = self.0.len();
+        let word_len = word.0.len();
+        if this_len < word_len {
+            return false;
+        }
+
+        for i in 0..(this_len - word_len) {
+            if self.0[i..(i + word_len)] == word.0 {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn matches(&self, index: usize, lts: LetterSet) -> bool {
         if let Some(&lt) = self.0.get(index) {
             lts.matches(lt)
