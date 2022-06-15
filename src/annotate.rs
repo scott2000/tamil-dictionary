@@ -175,6 +175,7 @@ const PRONOUN: KindSet =
 
 struct SpecialWord {
     if_matches: KindSet,
+    likelihood: StemLikelihood,
     then_insert: Vec<(&'static Word, &'static [ExpandState])>,
 }
 
@@ -183,6 +184,7 @@ type Specials = HashMap<&'static Word, SpecialWord>;
 fn get_specials() -> Specials {
     use EntryKind::*;
     use ExpandState::*;
+    use StemLikelihood::*;
 
     let mut map = Specials::default();
 
@@ -205,7 +207,25 @@ fn get_specials() -> Specials {
             pronoun,
             SpecialWord {
                 if_matches: KindSet::single(SuttuPeyar),
+                likelihood: Pronoun,
                 then_insert: vec![(pronoun, &[Emphasis])],
+            },
+        );
+    }
+
+    let regular_pronoun_bases: &[&Word] = &[
+        word![E, Ng, K, A, RetroL],
+        word![U, Ng, K, A, RetroL],
+        word![T, A, Ng, K, A, RetroL],
+    ];
+
+    for &base in regular_pronoun_bases {
+        map.insert(
+            base,
+            SpecialWord {
+                if_matches: KindSet::single(PeyarChol),
+                likelihood: Pronoun,
+                then_insert: vec![(base, &[Oblique])],
             },
         );
     }
@@ -225,6 +245,7 @@ fn get_specials() -> Specials {
             base,
             SpecialWord {
                 if_matches: KindSet::single(PeyarChol),
+                likelihood: Pronoun,
                 then_insert: vec![
                     (base, &[CaseNoKu]),
                     (intern::word(base + word![A, K, K, U]), &[Emphasis]),
@@ -247,6 +268,7 @@ fn get_specials() -> Specials {
             avai,
             SpecialWord {
                 if_matches: PRONOUN,
+                likelihood: Pronoun,
                 then_insert: vec![(without_vai, &[AdjectiveStemAvai])],
             },
         );
@@ -259,6 +281,7 @@ fn get_specials() -> Specials {
             vowel,
             SpecialWord {
                 if_matches: PRONOUN,
+                likelihood: Pronoun,
                 then_insert: vec![(vowel, &[VowelAdjective])],
             },
         );
@@ -270,6 +293,7 @@ fn get_specials() -> Specials {
         aana,
         SpecialWord {
             if_matches: KindSet::single(IdaiChol),
+            likelihood: Suffix,
             then_insert: vec![(aana, &[Adjective])],
         },
     );
@@ -281,6 +305,7 @@ fn get_specials() -> Specials {
         ulla,
         SpecialWord {
             if_matches: KindSet::any(),
+            likelihood: Regular,
             then_insert: vec![(ullu, &[TenseStem, SpecialA, SpecialB])],
         },
     );
@@ -293,6 +318,7 @@ fn get_specials() -> Specials {
         ellaam,
         SpecialWord {
             if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
             then_insert: vec![
                 (ellaam, &[Emphasis]),
                 (ellaa, &[Done]),
@@ -308,6 +334,7 @@ fn get_specials() -> Specials {
         ellaarum,
         SpecialWord {
             if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
             then_insert: vec![(ellaar, &[Oblique])],
         },
     );
@@ -319,6 +346,7 @@ fn get_specials() -> Specials {
         ellorum,
         SpecialWord {
             if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
             then_insert: vec![(ellor, &[Oblique])],
         },
     );
@@ -330,6 +358,7 @@ fn get_specials() -> Specials {
         maattu,
         SpecialWord {
             if_matches: KindSet::single(ThunaiVinai),
+            likelihood: Regular,
             then_insert: vec![(maattu, &[GeneralStem, SpecialA]), (maattaa, &[Negative])],
         },
     );
@@ -453,19 +482,12 @@ struct StemData {
 }
 
 impl StemData {
-    fn new(entry: &'static Entry, root: &'static Word, unlikely: bool, state: ExpandState) -> Self {
-        use StemLikelihood::*;
-
-        let likelihood = if unlikely {
-            Unlikely
-        } else if entry.word.starts_with('-') {
-            Suffix
-        } else if entry.kind_set.matches_any(PRONOUN) {
-            Pronoun
-        } else {
-            Regular
-        };
-
+    fn new(
+        entry: &'static Entry,
+        root: &'static Word,
+        state: ExpandState,
+        likelihood: StemLikelihood,
+    ) -> Self {
         Self {
             root,
             entry: entry.index,
@@ -485,7 +507,7 @@ impl StemData {
             if let Some(special) = state.specials.get(word) {
                 if entry.kind_set.matches_any(special.if_matches) {
                     for (word, insert) in special.then_insert.iter() {
-                        Self::insert(state, word, insert);
+                        Self::insert_with(state, word, insert, special.likelihood);
                     }
 
                     return;
@@ -657,33 +679,33 @@ impl StemData {
         } else if word.ends_with(word![A]) {
             Self::stem_adjective(state, word);
         } else {
-            Self::stem_noun_with_unlikely(state, word, true);
+            Self::stem_noun_with(state, word, StemLikelihood::Unlikely);
             Self::stem_other(state, word);
         }
     }
 
     fn stem_noun(state: &mut StemState, word: &Word) {
-        Self::stem_noun_with_unlikely(state, word, false);
+        Self::stem_noun_with(state, word, StemLikelihood::Regular);
     }
 
-    fn stem_noun_with_unlikely(state: &mut StemState, word: &Word, unlikely: bool) {
+    fn stem_noun_with(state: &mut StemState, word: &Word, likelihood: StemLikelihood) {
         // Handle nouns ending in -am
         if word.ends_with(word![A, M]) {
-            Self::insert_with_unlikely(state, &word[..(word.len() - 1)], unlikely, &[NounWithAm]);
+            Self::insert_with(state, &word[..(word.len() - 1)], &[NounWithAm], likelihood);
             return;
         }
 
-        Self::insert_with_unlikely(state, word, unlikely, &[Plural]);
+        Self::insert_with(state, word, &[Plural], likelihood);
 
         // Handle nouns ending in -an
         if let Some(word) = word.replace_suffix(word![A, AlveolarN], word![A, R]) {
-            Self::insert_with_unlikely(state, &word, unlikely, &[Plural]);
+            Self::insert_with(state, &word, &[Plural], likelihood);
             return;
         }
 
         // Handle nouns ending in -ar
         if let Some(word) = word.replace_suffix(word![A, R], word![A, AlveolarN]) {
-            Self::insert_with_unlikely(state, &word, unlikely, &[Oblique]);
+            Self::insert_with(state, &word, &[Oblique], likelihood);
             return;
         }
 
@@ -693,7 +715,7 @@ impl StemData {
             .or_else(|| word.replace_suffix(word![AlveolarR, U], word![AlveolarR, AlveolarR, U]));
 
         if let Some(word) = replace {
-            Self::insert_with_unlikely(state, &word, unlikely, &[Oblique]);
+            Self::insert_with(state, &word, &[Oblique], likelihood);
         }
     }
 
@@ -715,7 +737,12 @@ impl StemData {
 
         // Handle adjectives ending in -aadha
         if let Some(word) = word.strip_suffix(word![LongA, T, A]) {
-            Self::insert_with_unlikely(state, &(word + word![LongA]), true, &[Done]);
+            Self::insert_with(
+                state,
+                &(word + word![LongA]),
+                &[Done],
+                StemLikelihood::Unlikely,
+            );
         }
 
         if word.ends_with(word![A]) {
@@ -755,15 +782,25 @@ impl StemData {
     }
 
     fn insert(state: &mut StemState, word: &Word, states: &[ExpandState]) {
-        Self::insert_with_unlikely(state, word, false, states);
+        Self::insert_with(state, word, states, StemLikelihood::Regular);
     }
 
-    fn insert_with_unlikely(
+    fn insert_with(
         state: &mut StemState,
         word: &Word,
-        unlikely: bool,
         states: &[ExpandState],
+        mut likelihood: StemLikelihood,
     ) {
+        use StemLikelihood::*;
+
+        if let Regular = likelihood {
+            if state.entry.word.starts_with('-') {
+                likelihood = Suffix;
+            } else if state.entry.kind_set.matches_any(PRONOUN) {
+                likelihood = Pronoun;
+            }
+        }
+
         let word = intern::word(normalize(word));
 
         // Strip final -u since it may disappear
@@ -781,12 +818,12 @@ impl StemData {
         let entry = state.entry;
         if let Some(vec) = state.stems.get_mut(&stem) {
             for &state in states {
-                vec.push(Self::new(entry, word, unlikely, state));
+                vec.push(Self::new(entry, word, state, likelihood));
             }
         } else {
             let mut vec = Vec::new();
             for &state in states {
-                vec.push(Self::new(entry, word, unlikely, state));
+                vec.push(Self::new(entry, word, state, likelihood));
             }
             state.stems.insert(stem, vec);
         }
