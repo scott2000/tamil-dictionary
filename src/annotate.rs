@@ -1380,6 +1380,9 @@ impl ExpandChoice {
 
             InfinitiveStem => {
                 if self.ends_with(ex, word![K, U]) {
+                    // Old verbal noun (as in nadakkaiyil)
+                    self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
+
                     self.add_goto(ex, word![I, AlveolarR, U], &[TenseStem]);
                     self.unlikely().add_goto(
                         ex,
@@ -1387,6 +1390,9 @@ impl ExpandChoice {
                         &[TenseStem, SpecialA],
                     );
                 } else {
+                    // Old verbal noun (as in seygaiyil)
+                    self.add_goto(ex, word![K, Ai], &[RareVerbalNoun]);
+
                     self.add_goto(ex, word![K, I, AlveolarR, U], &[TenseStem]);
                     self.unlikely().add_goto(
                         ex,
@@ -1395,7 +1401,11 @@ impl ExpandChoice {
                     );
                 }
 
+                // Allow extra U (as in utkaarugiren)
                 if self.end_matches(ex, letterset![R, Zh]) {
+                    // Old verbal noun (as in thinnugai)
+                    self.add_goto(ex, word![U, K, Ai], &[RareVerbalNoun]);
+
                     self.add_goto(ex, word![U, K, I, AlveolarR, U], &[TenseStem]);
                     self.unlikely().add_goto(
                         ex,
@@ -1404,12 +1414,12 @@ impl ExpandChoice {
                     );
                 }
 
+                // Old conditional forms
                 self.unlikely()
                     .add_goto(ex, word![I, AlveolarL], &[Emphasis]);
                 self.unlikely()
                     .add_goto(ex, word![I, AlveolarN], &[Emphasis]);
 
-                self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
                 self.add_goto(ex, word![LongA], &[Negative]);
                 self.add_goto(ex, word![U, M], &[Particle]);
             }
@@ -1423,6 +1433,7 @@ impl ExpandChoice {
                     &[Emphasis],
                 );
 
+                // Old negative verbal noun
                 self.add_goto(ex, word![M, Ai], &[RareVerbalNoun]);
 
                 self.add_goto(ex, word![T, LongI], &[GeneralStemI]);
@@ -1434,6 +1445,7 @@ impl ExpandChoice {
             Infinitive => {
                 self.goto(ex, &[Emphasis]);
 
+                // Old verbal noun (as in nadakkal)
                 self.add_goto(ex, word![AlveolarL], &[RareVerbalNoun]);
 
                 self.likely_end = true;
@@ -1497,16 +1509,18 @@ impl ExpandChoice {
             }
 
             GeneralStemE => {
+                // Old -em person suffix (as in vandhem)
                 self.unlikely().add_goto(ex, word![M], &[Particle]);
 
                 self.add_goto(ex, word![AlveolarN], &[Particle]);
             }
 
             GeneralStemO => {
+                // Old person suffixes to form nouns (as in vandhor)
                 self.unlikely().add_goto(ex, word![RetroL], &[Oblique]);
                 self.unlikely().add_goto(ex, word![AlveolarN], &[Oblique]);
-
                 self.add_goto(ex, word![R], &[Oblique]);
+
                 self.add_goto(ex, word![M], &[Particle]);
             }
 
@@ -1543,12 +1557,18 @@ impl ExpandChoice {
             Oblique => {
                 self.goto(ex, &[Case]);
 
+                if !self.ends_with(ex, word![K, A, RetroL]) {
+                    // -am sariyai (as in aatrangarai)
+                    self.unlikely().add_goto(ex, word![A, M], &[Done]);
+                }
+
                 if self.ends_with(ex, word![T, U])
                     && (self.ends_with(ex, word![A, T, U])
                         || self.ends_with(ex, word![I, T, U])
                         || self.ends_with(ex, word![U, T, U])
                         || self.ends_with(ex, word![E, T, U]))
                 {
+                    // -an sariyai (as in adhan or adharku)
                     self.add_goto(ex, word![A, AlveolarN], &[Case]);
                     self.add_goto(ex, word![A, AlveolarL, K, U], &[Emphasis]);
                 }
@@ -1571,7 +1591,9 @@ impl ExpandChoice {
 
                 self.add_goto(ex, word![Ai], &[Emphasis]);
 
+                // Old possesive suffix (as in avanadhu kai)
                 self.unlikely().add_goto(ex, word![A, T, U], &[Oblique]);
+
                 self.add_goto(ex, word![U, RetroT, Ai, Y, A], &[Adjective]);
 
                 self.add_goto(ex, word![U, RetroT, AlveolarN], &[Emphasis]);
@@ -1585,6 +1607,7 @@ impl ExpandChoice {
             LocativeE => {
                 self.goto(ex, &[Irundhu]);
 
+                // Allow extra emphatic -e after locative case
                 self.add_goto(ex, word![LongE], &[Irundhu]);
             }
 
