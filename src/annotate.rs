@@ -437,26 +437,39 @@ struct StemState<'a> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct StemData {
-    pub root: &'static Word,
-    pub entry: EntryIndex,
-    pub not_start: bool,
-    pub unlikely: bool,
-    pub state: ExpandState,
+enum StemLikelihood {
+    Regular,
+    Pronoun,
+    Suffix,
+    Unlikely,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct StemData {
+    root: &'static Word,
+    entry: EntryIndex,
+    likelihood: StemLikelihood,
+    state: ExpandState,
 }
 
 impl StemData {
-    pub fn new(
-        entry: &'static Entry,
-        root: &'static Word,
-        unlikely: bool,
-        state: ExpandState,
-    ) -> Self {
+    fn new(entry: &'static Entry, root: &'static Word, unlikely: bool, state: ExpandState) -> Self {
+        use StemLikelihood::*;
+
+        let likelihood = if unlikely {
+            Unlikely
+        } else if entry.word.starts_with('-') {
+            Suffix
+        } else if entry.kind_set.matches_any(PRONOUN) {
+            Pronoun
+        } else {
+            Regular
+        };
+
         Self {
             root,
             entry: entry.index,
-            not_start: entry.word.starts_with('-'),
-            unlikely,
+            likelihood,
             state,
         }
     }
@@ -1075,13 +1088,13 @@ impl Choice {
 
 #[derive(Clone, Debug)]
 struct Expand<'a> {
-    pub full_word: &'a Word,
-    pub start: usize,
-    pub choices: Vec<ExpandChoice>,
+    full_word: &'a Word,
+    start: usize,
+    choices: Vec<ExpandChoice>,
 }
 
 impl<'a> Expand<'a> {
-    pub fn new(full_word: &'a Word, start: usize) -> Self {
+    fn new(full_word: &'a Word, start: usize) -> Self {
         Self {
             full_word,
             start,
@@ -1089,11 +1102,11 @@ impl<'a> Expand<'a> {
         }
     }
 
-    pub fn push(&mut self, choice: ExpandChoice) {
+    fn push(&mut self, choice: ExpandChoice) {
         self.choices.push(choice);
     }
 
-    pub fn evaluate(&mut self, results: &mut BTreeMap<usize, Choice>) {
+    fn evaluate(&mut self, results: &mut BTreeMap<usize, Choice>) {
         while let Some(choice) = self.choices.pop() {
             choice.step(self, results);
         }
@@ -1102,7 +1115,7 @@ impl<'a> Expand<'a> {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
-pub enum ExpandState {
+enum ExpandState {
     WeakVerb,
     StrongVerb,
     RareVerbalNoun,
@@ -1154,13 +1167,22 @@ struct ExpandChoice {
 }
 
 impl ExpandChoice {
-    pub fn insert_new(ex: &mut Expand, data: &StemData) {
+    fn insert_new(ex: &mut Expand, data: &StemData) {
+        use StemLikelihood::*;
+
+        let unlikely = match data.likelihood {
+            Regular => false,
+            Pronoun => ex.start != 0,
+            Suffix => ex.start == 0,
+            Unlikely => true,
+        };
+
         let choice = Self {
             end: ex.start,
             entry: data.entry,
             is_start: true,
             has_implicit_u: false,
-            unlikely: data.unlikely || (ex.start == 0 && data.not_start),
+            unlikely,
             likely_end: false,
             state: Done,
         };
@@ -1308,7 +1330,7 @@ impl ExpandChoice {
         }
     }
 
-    pub fn step(mut self, ex: &mut Expand, results: &mut BTreeMap<usize, Choice>) {
+    fn step(mut self, ex: &mut Expand, results: &mut BTreeMap<usize, Choice>) {
         use Letter::*;
 
         match self.state {
