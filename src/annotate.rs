@@ -174,7 +174,11 @@ impl<'a> Normalized<'a> {
                     letters.push(Ch);
                     if !iter.peek_matches(LetterSet::vowel()) {
                         add_offset(&letters, 1);
-                        letters.push(U);
+                        if iter.peek() == Some(Y) {
+                            letters.push(I);
+                        } else {
+                            letters.push(U);
+                        }
                     }
                 }
 
