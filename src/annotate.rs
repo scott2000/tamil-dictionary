@@ -265,7 +265,7 @@ fn get_specials() -> Specials {
             pronoun,
             SpecialWord {
                 if_matches: KindSet::single(SuttuPeyar),
-                likelihood: Pronoun,
+                likelihood: Prefix,
                 then_insert: vec![(pronoun, &[Emphasis])],
             },
         );
@@ -282,7 +282,7 @@ fn get_specials() -> Specials {
             base,
             SpecialWord {
                 if_matches: KindSet::single(PeyarChol),
-                likelihood: Pronoun,
+                likelihood: Prefix,
                 then_insert: vec![(base, &[Oblique])],
             },
         );
@@ -303,7 +303,7 @@ fn get_specials() -> Specials {
             base,
             SpecialWord {
                 if_matches: KindSet::single(PeyarChol),
-                likelihood: Pronoun,
+                likelihood: Prefix,
                 then_insert: vec![
                     (base, &[CaseNoKu]),
                     (
@@ -329,7 +329,7 @@ fn get_specials() -> Specials {
             avai,
             SpecialWord {
                 if_matches: PRONOUN,
-                likelihood: Pronoun,
+                likelihood: Prefix,
                 then_insert: vec![(without_vai, &[AdjectiveStemAvai])],
             },
         );
@@ -342,7 +342,7 @@ fn get_specials() -> Specials {
             vowel,
             SpecialWord {
                 if_matches: PRONOUN,
-                likelihood: Pronoun,
+                likelihood: Prefix,
                 then_insert: vec![(vowel, &[VowelAdjective])],
             },
         );
@@ -421,6 +421,16 @@ fn get_specials() -> Specials {
             if_matches: KindSet::single(ThunaiVinai),
             likelihood: Regular,
             then_insert: vec![(maattu, &[GeneralStem, SpecialA]), (maattaa, &[Negative])],
+        },
+    );
+
+    // Don't tread kondiru as a single word, despite it often being written as such
+    map.insert(
+        word![K, O, RetroN, RetroT, I, R, U],
+        SpecialWord {
+            if_matches: KindSet::single(VinaiChol),
+            likelihood: Regular,
+            then_insert: vec![],
         },
     );
 
@@ -529,7 +539,7 @@ struct StemState<'a> {
 #[derive(Copy, Clone, Debug)]
 enum StemLikelihood {
     Regular,
-    Pronoun,
+    Prefix,
     Suffix,
     Unlikely,
 }
@@ -878,13 +888,23 @@ impl StemData {
         states: &[ExpandState],
         mut likelihood: StemLikelihood,
     ) {
+        use EntryKind::*;
         use StemLikelihood::*;
 
         if let Regular = likelihood {
-            if state.entry.word.starts_with('-') {
+            let entry = state.entry;
+
+            if entry.word.starts_with('-') {
                 likelihood = Suffix;
-            } else if state.entry.kind_set.matches_any(PRONOUN) {
-                likelihood = Pronoun;
+            } else if entry.word.ends_with('-')
+                || entry.kind_set.matches_any(PRONOUN)
+                || (entry.kind_set.matches(VinaiChol) && !entry.kind_set.matches(ThunaiVinai))
+            {
+                // Mark as prefix if one of these conditions is met:
+                // 1. The word ends with a hyphen
+                // 2. The word is a pronoun
+                // 3. The word is a non-helper verb
+                likelihood = Prefix;
             }
         }
 
@@ -1293,7 +1313,7 @@ impl ExpandChoice {
 
         let unlikely = match data.likelihood {
             Regular => false,
-            Pronoun => ex.start != 0,
+            Prefix => ex.start != 0,
             Suffix => ex.start == 0,
             Unlikely => true,
         };
