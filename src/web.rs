@@ -17,7 +17,7 @@ use rocket::serde::json::Json;
 use rocket::Request;
 use rocket_dyn_templates::Template;
 
-use crate::annotate::TextSegment;
+use crate::annotate::{TextSegment, WordCount};
 use crate::dictionary::*;
 use crate::query::{Pattern, Query, SearchKind};
 use crate::search::word::WordSearch;
@@ -796,19 +796,34 @@ pub fn annotate_api(body: &str) -> RawHtml<String> {
 }
 
 #[derive(Serialize)]
+pub struct AnnotateResponse<'a> {
+    segments: Vec<AnnotateResponseEntry<'a>>,
+    top: Vec<(&'static str, usize)>,
+}
+
+#[derive(Serialize)]
 pub struct AnnotateResponseEntry<'a> {
     word: Cow<'a, str>,
     ids: Option<BTreeSet<EntryIndex>>,
 }
 
-#[get("/api/annotate/raw?<q>")]
-pub fn annotate_raw_get(q: &str) -> Json<Vec<AnnotateResponseEntry>> {
-    annotate_raw(q)
+#[get("/api/annotate/raw?<q>&<n>")]
+pub fn annotate_raw_get(q: &str, n: Option<u32>) -> Json<AnnotateResponse> {
+    annotate_raw(n, q)
 }
 
-#[post("/api/annotate/raw", format = "plain", data = "<body>")]
-pub fn annotate_raw(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
+#[post("/api/annotate/raw?<n>", format = "plain", data = "<body>")]
+pub fn annotate_raw(n: Option<u32>, body: &str) -> Json<AnnotateResponse> {
     ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    // Only count words if <n> is provided and nonzero
+    let mut count = n.and_then(|n| {
+        if n == 0 {
+            None
+        } else {
+            Some(WordCount::default())
+        }
+    });
 
     let mut segments = Vec::new();
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
@@ -828,6 +843,12 @@ pub fn annotate_raw(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
             }
 
             TextSegment::Tamil(word, Some(choice)) => {
+                // If counting words, add this choice to the count
+                if let Some(count) = &mut count {
+                    count.insert(&choice);
+                }
+
+                // Convert the choice to be owned
                 let entries = match Rc::try_unwrap(choice) {
                     Ok(choice) => choice.entries,
                     Err(choice) => choice.entries.clone(),
@@ -841,7 +862,23 @@ pub fn annotate_raw(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
         }
     }
 
-    Json(segments)
+    // If counting, take the top <n> words
+    let top = match (n, count) {
+        (Some(n), Some(count)) => {
+            let n = n.min(100) as usize;
+            let mut vec = count.into_vec();
+
+            if vec.len() > n {
+                vec.drain(n..);
+            }
+
+            vec
+        }
+
+        _ => Vec::new(),
+    };
+
+    Json(AnnotateResponse { segments, top })
 }
 
 #[get("/api/stats")]
