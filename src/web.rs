@@ -176,6 +176,11 @@ pub fn grammar() -> Template {
     render_template("grammar", ())
 }
 
+#[get("/annotate")]
+pub fn annotate() -> Template {
+    render_template("annotate", ())
+}
+
 #[derive(Serialize, FromForm, UriDisplayQuery, Default, Debug)]
 pub struct QueryKindSet {
     v: bool,

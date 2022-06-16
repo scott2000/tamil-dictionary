@@ -1,0 +1,32 @@
+.text {
+    padding: 10px;
+    min-width: 200px;
+    width: 95%;
+    border: 1px solid var(--border-color);
+    font-size: 18px;
+}
+
+#annotate-input {
+    resize: vertical;
+    min-height: 100px;
+}
+
+#annotate-input:focus {
+    outline: 3px solid var(--highlight-color);
+}
+
+#annotate-result {
+    white-space: pre-wrap;
+}
+
+#annotate-button {
+    margin-top: 16px;
+}
+
+#annotate-result a {
+    text-decoration: none;
+}
+
+#annotate-result a:hover {
+    text-decoration: underline;
+}

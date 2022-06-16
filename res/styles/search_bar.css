@@ -39,18 +39,18 @@
     margin-right: 6px;
 }
 
-#search-button {
+.search-button {
     background-color: var(--button-color);
 }
 
-#search-button:focus {
+.search-button:focus {
     background-color: var(--button-color);
     box-shadow: 0 0 0 3px var(--highlight-color);
     outline: none;
     color: inherit;
 }
 
-#search-button:active {
+.search-button:active {
     background-color: var(--button-active);
     color: inherit;
 }

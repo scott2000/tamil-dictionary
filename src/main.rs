@@ -96,6 +96,7 @@ async fn rocket() -> _ {
                 web::index,
                 web::advanced,
                 web::grammar,
+                web::annotate,
 
                 // Search pages
                 web::entries,
