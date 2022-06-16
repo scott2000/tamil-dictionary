@@ -33,6 +33,7 @@ const MAX_EXPAND: usize = 250;
 static RESULT_COUNT: AtomicU64 = AtomicU64::new(0);
 static SEARCH_COUNT: AtomicU64 = AtomicU64::new(0);
 static SUGGEST_COUNT: AtomicU64 = AtomicU64::new(0);
+static ANNOTATE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 pub fn render_template(template: &'static str, context: impl Serialize) -> Template {
     #[derive(Serialize)]
@@ -756,6 +757,8 @@ pub fn annotate_api_get(q: &str) -> RawHtml<String> {
 
 #[post("/api/annotate", data = "<body>")]
 pub fn annotate_api(body: &str) -> RawHtml<String> {
+    ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
+
     let mut html = String::with_capacity(body.len() * 3 / 2);
     let mut last_was_tamil = false;
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
@@ -805,6 +808,8 @@ pub fn annotate_raw_get(q: &str) -> Json<Vec<AnnotateResponseEntry>> {
 
 #[post("/api/annotate/raw", data = "<body>")]
 pub fn annotate_raw(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
+    ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
+
     let mut segments = Vec::new();
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
         match segment {
@@ -848,6 +853,7 @@ pub fn stats() -> String {
     let result_count = RESULT_COUNT.load(Ordering::Acquire);
     let search_count = SEARCH_COUNT.load(Ordering::Acquire);
     let suggest_count = SUGGEST_COUNT.load(Ordering::Acquire);
+    let annotate_count = ANNOTATE_COUNT.load(Ordering::Acquire);
 
     format!(
         concat!(
@@ -856,6 +862,7 @@ pub fn stats() -> String {
             "result_count={}\n",
             "search_count={}\n",
             "suggest_count={}\n",
+            "annotate_count={}\n",
         ),
         hours,
         mins,
@@ -864,6 +871,7 @@ pub fn stats() -> String {
         result_count,
         search_count,
         suggest_count,
+        annotate_count,
     )
 }
 
