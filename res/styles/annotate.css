@@ -9,6 +9,7 @@
 #annotate-input {
     resize: vertical;
     min-height: 100px;
+    background-color: transparent;
 }
 
 #annotate-input:focus {
