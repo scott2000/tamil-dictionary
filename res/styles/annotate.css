@@ -18,6 +18,7 @@
 
 #annotate-result {
     white-space: pre-wrap;
+    overflow-wrap: break-word;
 }
 
 #annotate-button {

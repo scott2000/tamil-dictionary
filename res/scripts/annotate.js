@@ -1,6 +1,8 @@
 'use strict';
 
 window.addEventListener('load', function() {
+  const sizeLimit = 8192;
+
   const annotateInput = document.getElementById('annotate-input');
   const annotateResult = document.getElementById('annotate-result');
   const annotateButton = document.getElementById('annotate-button');
@@ -29,19 +31,38 @@ window.addEventListener('load', function() {
   }
 
   function startRequest() {
+    const text = annotateInput.value.trimEnd();
+    if (!text) {
+      alert('Please enter some Tamil text to annotate.');
+      return;
+    }
+
+    const blob = new Blob([text]);
+    if (blob.size > sizeLimit) {
+      alert('Your text is too long, try something shorter (up to 8 KiB).');
+      return;
+    }
+
     const num = ++requestNum;
     annotateButton.disabled = true;
     annotateButton.textContent = 'Loading...';
 
     fetch('/api/annotate', {
       method: 'POST',
-      body: annotateInput.value,
+      body: blob,
     })
-      .then(response => response.text())
-      .then(text => {
-        if (requestNum === num) {
-          annotateHtml = text;
-          display();
+      .then(response => {
+        if (response.ok) {
+          return response.text()
+            .then(text => {
+              if (requestNum === num) {
+                annotateHtml = text;
+                display();
+              }
+            });
+        } else {
+          const status = `${response.status} ${response.statusText}`;
+          alert(`Could not load annotations (${status}). Please try again later.`);
         }
       })
       .catch(error => {
