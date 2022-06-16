@@ -760,6 +760,7 @@ impl StemData {
         if word.ends_with(word![K, A]) {
             Self::stem_adverb(state, word);
         } else if word.ends_with(word![A]) {
+            Self::stem_adverb(state, word);
             Self::stem_adjective(state, word);
         } else {
             Self::stem_noun_with(state, word, StemLikelihood::Unlikely);
@@ -1265,6 +1266,7 @@ enum ExpandState {
     AdjectiveStem,
     AdjectiveStemVa,
     AdjectiveStemAvai,
+    AagaOrAay,
     Emphasis,
     Particle,
     VowelAdjective,
@@ -1658,7 +1660,7 @@ impl ExpandChoice {
             NounWithAm => {
                 self.goto(ex, &[Done]);
 
-                self.add_goto(ex, word![M], &[Emphasis]);
+                self.add_goto(ex, word![M], &[AagaOrAay, Emphasis]);
                 self.add_goto(ex, word![M, K, A, RetroL], &[Oblique]);
                 self.add_goto(ex, word![T, T, U], &[Oblique]);
             }
@@ -1671,7 +1673,7 @@ impl ExpandChoice {
             }
 
             Oblique => {
-                self.goto(ex, &[Case]);
+                self.goto(ex, &[Case, AagaOrAay]);
 
                 if !self.ends_with(ex, word![K, A, RetroL]) {
                     // -am sariyai (as in aatrangarai)
@@ -1761,6 +1763,12 @@ impl ExpandChoice {
                 self.add_goto(ex, word![V, Ai], &[Emphasis]);
                 self.add_goto(ex, word![V, Ai, K, A, RetroL], &[Oblique]);
                 self.add_goto(ex, word![V, A, AlveolarR, AlveolarR, U], &[Oblique]);
+            }
+
+            AagaOrAay => {
+                self.unlikely = true;
+                self.add_goto(ex, word![LongA, Y], &[Emphasis]);
+                self.add_goto(ex, word![LongA, K, A], &[Emphasis]);
             }
 
             Emphasis => {
