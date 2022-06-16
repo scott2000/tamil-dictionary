@@ -186,6 +186,8 @@ impl<'a> Normalized<'a> {
                     }
                 }
 
+                H => letters.push(K),
+
                 _ => letters.push(lt),
             }
         }
