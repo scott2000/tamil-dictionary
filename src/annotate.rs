@@ -794,6 +794,11 @@ impl StemData {
 
         Self::insert_with(state, word, &[Plural], likelihood);
 
+        // Don't allow magan to be magar
+        if word.ends_with(word![M, A, K, A, AlveolarN]) {
+            return;
+        }
+
         // Handle nouns ending in -an
         if let Some(word) = word.replace_suffix(word![A, AlveolarN], word![A, R]) {
             Self::insert_with(state, &word, &[Plural], likelihood);
