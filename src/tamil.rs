@@ -937,28 +937,37 @@ pub struct LetterCombination {
 }
 
 impl LetterCombination {
-    pub fn take(
-        iter: &mut std::iter::Peekable<impl Iterator<Item = Letter>>,
-    ) -> Option<LetterCombination> {
+    pub fn take(iter: &mut WordIter) -> Option<LetterCombination> {
         if let Some(letter) = iter.next() {
             let mut base = LetterBase::Single(letter);
 
             // Check for consonant which may have combining letters
             if letter.is_consonant() {
                 // Check for 'ksh' cluster
-                if letter == Letter::K && iter.peek() == Some(&Letter::Sh) {
-                    iter.next();
+                if letter == Letter::K && iter.peek() == Some(Letter::Sh) {
+                    iter.adv();
                     base = LetterBase::Double(letter, Letter::Sh);
                 }
 
+                // Check for 'sree' letter
+                if letter == Letter::S
+                    && iter.peek() == Some(Letter::R)
+                    && iter.peek_over() == Some(Letter::LongI)
+                {
+                    iter.adv();
+                    iter.adv();
+                    return Some(LetterCombination {
+                        base: LetterBase::Double(Letter::S, Letter::R),
+                        combining: Some(Letter::LongI),
+                    });
+                }
+
                 // Check for combining vowel
-                if let Some(combining) = iter.peek() {
-                    if combining.is_vowel() {
-                        return Some(LetterCombination {
-                            base,
-                            combining: iter.next(),
-                        });
-                    }
+                if iter.peek_matches(LetterSet::vowel()) {
+                    return Some(LetterCombination {
+                        base,
+                        combining: iter.next(),
+                    });
                 }
             }
 
@@ -974,8 +983,8 @@ impl LetterCombination {
 
 impl Ord for Word {
     fn cmp(&self, rhs: &Self) -> Ordering {
-        let mut a = self.iter().peekable();
-        let mut b = rhs.iter().peekable();
+        let mut a = self.iter();
+        let mut b = rhs.iter();
         loop {
             match (
                 LetterCombination::take(&mut a),
