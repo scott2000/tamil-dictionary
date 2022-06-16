@@ -220,6 +220,18 @@ impl Letter {
                 vec![vec![], vec![left]]
             }
 
+            // Joining where there was doubling already
+            (TamilConsonant, TamilConsonant)
+                if left == right && LetterSet::vallinam().matches(left) =>
+            {
+                // Remove the doubled consonant since people forget it sometimes
+                let mut without = prefix[..(prefix.len() - 1)].to_owned();
+                without.extend_from_slice(suffix.as_ref());
+
+                prefix.extend_from_slice(suffix.as_ref());
+                return vec![prefix, without];
+            }
+
             // Natural joining
             _ => {
                 prefix.extend_from_slice(suffix.as_ref());
