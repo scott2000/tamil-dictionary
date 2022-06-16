@@ -49,6 +49,9 @@ window.addEventListener('load', function() {
 
     fetch('/api/annotate', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
       body: blob,
     })
       .then(response => {

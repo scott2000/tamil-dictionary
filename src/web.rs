@@ -755,7 +755,7 @@ pub fn annotate_api_get(q: &str) -> RawHtml<String> {
     annotate_api(q)
 }
 
-#[post("/api/annotate", data = "<body>")]
+#[post("/api/annotate", format = "plain", data = "<body>")]
 pub fn annotate_api(body: &str) -> RawHtml<String> {
     ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
 
@@ -806,7 +806,7 @@ pub fn annotate_raw_get(q: &str) -> Json<Vec<AnnotateResponseEntry>> {
     annotate_raw(q)
 }
 
-#[post("/api/annotate/raw", data = "<body>")]
+#[post("/api/annotate/raw", format = "plain", data = "<body>")]
 pub fn annotate_raw(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
     ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
 
