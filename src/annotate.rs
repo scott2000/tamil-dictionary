@@ -306,7 +306,10 @@ fn get_specials() -> Specials {
                 likelihood: Pronoun,
                 then_insert: vec![
                     (base, &[CaseNoKu]),
-                    (intern::word(base + word![A, K, K, U]), &[Emphasis]),
+                    (
+                        intern::word(base + word![A, K, K, U]),
+                        &[Emphasis, AagaOrAayOrAana],
+                    ),
                 ],
             },
         );
@@ -1266,7 +1269,7 @@ enum ExpandState {
     AdjectiveStem,
     AdjectiveStemVa,
     AdjectiveStemAvai,
-    AagaOrAay,
+    AagaOrAayOrAana,
     Emphasis,
     Particle,
     VowelAdjective,
@@ -1660,7 +1663,7 @@ impl ExpandChoice {
             NounWithAm => {
                 self.goto(ex, &[Done]);
 
-                self.add_goto(ex, word![M], &[AagaOrAay, Emphasis]);
+                self.add_goto(ex, word![M], &[AagaOrAayOrAana, Emphasis]);
                 self.add_goto(ex, word![M, K, A, RetroL], &[Oblique]);
                 self.add_goto(ex, word![T, T, U], &[Oblique]);
             }
@@ -1673,7 +1676,7 @@ impl ExpandChoice {
             }
 
             Oblique => {
-                self.goto(ex, &[Case, AagaOrAay]);
+                self.goto(ex, &[Case, AagaOrAayOrAana]);
 
                 if !self.ends_with(ex, word![K, A, RetroL]) {
                     // -am sariyai (as in aatrangarai)
@@ -1688,19 +1691,19 @@ impl ExpandChoice {
                 {
                     // -an sariyai (as in adhan or adharku)
                     self.add_goto(ex, word![A, AlveolarN], &[Case]);
-                    self.add_goto(ex, word![A, AlveolarL, K, U], &[Emphasis]);
+                    self.add_goto(ex, word![A, AlveolarL, K, U], &[Emphasis, AagaOrAayOrAana]);
                 }
 
                 self.add_goto(ex, word![I, AlveolarN], &[Case]);
-                self.add_goto(ex, word![I, AlveolarL, K, U], &[Emphasis]);
+                self.add_goto(ex, word![I, AlveolarL, K, U], &[Emphasis, AagaOrAayOrAana]);
             }
 
             Case => {
                 self.goto(ex, &[CaseNoKu]);
 
-                self.add_goto(ex, word![K, K, U], &[Emphasis]);
+                self.add_goto(ex, word![K, K, U], &[Emphasis, AagaOrAayOrAana]);
                 if !self.end_matches(ex, letterset![I, LongI, Ai]) {
-                    self.add_goto(ex, word![U, K, K, U], &[Emphasis]);
+                    self.add_goto(ex, word![U, K, K, U], &[Emphasis, AagaOrAayOrAana]);
                 }
             }
 
@@ -1765,10 +1768,11 @@ impl ExpandChoice {
                 self.add_goto(ex, word![V, A, AlveolarR, AlveolarR, U], &[Oblique]);
             }
 
-            AagaOrAay => {
+            AagaOrAayOrAana => {
                 self.unlikely = true;
                 self.add_goto(ex, word![LongA, Y], &[Emphasis]);
                 self.add_goto(ex, word![LongA, K, A], &[Emphasis]);
+                self.add_goto(ex, word![LongA, AlveolarN, A], &[Emphasis]);
             }
 
             Emphasis => {
