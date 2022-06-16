@@ -68,7 +68,7 @@ impl Example {
             .unwrap();
 
         if !matches {
-            panic!("pattern {:?} does not match {:?}", latin, tamil);
+            panic!("pattern {latin:?} does not match {tamil:?}");
         }
 
         Self {
@@ -436,7 +436,7 @@ impl ResultEntry {
         let mut kind = entry.kind_strs.join("/");
 
         if let Some(hint) = &entry.hint {
-            kind = format!("{} {}", hint, kind);
+            kind = format!("{hint} {kind}");
         }
 
         Self {

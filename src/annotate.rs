@@ -666,7 +666,7 @@ impl StemData {
                 }
 
                 if !success {
-                    eprintln!("could not find ending for {} in {}!", ve, word);
+                    eprintln!("could not find ending for {ve} in {word}!");
                     continue;
                 }
             }
@@ -686,7 +686,7 @@ impl StemData {
 
                 U | I | Y => Self::stem_verb_adverb(state, &parsed),
 
-                _ => panic!("not a valid vinaiyecham: {}", parsed),
+                _ => panic!("not a valid vinaiyecham: {parsed}"),
             }
         }
 
@@ -895,7 +895,7 @@ impl StemData {
 
         // Make sure the stem is valid
         if !is_possible_stem_start(stem) {
-            panic!("invalid stem: {}", stem);
+            panic!("invalid stem: {stem}");
         }
 
         // Insert stem into Stems map

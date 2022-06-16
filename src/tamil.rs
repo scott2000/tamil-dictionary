@@ -298,7 +298,7 @@ impl Letter {
             Self::LATIN_START..=Self::LATIN_END =>
                 Category::LatinAlpha,
 
-            ch => unreachable!("invalid character: {}", ch),
+            ch => unreachable!("invalid character: {ch}"),
         }
     }
 
@@ -330,7 +330,7 @@ impl Display for Letter {
             Self::LATIN_START..=Self::LATIN_END =>
                 write!(f, "{}", (ch - Self::LATIN_START + b'a') as char),
 
-            _ => unreachable!("invalid character: {}", ch),
+            _ => unreachable!("invalid character: {ch}"),
         }
     }
 }
@@ -846,7 +846,7 @@ impl Display for Word {
                     s.push((ch - Letter::LatinA as u8 + b'a') as char);
                 }
 
-                _ => unreachable!("invalid character: {}", ch),
+                _ => unreachable!("invalid character: {ch}"),
             }
         }
 

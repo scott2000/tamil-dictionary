@@ -37,7 +37,7 @@ pub fn search_word_prefix() -> TreeSearch {
 
 fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
     lazy_static::initialize(&ENTRIES);
-    eprintln!("Building {} trees...", kind);
+    eprintln!("Building {kind} trees...");
 
     let mut prefix_tree = Tree::default();
     let mut suffix_tree = Tree::default();
