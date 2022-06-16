@@ -296,7 +296,7 @@ pub fn literal_search<S: Search>(
                 continue;
             }
 
-            // Check for non-expanded diphthongs
+            // Check for non-expanded diphthongs and variations of "n"
             match lt {
                 // Check for "ai"
                 Letter::Ai => {
@@ -314,6 +314,28 @@ pub fn literal_search<S: Search>(
                         .literal(word![A, V, U])
                         .marking_expanded()
                         .joining(&search.literal(word![Au]))?;
+
+                    continue;
+                }
+
+                // Check for dental "n"
+                Letter::N => {
+                    search = search
+                        .literal(word![AlveolarN])
+                        .asserting_next(LetterSet::vowel())
+                        .marking_expanded()
+                        .joining(&search.literal(word![N]))?;
+
+                    continue;
+                }
+
+                // Check for alveolar "n"
+                Letter::AlveolarN => {
+                    search = search
+                        .literal(word![N])
+                        .asserting_next(LetterSet::vowel())
+                        .marking_expanded()
+                        .joining(&search.literal(word![AlveolarN]))?;
 
                     continue;
                 }

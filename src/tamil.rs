@@ -903,6 +903,10 @@ impl<'a> WordIter<'a> {
     pub fn remaining_count(&self) -> usize {
         self.word.len() - self.index
     }
+
+    pub fn is_end(&self) -> bool {
+        self.index == self.word.len()
+    }
 }
 
 impl<'a> Iterator for WordIter<'a> {

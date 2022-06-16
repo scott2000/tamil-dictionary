@@ -160,6 +160,10 @@ impl<'a> Normalized<'a> {
                     }
                 }
 
+                N if !iter.is_end() => {
+                    letters.push(AlveolarN);
+                }
+
                 J => letters.push(Ch),
 
                 Sh => {
@@ -339,7 +343,7 @@ fn get_specials() -> Specials {
         );
     }
 
-    let aana = word![LongA, N, A];
+    let aana = word![LongA, AlveolarN, A];
 
     map.insert(
         aana,
@@ -1117,7 +1121,7 @@ fn is_possible_stem_start(stem: &Word) -> bool {
 
     // Stems starting with these consonants and English letters are invalid
     const INVALID_START: LetterSet =
-        LetterSet::latin().union(letterset![RetroN, Zh, RetroL, AlveolarR, AlveolarN]);
+        LetterSet::latin().union(letterset![RetroN, Zh, RetroL, AlveolarR]);
 
     if stem.start_matches(INVALID_START) {
         // Stems starting with lch- are actually ksh-, which is valid
