@@ -33,7 +33,7 @@ window.addEventListener('load', function() {
     annotateButton.disabled = true;
     annotateButton.textContent = 'Loading...';
 
-    fetch('/api/annotate/html', {
+    fetch('/api/annotate', {
       method: 'POST',
       body: annotateInput.value,
     })

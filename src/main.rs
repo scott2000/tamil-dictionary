@@ -106,10 +106,10 @@ async fn rocket() -> _ {
                 web::search_no_query,
 
                 // API endpoints
-                web::annotate_html_get,
-                web::annotate_json_get,
-                web::annotate_html,
-                web::annotate_json,
+                web::annotate_api_get,
+                web::annotate_raw_get,
+                web::annotate_api,
+                web::annotate_raw,
                 web::suggest,
                 web::stats,
             ],

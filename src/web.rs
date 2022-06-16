@@ -749,13 +749,13 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
     Json(Vec::new())
 }
 
-#[get("/api/annotate/html?<q>")]
-pub fn annotate_html_get(q: &str) -> RawHtml<String> {
-    annotate_html(q)
+#[get("/api/annotate?<q>")]
+pub fn annotate_api_get(q: &str) -> RawHtml<String> {
+    annotate_api(q)
 }
 
-#[post("/api/annotate/html", data = "<body>")]
-pub fn annotate_html(body: &str) -> RawHtml<String> {
+#[post("/api/annotate", data = "<body>")]
+pub fn annotate_api(body: &str) -> RawHtml<String> {
     let mut html = String::with_capacity(body.len() * 3 / 2);
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
         match segment {
@@ -788,13 +788,13 @@ pub struct AnnotateResponseEntry<'a> {
     ids: Option<BTreeSet<EntryIndex>>,
 }
 
-#[get("/api/annotate/json?<q>")]
-pub fn annotate_json_get(q: &str) -> Json<Vec<AnnotateResponseEntry>> {
-    annotate_json(q)
+#[get("/api/annotate/raw?<q>")]
+pub fn annotate_raw_get(q: &str) -> Json<Vec<AnnotateResponseEntry>> {
+    annotate_raw(q)
 }
 
-#[post("/api/annotate/json", data = "<body>")]
-pub fn annotate_json(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
+#[post("/api/annotate/raw", data = "<body>")]
+pub fn annotate_raw(body: &str) -> Json<Vec<AnnotateResponseEntry>> {
     let mut segments = Vec::new();
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
         match segment {
