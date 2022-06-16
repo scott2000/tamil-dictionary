@@ -31,6 +31,7 @@ window.addEventListener('load', function() {
   function startRequest() {
     const num = ++requestNum;
     annotateButton.disabled = true;
+    annotateButton.textContent = 'Loading...';
 
     fetch('/api/annotate/html', {
       method: 'POST',
@@ -43,7 +44,10 @@ window.addEventListener('load', function() {
           display();
         }
       })
-      .catch(error => alert('Error: ' + error));
+      .catch(error => {
+        display();
+        alert('Could not load annotations. Please check your network connection and try again.');
+      });
   }
 
   annotateButton.onclick = function() {
