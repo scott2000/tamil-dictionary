@@ -9,18 +9,20 @@ use serde::Deserialize;
 
 use crate::dictionary::{Entry, EntryIndex, EntryKind, KindSet, ENTRIES};
 use crate::tamil::{Letter, LetterSet, Word};
-use crate::{intern, HashMap};
+use crate::{intern, HashMap, HashSet};
 
 use ExpandState::*;
 
+pub type AnnotatedTextSegment<'a> = TextSegment<'a, Option<Rc<Choice>>>;
+
 #[derive(Debug)]
-pub enum TextSegment<'a, T> {
+pub enum TextSegment<'a, T = ()> {
     NonTamil(&'a str),
     Tamil(Box<Word>, T),
 }
 
-impl<'a> TextSegment<'a, ()> {
-    pub fn parse(text: &'a str) -> impl Iterator<Item = TextSegment<'a, ()>> {
+impl<'a> TextSegment<'a> {
+    pub fn parse(text: &'a str) -> impl Iterator<Item = TextSegment<'a>> {
         let mut chars = text.char_indices().peekable();
 
         // Create an iterator using a closure to process the characters
@@ -49,7 +51,7 @@ impl<'a> TextSegment<'a, ()> {
         })
     }
 
-    pub fn group(self) -> Vec<TextSegment<'a, Option<Rc<Choice>>>> {
+    pub fn group(self) -> Vec<AnnotatedTextSegment<'a>> {
         match self {
             Self::NonTamil(word) => vec![TextSegment::NonTamil(word)],
 
@@ -80,6 +82,121 @@ impl<'a> TextSegment<'a, ()> {
                 }
             }
         }
+    }
+}
+
+lazy_static! {
+    static ref EXCLUDED_WORDS: HashSet<&'static str> = {
+        let mut set = HashSet::default();
+
+        let excluded: &[&Word] = &[
+            word![E, AlveolarN],
+            word![E, M],
+            word![E, Ng, K, A, RetroL],
+            word![N, A, M],
+            word![U, AlveolarN],
+            word![U, M],
+            word![U, Ng, K, A, RetroL],
+            word![T, A, AlveolarN],
+            word![T, A, M],
+            word![T, A, Ng, K, A, RetroL],
+            word![M, U, RetroT, I],
+            word![U, RetroL, RetroL, A],
+            word![I, AlveolarL, AlveolarL, LongA, T, A],
+            word![I, AlveolarL, AlveolarL, LongA, M, A, AlveolarL],
+            word![LongO, R],
+            word![O, R, U],
+            word![O, R, U, V, A, RetroL],
+            word![O, R, U, V, A, AlveolarN],
+            word![O, R, U, V, A, R],
+        ];
+
+        for &word in excluded {
+            set.insert(&*Box::leak(word.to_string().into_boxed_str()));
+        }
+
+        set
+    };
+}
+
+const ADVERB: KindSet =
+    KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::InaiIdaiChol));
+
+const PRONOUN: KindSet =
+    KindSet::single(EntryKind::SuttuPeyar).union(KindSet::single(EntryKind::VinaaPeyar));
+
+const EXCLUDE: KindSet = PRONOUN
+    .union(KindSet::single(EntryKind::IdaiChol))
+    .union(KindSet::single(EntryKind::ThunaiVinai))
+    .union(KindSet::single(EntryKind::VinaiMutru));
+
+#[derive(Clone, Default, Debug)]
+pub struct WordCount {
+    counts: HashMap<&'static str, usize>,
+}
+
+impl WordCount {
+    pub fn insert(&mut self, choice: &Choice) {
+        let entries: &[Entry] = &ENTRIES;
+        let excluded: &HashSet<_> = &EXCLUDED_WORDS;
+
+        let mut has_vinai = false;
+        for &index in choice.entries.iter() {
+            let entry = &entries[index as usize];
+            let kinds = entry.kind_set;
+
+            // If any word is excluded, then all words are excluded to be safe
+            if kinds.matches_any(EXCLUDE) || excluded.contains(&*entry.word) {
+                return;
+            }
+
+            // Record whether any verbs are seen
+            if kinds.matches(EntryKind::VinaiChol) {
+                has_vinai = true;
+            }
+        }
+
+        let mut seen = HashSet::default();
+        for &index in choice.entries.iter() {
+            let entry = &entries[index as usize];
+
+            // If there is a verb present, exclude any derived adverbs
+            if has_vinai && entry.kind_set.matches(EntryKind::VinaiAdai) {
+                continue;
+            }
+
+            // If the word was already seen, don't count it again
+            let word = entry.primary_word();
+            if !seen.insert(word) {
+                continue;
+            }
+
+            // Increment the corresponding count in the map
+            if let Some(count) = self.counts.get_mut(word) {
+                *count += 1;
+            } else {
+                self.counts.insert(word, 1);
+            }
+        }
+    }
+
+    pub fn insert_segment(&mut self, segment: &AnnotatedTextSegment) {
+        if let TextSegment::Tamil(_, Some(choice)) = segment {
+            self.insert(choice);
+        }
+    }
+
+    pub fn into_vec(self) -> Vec<(&'static str, usize)> {
+        let mut vec: Vec<_> = self.counts.into_iter().collect();
+
+        // Sort first in reverse by count, then in order by parsed word
+        vec.sort_by(|(a_str, a_count), (b_str, b_count)| {
+            b_count
+                .cmp(a_count)
+                .then_with(|| Word::parse(a_str).cmp(&Word::parse(b_str)))
+        });
+
+        vec
     }
 }
 
@@ -224,12 +341,6 @@ impl<'a> Normalized<'a> {
         &self.original[self.to_original(start)..self.to_original(end)]
     }
 }
-
-const ADVERB: KindSet =
-    KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::InaiIdaiChol));
-
-const PRONOUN: KindSet =
-    KindSet::single(EntryKind::SuttuPeyar).union(KindSet::single(EntryKind::VinaaPeyar));
 
 struct SpecialWord {
     if_matches: KindSet,
