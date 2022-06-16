@@ -757,17 +757,27 @@ pub fn annotate_api_get(q: &str) -> RawHtml<String> {
 #[post("/api/annotate", data = "<body>")]
 pub fn annotate_api(body: &str) -> RawHtml<String> {
     let mut html = String::with_capacity(body.len() * 3 / 2);
+    let mut last_was_tamil = false;
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
         match segment {
             TextSegment::NonTamil(text) => {
+                last_was_tamil = false;
                 html.push_str(&RawStr::new(text).html_escape());
             }
 
             TextSegment::Tamil(word, None) => {
+                // Always an individual word, so last_was_tamil is irrelevant
                 write!(html, "{}", word).unwrap();
             }
 
             TextSegment::Tamil(word, Some(choice)) => {
+                // Add a word break between segments to break up long words
+                if last_was_tamil {
+                    html.push_str("<wbr>");
+                } else {
+                    last_was_tamil = true;
+                }
+
                 write!(
                     html,
                     r#"<a href="{}">{}</a>"#,
