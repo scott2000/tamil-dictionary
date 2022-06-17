@@ -904,7 +904,7 @@ impl<'a> WordIter<'a> {
         self.word.len() - self.index
     }
 
-    pub fn is_end(&self) -> bool {
+    pub fn at_end(&self) -> bool {
         self.index == self.word.len()
     }
 }

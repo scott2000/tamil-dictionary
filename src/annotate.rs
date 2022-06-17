@@ -281,10 +281,6 @@ impl<'a> Normalized<'a> {
                     }
                 }
 
-                N if !iter.is_end() => {
-                    letters.push(AlveolarN);
-                }
-
                 J => letters.push(Ch),
 
                 Sh => {
@@ -756,11 +752,38 @@ impl StemData {
         Some(letters.into())
     }
 
+    fn convert_n(word: &Word) -> Option<Box<Word>> {
+        use Letter::*;
+
+        let mut modified = false;
+        let mut letters = Vec::new();
+        let mut iter = word.iter();
+        while let Some(lt) = iter.next() {
+            if lt == N && iter.peek() != Some(T) && !letters.is_empty() && !iter.at_end() {
+                modified = true;
+                letters.push(AlveolarN);
+            } else {
+                letters.push(lt);
+            }
+        }
+
+        if modified {
+            Some(letters.into())
+        } else {
+            None
+        }
+    }
+
     fn stem_subwords(state: &mut StemState, word: &str, callback: fn(&mut StemState, &Word)) {
         // For every possible way to join the words, add a stem
         for word in Entry::joined_subwords(word) {
             // Convert any -auv- to -avv- (as in vauvaal = vavvaal)
             if let Some(word) = Self::convert_auv_to_avv(&word) {
+                callback(state, &word);
+            }
+
+            // Convert dental -n- to alveolar -n- (as in aniyaayam)
+            if let Some(word) = Self::convert_n(&word) {
                 callback(state, &word);
             }
 
@@ -774,7 +797,10 @@ impl StemData {
         let entry = state.entry;
         let key = (String::from(&*entry.word), entry.subword);
         let ve = &state.verbs[&key];
-        let parsed: Vec<_> = ve.iter().map(|ve| Word::parse(ve)).collect();
+        let parsed: Vec<_> = ve
+            .iter()
+            .flat_map(|ve| Entry::joined_subwords(ve))
+            .collect();
 
         // Usually strong iff infinitive is -ka and adverb is not -i or -y
         let strong = parsed.iter().any(|word| word.ends_with(word![K, A]))
@@ -784,6 +810,7 @@ impl StemData {
         for (ve, mut parsed) in ve.iter().zip(parsed) {
             // If incomplete, use Ves to try to match it with another verb
             if let Some(stripped) = ve.strip_prefix('-') {
+                let mut failed_n = false;
                 let mut success = false;
                 for full in &state.ves[stripped] {
                     if let Some(stripped) = word.strip_suffix(full) {
@@ -791,9 +818,21 @@ impl StemData {
                         success = true;
                         break;
                     }
+
+                    // Check if it only failed because of convert_n()
+                    if word.get(word.len() - full.len()) == Some(AlveolarN)
+                        && full.first() == Some(N)
+                    {
+                        failed_n = true;
+                    }
                 }
 
                 if !success {
+                    // If it only failed because of convert_n(), skip this stem
+                    if failed_n {
+                        return;
+                    }
+
                     eprintln!("could not find ending for {ve} in {word}!");
                     continue;
                 }
@@ -909,8 +948,12 @@ impl StemData {
 
         Self::insert_with(state, word, &[Plural], likelihood);
 
-        // Don't allow magan to be magar
-        if word.ends_with(word![M, A, K, A, AlveolarN]) {
+        // Don't allow magan to be magar or vice versa
+        if word.ends_with(word![M, A, K, A, AlveolarN])
+            || word.ends_with(word![M, A, K, A, R])
+            || word.ends_with(word![M, A, H, A, AlveolarN])
+            || word.ends_with(word![M, A, H, A, R])
+        {
             return;
         }
 
