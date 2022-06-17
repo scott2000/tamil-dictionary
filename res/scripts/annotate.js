@@ -12,6 +12,7 @@ window.addEventListener('load', function() {
 
   function display() {
     if (annotateHtml === null) {
+      annotateInput.disabled = false;
       annotateInput.style.display = 'block';
 
       annotateResult.style.display = 'none';
@@ -44,6 +45,7 @@ window.addEventListener('load', function() {
     }
 
     const num = ++requestNum;
+    annotateInput.disabled = true;
     annotateButton.disabled = true;
     annotateButton.textContent = 'Loading...';
 
@@ -65,6 +67,7 @@ window.addEventListener('load', function() {
             });
         } else {
           const status = `${response.status} ${response.statusText}`;
+          display();
           alert(`Could not load annotations (${status}). Please try again later.`);
         }
       })

@@ -232,9 +232,9 @@ impl<'a> Normalized<'a> {
         let mut offsets = Vec::new();
         let mut current_difference: isize = 0;
 
-        let mut add_offset = |letters: &Vec<Letter>, diff| {
+        let mut add_offset = |letters: &Vec<Letter>, diff, offset| {
             current_difference += diff;
-            let norm_offset = letters.len();
+            let norm_offset = letters.len() + offset;
             let original_offset = (norm_offset as isize) - current_difference;
             offsets.push((norm_offset, original_offset as usize));
         };
@@ -242,7 +242,7 @@ impl<'a> Normalized<'a> {
         let mut iter = word.iter();
         if word.starts_with(word![A, Y, Y]) {
             letters.push(Ai);
-            add_offset(&letters, -1);
+            add_offset(&letters, -1, 0);
             letters.push(Y);
             for _ in 0..3 {
                 iter.adv();
@@ -263,20 +263,26 @@ impl<'a> Normalized<'a> {
             match lt {
                 Au => {
                     letters.push(A);
-                    add_offset(&letters, 1);
+                    add_offset(&letters, 1, 0);
                     letters.push(V);
-                    add_offset(&letters, 1);
+                    add_offset(&letters, 1, 0);
                     letters.push(U);
                 }
 
-                Aaydham => {}
+                Aaydham => {
+                    if iter.at_end() {
+                        add_offset(&letters, -1, 0);
+                    } else {
+                        add_offset(&letters, -1, 1);
+                    }
+                }
 
                 K if iter.peek() == Some(Sh) => {
                     iter.adv();
 
                     letters.extend_from_slice(&[RetroL, Ch]);
                     if !iter.peek_matches(LetterSet::vowel()) {
-                        add_offset(&letters, 1);
+                        add_offset(&letters, 1, 0);
                         letters.push(U);
                     }
                 }
@@ -286,7 +292,7 @@ impl<'a> Normalized<'a> {
                 Sh => {
                     letters.push(RetroT);
                     if !iter.peek_matches(LetterSet::vowel()) {
-                        add_offset(&letters, 1);
+                        add_offset(&letters, 1, 0);
                         letters.push(U);
                     }
                 }
@@ -294,7 +300,7 @@ impl<'a> Normalized<'a> {
                 S => {
                     letters.push(Ch);
                     if !iter.peek_matches(LetterSet::vowel()) {
-                        add_offset(&letters, 1);
+                        add_offset(&letters, 1, 0);
                         if iter.peek() == Some(Y) {
                             letters.push(I);
                         } else {
@@ -1310,7 +1316,7 @@ fn is_possible_stem_start(stem: &Word) -> bool {
 
     // Stems starting with these consonants and English letters are invalid
     const INVALID_START: LetterSet =
-        LetterSet::latin().union(letterset![RetroN, Zh, RetroL, AlveolarR]);
+        LetterSet::latin().union(letterset![RetroN, Zh, RetroL, AlveolarR, AlveolarN]);
 
     if stem.start_matches(INVALID_START) {
         // Stems starting with lch- are actually ksh-, which is valid
@@ -1955,7 +1961,7 @@ impl ExpandChoice {
                 self.unlikely = true;
                 self.add_goto(ex, word![LongA, Y], &[Emphasis]);
                 self.add_goto(ex, word![LongA, K, A], &[Emphasis]);
-                self.add_goto(ex, word![LongA, AlveolarN, A], &[Emphasis]);
+                self.add_goto(ex, word![LongA, AlveolarN, A], &[Adjective]);
             }
 
             Emphasis => {
