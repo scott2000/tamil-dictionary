@@ -807,23 +807,23 @@ pub struct AnnotateResponseEntry<'a> {
     ids: Option<BTreeSet<EntryIndex>>,
 }
 
-#[get("/api/annotate/raw?<q>&<n>")]
-pub fn annotate_raw_get(q: &str, n: Option<u32>) -> Json<AnnotateResponse> {
-    annotate_raw(n, q)
+#[get("/api/annotate/raw?<q>&<n>&<min>")]
+pub fn annotate_raw_get(q: &str, n: Option<u32>, min: Option<u32>) -> Json<AnnotateResponse> {
+    annotate_raw(n, min, q)
 }
 
-#[post("/api/annotate/raw?<n>", format = "plain", data = "<body>")]
-pub fn annotate_raw(n: Option<u32>, body: &str) -> Json<AnnotateResponse> {
+#[post("/api/annotate/raw?<n>&<min>", format = "plain", data = "<body>")]
+pub fn annotate_raw(n: Option<u32>, min: Option<u32>, body: &str) -> Json<AnnotateResponse> {
     ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    // Only count words if <n> is provided and nonzero
-    let mut count = n.and_then(|n| {
-        if n == 0 {
-            None
-        } else {
-            Some(WordCount::default())
-        }
-    });
+    let n = n.unwrap_or(25).min(100) as usize;
+    let min = min.unwrap_or(2) as usize;
+
+    let mut count = if n == 0 {
+        None
+    } else {
+        Some(WordCount::default())
+    };
 
     let mut segments = Vec::new();
     for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
@@ -862,20 +862,15 @@ pub fn annotate_raw(n: Option<u32>, body: &str) -> Json<AnnotateResponse> {
         }
     }
 
-    // If counting, take the top <n> words
-    let top = match (n, count) {
-        (Some(n), Some(count)) => {
-            let n = n.min(100) as usize;
-            let mut vec = count.into_vec();
-
-            if vec.len() > n {
-                vec.drain(n..);
-            }
-
-            vec
+    // If counting, take the top <n> words with at least <min> uses
+    let top = if let Some(count) = count {
+        let mut vec = count.into_vec(min);
+        if vec.len() > n {
+            vec.drain(n..);
         }
-
-        _ => Vec::new(),
+        vec
+    } else {
+        Vec::new()
     };
 
     Json(AnnotateResponse { segments, top })

@@ -186,8 +186,12 @@ impl WordCount {
         }
     }
 
-    pub fn into_vec(self) -> Vec<(&'static str, usize)> {
-        let mut vec: Vec<_> = self.counts.into_iter().collect();
+    pub fn into_vec(self, min: usize) -> Vec<(&'static str, usize)> {
+        let mut vec: Vec<_> = self
+            .counts
+            .into_iter()
+            .filter(|&(_, count)| count >= min)
+            .collect();
 
         // Sort first in reverse by count, then in order by parsed word
         vec.sort_by(|(a_str, a_count), (b_str, b_count)| {
