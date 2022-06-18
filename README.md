@@ -22,6 +22,8 @@ searches with respect to the length of the query string.
 * Automatic transliteration (`maram` => `மரம்`)
 * Awareness of grammar rules (`கடல்கரை` => `கடற்கரை`)
 * Automatic light/dark theme depending on device settings
+* Annotater which adds links to definitions for words (at `/annotate`)
+* Random word search (at `/random`)
 
 ## Installation
 
@@ -30,6 +32,8 @@ Clone the repository:
 ```sh
 git clone https://github.com/scott2000/tamil-dictionary.git
 ```
+
+### Dictionary file
 
 Create a file called `dictionary.json` with the contents of your dictionary
 represented as a list of objects. In each object, there should be a `word` field
@@ -113,6 +117,36 @@ Which will be rendered as:
 </ol>
 </div>
 <hr>
+
+### Verbs file
+
+There is an optional feature located at `/annotate` which takes some input text,
+finds the definitions corresponding to each word in the text, and adds links to
+those words. Since Tamil verbs can be conjugated in many different ways, this
+feature requires a specification of how to conjugate each verb in the
+dicitonary. This is done by providing all possible வினையெச்சம் forms of each verb
+in a file called `verbs.json`. This file contains an array of objects. Here is
+an example object:
+
+```json
+{
+  "word": "வா",
+  "sub": 1,
+  "ve": ["வர", "வந்து"]
+}
+```
+
+If there's a word which shares a conjugation with another verb, you may use
+hyphens to indicate that only a partial conjugation was given:
+
+```json
+{
+  "word": "கொண்டுவா",
+  "ve": ["-வர", "-வந்து"]
+}
+```
+
+### Starting the server
 
 Make sure you have installed Rust and Cargo, and run `cargo run --release`
 to start the server on `localhost:8000`. A `Rocket.toml` file can be used to
