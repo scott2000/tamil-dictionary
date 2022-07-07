@@ -1809,8 +1809,8 @@ impl ExpandChoice {
 
             GeneralStemA => {
                 self.add_goto(ex, word![Y], &[Particle]);
+                self.add_goto(ex, word![RetroL], &[Particle]);
                 self.add_goto(ex, word![AlveolarN], &[Particle]);
-                self.add_goto(ex, word![AlveolarL], &[Particle]);
                 self.add_goto(ex, word![R], &[Particle, GeneralStemPlural]);
             }
 
