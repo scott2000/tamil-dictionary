@@ -529,6 +529,30 @@ fn get_specials() -> Specials {
         },
     );
 
+    let anaittum = word![A, AlveolarN, Ai, T, T, U, M];
+    let anaittu = word![A, AlveolarN, Ai, T, T, U];
+
+    map.insert(
+        anaittum,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
+            then_insert: vec![(anaittu, &[Oblique])],
+        },
+    );
+
+    let anaivarum = word![A, AlveolarN, Ai, V, A, R, U, M];
+    let anaivar = word![A, AlveolarN, Ai, V, A, R];
+
+    map.insert(
+        anaivarum,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
+            then_insert: vec![(anaivar, &[Oblique])],
+        },
+    );
+
     let maattu = word![M, LongA, RetroT, RetroT, U];
     let maattaa = word![M, LongA, RetroT, RetroT, LongA];
 
