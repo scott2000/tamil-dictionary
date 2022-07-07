@@ -881,7 +881,15 @@ impl StemData {
                     }
                 }
 
-                U | I | Y => Self::stem_verb_adverb(state, &parsed),
+                U | I | Y => {
+                    Self::stem_verb_adverb(state, &parsed);
+
+                    // Allow -aay instead of -aagi
+                    if let Some(parsed) = parsed.replace_suffix(word![LongA, K, I], word![LongA, Y])
+                    {
+                        Self::stem_verb_adverb(state, &parsed);
+                    }
+                }
 
                 _ => panic!("not a valid vinaiyecham: {parsed}"),
             }
