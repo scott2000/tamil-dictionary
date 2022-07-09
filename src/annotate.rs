@@ -52,6 +52,15 @@ impl<'a> TextSegment<'a> {
     }
 
     pub fn annotate(text: &'a str) -> impl Iterator<Item = AnnotatedTextSegment<'a>> {
+        let (exclude, text) = Self::strip_exclude(text);
+        Self::parse(text).flat_map(move |seg| seg.group_excluding(&exclude))
+    }
+
+    pub fn group(self) -> Vec<AnnotatedTextSegment<'a>> {
+        self.group_excluding(&ExcludeSet::default())
+    }
+
+    pub fn strip_exclude(text: &'a str) -> (ExcludeSet, &'a str) {
         let mut text = text.trim();
 
         let exclude = if let Some(without_exclude) = text.strip_prefix("[exclude:") {
@@ -72,11 +81,7 @@ impl<'a> TextSegment<'a> {
             ExcludeSet::default()
         };
 
-        Self::parse(text).flat_map(move |seg| seg.group_excluding(&exclude))
-    }
-
-    pub fn group(self) -> Vec<AnnotatedTextSegment<'a>> {
-        self.group_excluding(&ExcludeSet::default())
+        (exclude, text)
     }
 
     pub fn group_excluding(self, exclude: &ExcludeSet) -> Vec<AnnotatedTextSegment<'a>> {
