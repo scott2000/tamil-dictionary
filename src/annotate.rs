@@ -399,6 +399,14 @@ impl ExcludeSet {
         self.set.insert(word);
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.set.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.set.len()
+    }
+
     fn contains(&self, word: &Word) -> bool {
         self.set.contains(word)
     }
