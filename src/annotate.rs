@@ -575,6 +575,18 @@ fn get_specials() -> Specials {
         },
     );
 
+    let yaavum = word![Y, LongA, V, U, M];
+    let yaa = word![Y, LongA];
+
+    map.insert(
+        yaavum,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
+            then_insert: vec![(yaavum, &[Emphasis]), (yaa, &[Adjective])],
+        },
+    );
+
     let muzhu = word![M, U, Zh, U];
 
     map.insert(
