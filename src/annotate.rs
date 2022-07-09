@@ -51,7 +51,35 @@ impl<'a> TextSegment<'a> {
         })
     }
 
+    pub fn annotate(text: &'a str) -> impl Iterator<Item = AnnotatedTextSegment<'a>> {
+        let mut text = text.trim();
+
+        let exclude = if let Some(without_exclude) = text.strip_prefix("[exclude:") {
+            if let Some((excluded, new_text)) = without_exclude.split_once(']') {
+                text = new_text.trim_start();
+
+                excluded.split(',').map(str::trim).map(Word::parse).fold(
+                    ExcludeSet::default(),
+                    |mut exclude, word| {
+                        exclude.insert(&word);
+                        exclude
+                    },
+                )
+            } else {
+                ExcludeSet::default()
+            }
+        } else {
+            ExcludeSet::default()
+        };
+
+        Self::parse(text).flat_map(move |seg| seg.group_excluding(&exclude))
+    }
+
     pub fn group(self) -> Vec<AnnotatedTextSegment<'a>> {
+        self.group_excluding(&ExcludeSet::default())
+    }
+
+    pub fn group_excluding(self, exclude: &ExcludeSet) -> Vec<AnnotatedTextSegment<'a>> {
         match self {
             Self::NonTamil(word) => vec![TextSegment::NonTamil(word)],
 
@@ -60,7 +88,7 @@ impl<'a> TextSegment<'a> {
                 let word = Normalized::new(&original_word, true);
 
                 // Split the words into groups
-                let groups = joined_groups(&word.normalized);
+                let groups = joined_groups(&word.normalized, exclude);
 
                 // Only take the first group, if there is one
                 if let Some(choices) = groups.into_iter().next() {
@@ -345,6 +373,29 @@ impl<'a> Normalized<'a> {
 
     pub fn slice_original(&self, start: usize, end: usize) -> &'a Word {
         &self.original[self.to_original(start)..self.to_original(end)]
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ExcludeSet {
+    set: HashSet<Box<Word>>,
+}
+
+impl ExcludeSet {
+    pub fn insert(&mut self, word: &Word) {
+        // Normalize the word for efficient matching
+        let mut word = Normalized::new(word, true).normalized;
+
+        // Remove any final -u
+        if let Some(new_word) = word.strip_suffix(word![U]) {
+            word = new_word.into();
+        }
+
+        self.set.insert(word);
+    }
+
+    fn contains(&self, word: &Word) -> bool {
+        self.set.contains(word)
     }
 }
 
@@ -1222,8 +1273,8 @@ impl ShortestOnly {
     }
 }
 
-fn joined_groups(full_word: &Word) -> Vec<Choices> {
-    let groups = best_groups(full_word);
+fn joined_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
+    let groups = best_groups(full_word, exclude);
 
     // If only one grouping is found, just return it
     if groups.len() <= 1 {
@@ -1248,7 +1299,7 @@ fn joined_groups(full_word: &Word) -> Vec<Choices> {
     map.into_iter().rev().map(|(_, choices)| choices).collect()
 }
 
-fn best_groups(full_word: &Word) -> Vec<Choices> {
+fn best_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
     // Words should not have more than 100 letters
     const MAX_LEN: usize = 100;
 
@@ -1291,7 +1342,7 @@ fn best_groups(full_word: &Word) -> Vec<Choices> {
         }
 
         // Add new choices to end of existing choices
-        let after = choices_after(full_word, end);
+        let after = choices_after(full_word, exclude, end);
         for choices in choices {
             for (end, choice) in after.iter() {
                 let mut choices = choices.clone();
@@ -1310,7 +1361,7 @@ fn best_groups(full_word: &Word) -> Vec<Choices> {
     Vec::new()
 }
 
-fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
+fn choices_after(full_word: &Word, exclude: &ExcludeSet, start: usize) -> Vec<(usize, Rc<Choice>)> {
     // If the stem starts with an invalid combination, don't search at all
     if !is_possible_stem_start(&full_word[start..]) {
         return Vec::new();
@@ -1332,6 +1383,11 @@ fn choices_after(full_word: &Word, start: usize) -> Vec<(usize, Rc<Choice>)> {
         // No need to look up a single consonant
         if stem.len() == 1 && stem.start_matches(LetterSet::consonant()) {
             continue;
+        }
+
+        // If the stem is marked as excluded, then stop searching
+        if exclude.contains(stem) {
+            break;
         }
 
         // If the prefix matches a stem, try to expand that stem

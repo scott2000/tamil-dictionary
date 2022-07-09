@@ -761,7 +761,7 @@ pub fn annotate_api(body: &str) -> RawHtml<String> {
 
     let mut html = String::with_capacity(body.len() * 3 / 2);
     let mut last_was_tamil = false;
-    for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
+    for segment in TextSegment::annotate(body) {
         match segment {
             TextSegment::NonTamil(text) => {
                 last_was_tamil = false;
@@ -826,7 +826,7 @@ pub fn annotate_raw(n: Option<u32>, min: Option<u32>, body: &str) -> Json<Annota
     };
 
     let mut segments = Vec::new();
-    for segment in TextSegment::parse(body).flat_map(TextSegment::group) {
+    for segment in TextSegment::annotate(body) {
         match segment {
             TextSegment::NonTamil(text) => {
                 segments.push(AnnotateResponseEntry {
