@@ -875,7 +875,7 @@ impl StemData {
 
                     // Special case for words with doubling last letter, joining letters
                     if !strong && parsed.starts_with(word) {
-                        Self::insert(state, word, &[InfinitiveStem]);
+                        Self::insert(state, word, &[WeakInfinitiveStem]);
                         Self::insert(state, &(word + word![V, U]), &[FutureStem]);
                         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
                     }
@@ -924,7 +924,7 @@ impl StemData {
         // Handle weak verbs by replacing final -a with -u
         if !strong {
             let word = word.strip_suffix(word![A]).unwrap();
-            Self::insert(state, &(word + word![U]), &[InfinitiveStem]);
+            Self::insert(state, &(word + word![U]), &[WeakInfinitiveStem]);
             Self::insert(state, &(word + word![U, V, U]), &[FutureStem]);
             Self::insert(state, &(word + word![U, P, U]), &[FutureStem]);
             return;
@@ -932,14 +932,14 @@ impl StemData {
 
         // Handle strong -kka verbs
         if let Some(word) = word.strip_suffix(word![K, K, A]) {
-            Self::insert(state, &(word + word![K, K, U]), &[InfinitiveStem]);
+            Self::insert(state, &(word + word![K, K, U]), &[StrongInfinitiveStem]);
             Self::insert(state, &(word + word![P, P, U]), &[FutureStem]);
             return;
         }
 
         // Handle other strong verbs
         let word = word.strip_suffix(word![K, A]).unwrap();
-        Self::insert(state, &(word + word![K, U]), &[InfinitiveStem]);
+        Self::insert(state, &(word + word![K, U]), &[StrongInfinitiveStem]);
         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
     }
 
@@ -1462,6 +1462,8 @@ enum ExpandState {
     RareVerbalNoun,
     VerbStem,
     AdverbStem,
+    WeakInfinitiveStem,
+    StrongInfinitiveStem,
     InfinitiveStem,
     Negative,
     Infinitive,
@@ -1720,30 +1722,36 @@ impl ExpandChoice {
                 }
             },
 
+            WeakInfinitiveStem => {
+                self.goto(ex, &[InfinitiveStem]);
+
+                // Old verbal noun (as in seygaiyil)
+                self.add_goto(ex, word![K, Ai], &[RareVerbalNoun]);
+
+                self.add_goto(ex, word![K, I, AlveolarR, U], &[TenseStem]);
+                self.unlikely().add_goto(
+                    ex,
+                    word![K, I, AlveolarN, AlveolarR, U],
+                    &[TenseStem, SpecialA],
+                );
+            }
+
+            StrongInfinitiveStem => {
+                self.goto(ex, &[InfinitiveStem]);
+
+                // Old verbal noun (as in nadakkaiyil)
+                self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
+
+                self.add_goto(ex, word![I, AlveolarR, U], &[TenseStem]);
+                self.unlikely().add_goto(
+                    ex,
+                    word![I, AlveolarN, AlveolarR, U],
+                    &[TenseStem, SpecialA],
+                );
+            }
+
             InfinitiveStem => {
-                if self.ends_with(ex, word![K, U]) {
-                    // Old verbal noun (as in nadakkaiyil)
-                    self.add_goto(ex, word![Ai], &[RareVerbalNoun]);
-
-                    self.add_goto(ex, word![I, AlveolarR, U], &[TenseStem]);
-                    self.unlikely().add_goto(
-                        ex,
-                        word![I, AlveolarN, AlveolarR, U],
-                        &[TenseStem, SpecialA],
-                    );
-                } else {
-                    // Old verbal noun (as in seygaiyil)
-                    self.add_goto(ex, word![K, Ai], &[RareVerbalNoun]);
-
-                    self.add_goto(ex, word![K, I, AlveolarR, U], &[TenseStem]);
-                    self.unlikely().add_goto(
-                        ex,
-                        word![K, I, AlveolarN, AlveolarR, U],
-                        &[TenseStem, SpecialA],
-                    );
-                }
-
-                // Allow extra U (as in utkaarugiren)
+                // Allow extra U for present (as in utkaarugiren)
                 if self.end_matches(ex, letterset![R, Zh]) {
                     // Old verbal noun (as in thinnugai)
                     self.add_goto(ex, word![U, K, Ai], &[RareVerbalNoun]);
