@@ -879,6 +879,12 @@ impl StemData {
                         Self::insert(state, &(word + word![V, U]), &[FutureStem]);
                         Self::insert(state, &(word + word![P, U]), &[FutureStem]);
                     }
+
+                    // Allow -aa instead of -aagu
+                    if let Some(word) = parsed.strip_suffix(word![LongA, K, A]) {
+                        Self::insert(state, &(word + word![LongA]), &[WeakInfinitiveStem]);
+                        Self::insert(state, &(word + word![LongA, V, U]), &[FutureStem]);
+                    }
                 }
 
                 U | I | Y => {
@@ -893,6 +899,11 @@ impl StemData {
 
                 _ => panic!("not a valid vinaiyecham: {parsed}"),
             }
+        }
+
+        // Allow -aa instead of -aagu
+        if let Some(word) = word.strip_suffix(word![LongA, K, U]) {
+            Self::insert(state, &(word + word![LongA]), &[WeakVerb]);
         }
 
         // If weak, mark as a weak verb and return early
