@@ -1721,6 +1721,7 @@ impl ExpandChoice {
                 Some(I) => {
                     self.add_goto(ex, word![AlveolarR, AlveolarR, U], &[Done]);
                     self.add_goto(ex, word![Y, A], &[Adjective]);
+                    self.add_goto(ex, word![Y, A, AlveolarN], &[PastStem, SpecialB]);
                     self.add_goto(ex, word![AlveolarN], &[PastStem, SpecialB]);
                 }
 
