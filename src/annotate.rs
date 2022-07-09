@@ -529,6 +529,17 @@ fn get_specials() -> Specials {
         );
     }
 
+    // Treat Ai as a vowel adjective to prevent it being used wrongly
+    let ai = word![Ai];
+    map.insert(
+        ai,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarAdai),
+            likelihood: Prefix,
+            then_insert: vec![(ai, &[VowelAdjective])],
+        },
+    );
+
     let aana = word![LongA, AlveolarN, A];
 
     map.insert(
@@ -554,66 +565,24 @@ fn get_specials() -> Specials {
 
     let ellaam = word![E, AlveolarL, AlveolarL, LongA, M];
     let ellaa = word![E, AlveolarL, AlveolarL, LongA];
-    let ellaavatru = word![E, AlveolarL, AlveolarL, LongA, V, A, AlveolarR, AlveolarR, U];
 
     map.insert(
         ellaam,
         SpecialWord {
             if_matches: KindSet::single(PeyarChol),
             likelihood: Regular,
-            then_insert: vec![
-                (ellaam, &[Emphasis]),
-                (ellaa, &[Done]),
-                (ellaavatru, &[Oblique]),
-            ],
+            then_insert: vec![(ellaam, &[Emphasis]), (ellaa, &[Adjective])],
         },
     );
 
-    let ellaarum = word![E, AlveolarL, AlveolarL, LongA, R, U, M];
-    let ellaar = word![E, AlveolarL, AlveolarL, LongA, R];
+    let muzhu = word![M, U, Zh, U];
 
     map.insert(
-        ellaarum,
+        muzhu,
         SpecialWord {
-            if_matches: KindSet::single(PeyarChol),
+            if_matches: KindSet::single(PeyarAdai),
             likelihood: Regular,
-            then_insert: vec![(ellaar, &[Oblique])],
-        },
-    );
-
-    let ellorum = word![E, AlveolarL, AlveolarL, LongO, R, U, M];
-    let ellor = word![E, AlveolarL, AlveolarL, LongO, R];
-
-    map.insert(
-        ellorum,
-        SpecialWord {
-            if_matches: KindSet::single(PeyarChol),
-            likelihood: Regular,
-            then_insert: vec![(ellor, &[Oblique])],
-        },
-    );
-
-    let anaittum = word![A, AlveolarN, Ai, T, T, U, M];
-    let anaittu = word![A, AlveolarN, Ai, T, T, U];
-
-    map.insert(
-        anaittum,
-        SpecialWord {
-            if_matches: KindSet::single(PeyarChol),
-            likelihood: Regular,
-            then_insert: vec![(anaittu, &[Oblique])],
-        },
-    );
-
-    let anaivarum = word![A, AlveolarN, Ai, V, A, R, U, M];
-    let anaivar = word![A, AlveolarN, Ai, V, A, R];
-
-    map.insert(
-        anaivarum,
-        SpecialWord {
-            if_matches: KindSet::single(PeyarChol),
-            likelihood: Regular,
-            then_insert: vec![(anaivar, &[Oblique])],
+            then_insert: vec![(muzhu, &[AdjectiveStem, Emphasis])],
         },
     );
 
@@ -1079,6 +1048,19 @@ impl StemData {
         // Handle nouns ending in -ar
         if let Some(word) = word.replace_suffix(word![A, R], word![A, AlveolarN]) {
             Self::insert_with(state, &word, &[Oblique], likelihood);
+            return;
+        }
+
+        // Handle nouns ending in -um
+        if let Some(word) = word.strip_suffix(word![U, M]) {
+            if word.end_matches(LetterSet::tamil_final().complement()) {
+                // Include the U if ending in invalid ending (as in muzhuvadhum => muzhuvadhu)
+                Self::insert_with(state, &(word + word![U]), &[Oblique], likelihood);
+            } else if !word.is_empty() {
+                // Otherwise don't include the U (as in ellaarum => ellaar)
+                Self::insert_with(state, word, &[Oblique], likelihood);
+            }
+
             return;
         }
 
