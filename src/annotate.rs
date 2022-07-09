@@ -2088,10 +2088,14 @@ impl ExpandChoice {
             }
 
             VowelAdjective => {
-                if self.end + 1 >= ex.full_word.len() {
-                    self.goto(ex, &[Done]);
+                if self.end + 1 == ex.full_word.len() {
+                    // Allow space between (as in ap-padam)
+                    if ex.full_word.matches(self.end, LetterSet::tamil_initial()) {
+                        self.result(ex, results, 1);
+                    }
                     return;
                 } else if self.end + 3 >= ex.full_word.len() {
+                    // Otherwise it's probably something else
                     return;
                 }
 
