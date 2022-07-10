@@ -290,8 +290,9 @@ pub fn literal_search<S: Search>(
             } else if letters.index > 3 && lt == Letter::U {
                 // Check for final "u"
                 search = search
-                    .asserting_next(LetterSet::vowel())
-                    .joining(&search.asserting_end())?
+                    .asserting_prev_matching(LetterSet::tamil_final())?
+                    .asserting_end()
+                    .joining(&search.asserting_next(LetterSet::vowel().difference(letterset![U])))?
                     .marking_expanded()
                     .joining(&search.literal(word![U]))?;
 
@@ -429,12 +430,12 @@ const KCP: LetterSet = letterset![K, Ch, P];
 fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<bool, S::Error> {
     match letters.remaining_with_offset(-2).as_ref() {
         // Check for double letter followed by U
-        &[_, lt, next, Letter::U] if next == lt => {
+        &[_, lt, next, Letter::U] if next == lt && LetterSet::tamil_final().matches(lt) => {
             let with_single = search.literal(word![lt]);
             let with_double = with_single.literal(word![lt]);
 
             *search = with_double
-                .asserting_next(LetterSet::vowel())
+                .asserting_next(LetterSet::vowel().difference(letterset![U]))
                 .joining(&with_single.asserting_end())?
                 .marking_expanded()
                 .joining(&with_double.literal(word![U]))?;
