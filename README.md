@@ -21,6 +21,7 @@ searches with respect to the length of the query string.
 * True dictionary sort order (not based on Unicode order)
 * Automatic transliteration (`maram` => `மரம்`)
 * Awareness of grammar rules (`கடல்கரை` => `கடற்கரை`)
+* Partial support for spoken Tamil (`கொளந்த` => `குழந்தை`)
 * Automatic light/dark theme depending on device settings
 * Annotater which adds links to definitions for words (at `/annotate`)
 * Random word search (at `/random`)
