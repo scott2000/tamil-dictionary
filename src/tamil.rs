@@ -474,6 +474,14 @@ impl LetterSet {
             .union(letterset![RetroN, M, Y, AlveolarN])
     }
 
+    pub const fn alveolar() -> Self {
+        letterset![AlveolarR, AlveolarN, AlveolarL, R]
+    }
+
+    pub const fn retroflex() -> Self {
+        letterset![RetroT, RetroN, RetroL, Zh]
+    }
+
     pub const fn vowel_with_v() -> Self {
         letterset![A, LongA, U, LongU, O, LongO, Au]
     }
@@ -885,6 +893,10 @@ impl<'a> WordIter<'a> {
 
     pub fn peek_matches(&self, lts: LetterSet) -> bool {
         self.word.matches(self.index, lts)
+    }
+
+    pub fn peek_over_matches(&self, lts: LetterSet) -> bool {
+        self.word.matches(self.index + 1, lts)
     }
 
     pub fn adv(&mut self) {

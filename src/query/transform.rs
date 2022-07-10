@@ -290,20 +290,83 @@ pub fn literal_search<S: Search>(
             } else if letters.index > 3 && lt == Letter::U {
                 // Check for final "u"
                 search = search
-                    .literal(word![U])
-                    .joining(&search.asserting_next(LetterSet::vowel()).marking_expanded())?;
+                    .asserting_next(LetterSet::vowel())
+                    .joining(&search.asserting_end())?
+                    .marking_expanded()
+                    .joining(&search.literal(word![U]))?;
 
                 continue;
             }
 
-            // Check for non-expanded diphthongs and variations of "n"
+            // Check for following consonant and either A or Ai
+            let a_transform = || {
+                letters.peek_matches(LetterSet::consonant())
+                    && letters.peek_over_matches(letterset![A, Ai])
+            };
+
+            // Check for variations of vowels and "n"
             match lt {
+                // Check for "a" (/ai/ -> [a])
+                Letter::A => {
+                    search = search
+                        .literal(word![Ai])
+                        .marking_expanded()
+                        .joining(&search.literal(word![A]))?;
+
+                    continue;
+                }
+
+                // Check for "u" (/i/ -> [u] / #p_R)
+                Letter::U if !a_transform() => {
+                    search = search
+                        .asserting_prev_matching(letterset![P, M])?
+                        .literal(word![I])
+                        .asserting_next(LetterSet::retroflex())
+                        .marking_expanded()
+                        .joining(&search.literal(word![U]))?;
+
+                    continue;
+                }
+
+                // Check for "e" (/i/ -> [e] / #_Ca)
+                Letter::E if a_transform() => {
+                    search = search
+                        .literal(word![I])
+                        .marking_expanded()
+                        .joining(&search.literal(word![E]))?;
+
+                    continue;
+                }
+
                 // Check for "ai"
                 Letter::Ai => {
                     search = search
                         .literal(word![A, Y])
                         .marking_expanded()
                         .joining(&search.literal(word![Ai]))?;
+
+                    continue;
+                }
+
+                Letter::O => {
+                    if a_transform() {
+                        // Check for "o" (/u/ -> [o] / #_Ca, /i/ -> [o] / #p_Ra)
+                        search = search
+                            .asserting_prev_matching(letterset![P, M])?
+                            .literal(word![I])
+                            .asserting_next(LetterSet::retroflex())
+                            .joining(&search.literal(word![U]))?
+                            .marking_expanded()
+                            .joining(&search.literal(word![O]))?;
+                    } else {
+                        // Check for "o" (/e/ -> [o] / #p_R)
+                        search = search
+                            .asserting_prev_matching(letterset![P, M])?
+                            .literal(word![E])
+                            .asserting_next(LetterSet::retroflex())
+                            .marking_expanded()
+                            .joining(&search.literal(word![O]))?;
+                    }
 
                     continue;
                 }
@@ -340,6 +403,16 @@ pub fn literal_search<S: Search>(
                     continue;
                 }
 
+                // Check for retroflex "l" (/z/ -> [l])
+                Letter::RetroL => {
+                    search = search
+                        .literal(word![Zh])
+                        .marking_expanded()
+                        .joining(&search.literal(word![RetroL]))?;
+
+                    continue;
+                }
+
                 _ => {}
             }
         }
@@ -355,6 +428,20 @@ const KCP: LetterSet = letterset![K, Ch, P];
 #[rustfmt::skip]
 fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<bool, S::Error> {
     match letters.remaining_with_offset(-2).as_ref() {
+        // Check for double letter followed by U
+        &[_, lt, next, Letter::U] if next == lt => {
+            let with_single = search.literal(word![lt]);
+            let with_double = with_single.literal(word![lt]);
+
+            *search = with_double
+                .asserting_next(LetterSet::vowel())
+                .joining(&with_single.asserting_end())?
+                .marking_expanded()
+                .joining(&with_double.literal(word![U]))?;
+
+            return Ok(true);
+        }
+
         // Check for "aaga" and "aana"
         [_, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
             if letters.index > 2 => {}
