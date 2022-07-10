@@ -8,7 +8,7 @@ use std::rc::Rc;
 use serde::Deserialize;
 
 use crate::dictionary::{Entry, EntryIndex, EntryKind, KindSet, ENTRIES};
-use crate::tamil::{Letter, LetterSet, Word};
+use crate::tamil::{Letter, LetterCombination, LetterSet, Word};
 use crate::{intern, HashMap, HashSet};
 
 use ExpandState::*;
@@ -1036,7 +1036,7 @@ impl StemData {
     fn stem_noun_with(state: &mut StemState, word: &Word, likelihood: StemLikelihood) {
         // Handle nouns ending in -am
         if word.ends_with(word![A, M]) {
-            Self::insert_with(state, &word[..(word.len() - 1)], &[NounWithAm], likelihood);
+            Self::insert_with(state, word.remove_end(1), &[NounWithAm], likelihood);
             return;
         }
 
@@ -1112,12 +1112,61 @@ impl StemData {
             );
         }
 
+        // Most adjectives end in -a, and are considered "normal"
         if word.ends_with(word![A]) {
             Self::insert(state, word, &[Adjective]);
-        } else {
-            // If doesn't end with -a, treat as unknown
-            Self::insert(state, word, &[Emphasis]);
+            return;
         }
+
+        // Check for special adjectives
+        let _ = Self::stem_special_adjective(state, word);
+
+        // If doesn't end with -a, treat as unknown
+        Self::insert(state, word, &[Emphasis]);
+    }
+
+    fn stem_special_adjective(state: &mut StemState, word: &Word) -> Option<()> {
+        let mut iter = word.iter();
+
+        // The first letter must be short
+        let first = LetterCombination::take(&mut iter)?;
+        if !first.is_short() {
+            return None;
+        }
+
+        // The second letter must end in U
+        let second = LetterCombination::take(&mut iter)?;
+        if second.combining != Some(Letter::U) {
+            return None;
+        }
+
+        // The second letter must have a consonant
+        let second_base = second.base_consonant()?;
+
+        // A single M with no vowel
+        const SINGLE_M: LetterCombination = LetterCombination::single(Letter::M);
+
+        match LetterCombination::take(&mut iter) {
+            // Check for doubling vallinam (as in pudhu => puth-)
+            None if LetterSet::vallinam().matches(second_base) => {
+                let doubled = word.remove_end(1) + word![second_base];
+                Self::insert_with(state, &doubled, &[Done], StemLikelihood::Prefix);
+            }
+
+            // Check for -um (as in nedum => nedu)
+            Some(SINGLE_M) if iter.at_end() => {
+                Self::insert_with(
+                    state,
+                    word.remove_end(1),
+                    &[DroppedM],
+                    StemLikelihood::Prefix,
+                );
+            }
+
+            _ => return None,
+        }
+
+        Some(())
     }
 
     fn stem_adverb(state: &mut StemState, word: &Word) {
@@ -1570,6 +1619,7 @@ enum ExpandState {
     Emphasis,
     Particle,
     VowelAdjective,
+    DroppedM,
     Done,
 }
 
@@ -2121,6 +2171,22 @@ impl ExpandChoice {
 
                     // Remove only first of doubled letters
                     self.result(ex, results, 1);
+                }
+            }
+
+            DroppedM => {
+                // The next letter must be a valid initial consonant, but not vallinam
+                const INVALID_NEXT: LetterSet = LetterSet::tamil_initial()
+                    .intersect(LetterSet::consonant())
+                    .difference(LetterSet::vallinam())
+                    .complement();
+
+                let word = &ex.full_word;
+                let last = self.matched(ex).last();
+
+                // Only add to results if ending in U and next letter is valid
+                if last == Some(Letter::U) && !word.matches(self.end, INVALID_NEXT) {
+                    self.result(ex, results, 0);
                 }
             }
 

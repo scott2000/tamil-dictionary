@@ -250,11 +250,11 @@ impl Letter {
         result
     }
 
-    pub fn is_vowel(self) -> bool {
+    pub const fn is_vowel(self) -> bool {
         matches!(self as u8, Self::VOWEL_START..=Self::VOWEL_END)
     }
 
-    pub fn is_consonant(self) -> bool {
+    pub const fn is_consonant(self) -> bool {
         matches!(self as u8, Self::CONSONANT_START..=Self::CONSONANT_END)
     }
 
@@ -508,15 +508,15 @@ impl LetterSet {
         }
     }
 
-    pub fn is_complement(self) -> bool {
+    pub const fn is_complement(self) -> bool {
         (self.0 & (1 << Letter::LETTER_COUNT)) != 0
     }
 
-    pub fn matches(self, lt: Letter) -> bool {
+    pub const fn matches(self, lt: Letter) -> bool {
         (self.0 & (1 << lt as u8)) != 0
     }
 
-    pub fn parse_escape(ch: char) -> Option<Self> {
+    pub const fn parse_escape(ch: char) -> Option<Self> {
         match ch {
             'V' => Some(Self::vowel()),
             'C' => Some(Self::consonant()),
@@ -706,6 +706,10 @@ impl Word {
         }
 
         Some(&self[..prefix.len()])
+    }
+
+    pub fn remove_end(&self, count: usize) -> &Self {
+        &self[..(self.len() - count)]
     }
 
     pub fn parse(s: &str) -> Box<Word> {
@@ -949,47 +953,70 @@ pub struct LetterCombination {
 }
 
 impl LetterCombination {
-    pub fn take(iter: &mut WordIter) -> Option<LetterCombination> {
-        if let Some(letter) = iter.next() {
-            let mut base = LetterBase::Single(letter);
+    pub const fn single(lt: Letter) -> Self {
+        Self {
+            base: LetterBase::Single(lt),
+            combining: None,
+        }
+    }
 
-            // Check for consonant which may have combining letters
-            if letter.is_consonant() {
-                // Check for 'ksh' cluster
-                if letter == Letter::K && iter.peek() == Some(Letter::Sh) {
-                    iter.adv();
-                    base = LetterBase::Double(letter, Letter::Sh);
-                }
-
-                // Check for 'sree' letter
-                if letter == Letter::S
-                    && iter.peek() == Some(Letter::R)
-                    && iter.peek_over() == Some(Letter::LongI)
-                {
-                    iter.adv();
-                    iter.adv();
-                    return Some(LetterCombination {
-                        base: LetterBase::Double(Letter::S, Letter::R),
-                        combining: Some(Letter::LongI),
-                    });
-                }
-
-                // Check for combining vowel
-                if iter.peek_matches(LetterSet::vowel()) {
-                    return Some(LetterCombination {
-                        base,
-                        combining: iter.next(),
-                    });
-                }
+    pub const fn base_consonant(&self) -> Option<Letter> {
+        if let LetterBase::Single(lt) = self.base {
+            if lt.is_consonant() {
+                return Some(lt);
             }
-
-            return Some(LetterCombination {
-                base,
-                combining: None,
-            });
         }
 
         None
+    }
+
+    pub const fn is_short(&self) -> bool {
+        if let Some(lt) = self.combining {
+            return LetterSet::kuril().matches(lt);
+        }
+
+        false
+    }
+
+    pub fn take(iter: &mut WordIter) -> Option<Self> {
+        let lt = iter.next()?;
+
+        let mut base = LetterBase::Single(lt);
+
+        // Check for consonant which may have combining letters
+        if lt.is_consonant() {
+            // Check for 'ksh' cluster
+            if lt == Letter::K && iter.peek() == Some(Letter::Sh) {
+                iter.adv();
+                base = LetterBase::Double(lt, Letter::Sh);
+            }
+
+            // Check for 'sree' letter
+            if lt == Letter::S
+                && iter.peek() == Some(Letter::R)
+                && iter.peek_over() == Some(Letter::LongI)
+            {
+                iter.adv();
+                iter.adv();
+                return Some(Self {
+                    base: LetterBase::Double(Letter::S, Letter::R),
+                    combining: Some(Letter::LongI),
+                });
+            }
+
+            // Check for combining vowel
+            if iter.peek_matches(LetterSet::vowel()) {
+                return Some(Self {
+                    base,
+                    combining: iter.next(),
+                });
+            }
+        }
+
+        Some(Self {
+            base,
+            combining: None,
+        })
     }
 }
 
