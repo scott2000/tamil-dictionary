@@ -1814,8 +1814,8 @@ impl ExpandChoice {
 
         let prev = word[self.end - 1];
 
+        // Handle insertion of Y and V glides
         if LetterSet::vowel().matches(prev) {
-            // Handle insertion of Y and V glides
             let glide = if letterset![I, LongI, E, LongE, Ai].matches(prev) {
                 Y
             } else {
@@ -1826,11 +1826,28 @@ impl ExpandChoice {
                 self.end += 1;
                 self.goto(ex, states);
             }
-        } else if self.is_start && word.get(self.end) == Some(prev) {
-            // Handle doubling of final consonant
-            self.end += 1;
-            self.goto(ex, states);
+
+            return;
         }
+
+        // Doubling can only occur at the start
+        if !self.is_start {
+            return;
+        }
+
+        let next = word.get(self.end);
+
+        // Doubling requires two of the same letter in a row
+        if next != Some(prev) {
+            // RetroN-RetroN becomes RetroN-AlveolarN, so it actually is valid
+            if !matches!((prev, next), (RetroN, Some(AlveolarN))) {
+                return;
+            }
+        }
+
+        // Handle doubling of final consonant
+        self.end += 1;
+        self.goto(ex, states);
     }
 
     #[inline]
