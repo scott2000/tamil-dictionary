@@ -2071,7 +2071,7 @@ impl ExpandChoice {
 
                 self.add_goto(ex, word![U, RetroT, Ai, Y, A], &[Adjective]);
 
-                self.add_goto(ex, word![U, RetroT, AlveolarN], &[Emphasis]);
+                self.add_goto(ex, word![U, RetroT, A, AlveolarN], &[Emphasis]);
                 self.add_goto(ex, word![LongO, RetroT, U], &[Emphasis]);
                 self.add_goto(ex, word![LongA, AlveolarL], &[Emphasis]);
 
