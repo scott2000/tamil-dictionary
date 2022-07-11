@@ -340,10 +340,6 @@ window.addEventListener('load', function() {
   searchAdvLink.onclick = function() {
     showAdvanced();
 
-    setTimeout(function() {
-      searchDefinition.focus();
-    }, 0);
-
     return false;
   };
 
