@@ -340,6 +340,10 @@ window.addEventListener('load', function() {
   searchAdvLink.onclick = function() {
     showAdvanced();
 
+    setTimeout(function() {
+      searchDefinition.focus();
+    }, 0);
+
     return false;
   };
 
@@ -355,6 +359,11 @@ window.addEventListener('load', function() {
       elem.checked = false;
       elem.disabled = false;
     }
+
+    setTimeout(function() {
+      searchWord.focus();
+      searchWord.setSelectionRange(0, searchWord.value.length, 'backward');
+    }, 0);
 
     advanced = false;
     refreshQuery();
