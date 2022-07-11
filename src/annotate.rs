@@ -649,6 +649,18 @@ fn get_specials() -> Specials {
         },
     );
 
+    // Don't allow "onpathu" or "onpathi"
+    let onpadhu = word![O, AlveolarN, P, A, T, U];
+
+    map.insert(
+        onpadhu,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarChol),
+            likelihood: Regular,
+            then_insert: vec![(onpadhu, &[Plural])],
+        },
+    );
+
     // Don't tread kondiru as a single word, despite it often being written as such
     map.insert(
         word![K, O, RetroN, RetroT, I, R, U],
@@ -1085,6 +1097,13 @@ impl StemData {
                 Self::insert_with(state, word, &[Oblique], likelihood);
             }
 
+            return;
+        }
+
+        // Handle nouns ending in -padhu
+        if let Some(word) = word.strip_suffix(word![P, A, T, U]) {
+            Self::insert_with(state, &(word + word![P, A, T, T, U]), &[Case], likelihood);
+            Self::insert_with(state, &(word + word![P, A, T, T, I]), &[Done], likelihood);
             return;
         }
 
