@@ -93,7 +93,7 @@ impl<'a> TextSegment<'a> {
                 let word = Normalized::new(&original_word, true);
 
                 // Split the words into groups
-                let groups = joined_groups(&word.normalized, exclude);
+                let groups = joined_groups(&word, exclude);
 
                 // Only take the first group, if there is one
                 if let Some(choices) = groups.into_iter().next() {
@@ -239,10 +239,14 @@ impl WordCount {
 
 #[derive(Debug)]
 pub struct Normalized<'a> {
-    pub original: &'a Word,
+    // Normalized word (used for annotation)
     pub normalized: Box<Word>,
+    // Original word (used for splitting)
+    pub original: &'a Word,
     // Pairs of (normalized offset, original offset)
-    offsets: Vec<(usize, usize)>,
+    original_offsets: Vec<(usize, usize)>,
+    // Indices of N which were converted to AlveolarN
+    n_offsets: Vec<usize>,
 }
 
 impl<'a> Normalized<'a> {
@@ -252,24 +256,32 @@ impl<'a> Normalized<'a> {
         #[inline]
         fn normalize_map(left: Letter, right: Letter) -> Option<(Letter, Letter)> {
             match (left, right) {
+                // Mellinam-vallinam transformations
                 (Ng, K) => Some((M, K)),
                 (Ny, Ch) => Some((M, Ch)),
                 (N, T) => Some((M, T)),
+
+                // Mellinam-mellinam transformations
+                (RetroN, RetroN) => Some((RetroN, N)),
+                (AlveolarN, AlveolarN) => Some((AlveolarN, N)),
+
+                // Vallinam-vallinam transformations
                 (RetroT, K | Ch | P) => Some((RetroL, right)),
                 (AlveolarR, K | Ch | P) => Some((AlveolarL, right)),
+
                 _ => None,
             }
         }
 
         let mut letters = Vec::with_capacity(word.len());
-        let mut offsets = Vec::new();
+        let mut original_offsets = Vec::new();
         let mut current_difference: isize = 0;
 
         let mut add_offset = |letters: &Vec<Letter>, diff, offset| {
             current_difference += diff;
             let norm_offset = letters.len() + offset;
             let original_offset = (norm_offset as isize) - current_difference;
-            offsets.push((norm_offset, original_offset as usize));
+            original_offsets.push((norm_offset, original_offset as usize));
         };
 
         let mut iter = word.iter();
@@ -359,25 +371,39 @@ impl<'a> Normalized<'a> {
             }
         }
 
+        // Convert N to AlveolarN and record offsets
+        let mut n_offsets = Vec::new();
+        for (i, lt) in letters.iter_mut().enumerate() {
+            if *lt == N {
+                *lt = AlveolarN;
+                n_offsets.push(i);
+            }
+        }
+
         Self {
             original: word,
             normalized: letters.into(),
-            offsets,
+            original_offsets,
+            n_offsets,
         }
     }
 
-    pub fn to_original(&self, normalized_index: usize) -> usize {
-        for &(i, orig) in self.offsets.iter().rev() {
+    pub fn is_n_dental(&self, index: usize) -> bool {
+        self.n_offsets.contains(&index)
+    }
+
+    pub fn slice_original(&self, start: usize, end: usize) -> &'a Word {
+        &self.original[self.to_original(start)..self.to_original(end)]
+    }
+
+    fn to_original(&self, normalized_index: usize) -> usize {
+        for &(i, orig) in self.original_offsets.iter().rev() {
             if let Some(diff) = normalized_index.checked_sub(i) {
                 return diff + orig;
             }
         }
 
         normalized_index
-    }
-
-    pub fn slice_original(&self, start: usize, end: usize) -> &'a Word {
-        &self.original[self.to_original(start)..self.to_original(end)]
     }
 }
 
@@ -531,6 +557,7 @@ fn get_specials() -> Specials {
 
     // Treat Ai as a vowel adjective to prevent it being used wrongly
     let ai = word![Ai];
+
     map.insert(
         ai,
         SpecialWord {
@@ -607,6 +634,18 @@ fn get_specials() -> Specials {
             if_matches: KindSet::single(ThunaiVinai),
             likelihood: Regular,
             then_insert: vec![(maattu, &[GeneralStem, SpecialA]), (maattaa, &[Negative])],
+        },
+    );
+
+    // The adjective "in" is often confused for other forms
+    let r#in = word![I, AlveolarN];
+
+    map.insert(
+        r#in,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarAdai),
+            likelihood: Unlikely,
+            then_insert: vec![(r#in, &[Done])],
         },
     );
 
@@ -827,38 +866,11 @@ impl StemData {
         Some(letters.into())
     }
 
-    fn convert_n(word: &Word) -> Option<Box<Word>> {
-        use Letter::*;
-
-        let mut modified = false;
-        let mut letters = Vec::new();
-        let mut iter = word.iter();
-        while let Some(lt) = iter.next() {
-            if lt == N && iter.peek() != Some(T) && !letters.is_empty() && !iter.at_end() {
-                modified = true;
-                letters.push(AlveolarN);
-            } else {
-                letters.push(lt);
-            }
-        }
-
-        if modified {
-            Some(letters.into())
-        } else {
-            None
-        }
-    }
-
     fn stem_subwords(state: &mut StemState, word: &str, callback: fn(&mut StemState, &Word)) {
         // For every possible way to join the words, add a stem
         for word in Entry::joined_subwords(word) {
             // Convert any -auv- to -avv- (as in vauvaal = vavvaal)
             if let Some(word) = Self::convert_auv_to_avv(&word) {
-                callback(state, &word);
-            }
-
-            // Convert dental -n- to alveolar -n- (as in aniyaayam)
-            if let Some(word) = Self::convert_n(&word) {
                 callback(state, &word);
             }
 
@@ -1227,17 +1239,35 @@ impl StemData {
             }
         }
 
-        let word = intern::word(Normalized::new(word, false).normalized);
+        // Insert both normalization variations if necessary
+        let normalized = Normalized::new(word, false);
+        let fixed = Normalized::new(word, true);
+
+        if fixed.normalized != normalized.normalized {
+            Self::insert_normalized(state, fixed, states, likelihood);
+        }
+
+        Self::insert_normalized(state, normalized, states, likelihood);
+    }
+
+    fn insert_normalized(
+        state: &mut StemState,
+        word: Normalized,
+        states: &[ExpandState],
+        likelihood: StemLikelihood,
+    ) {
+        // Make sure the stem is valid
+        if !is_possible_stem_start(&word, 0) {
+            panic!("invalid word: {}", word.original);
+        }
+
+        // Intern the word since it will live for duration of program
+        let word = intern::word(word.normalized);
 
         // Strip final -u since it may disappear
         let mut stem = word;
         if let Some(new_stem) = stem.strip_suffix(word![U]) {
             stem = new_stem;
-        }
-
-        // Make sure the stem is valid
-        if !is_possible_stem_start(stem) {
-            panic!("invalid stem: {stem}");
         }
 
         // Insert stem into Stems map
@@ -1329,8 +1359,8 @@ impl ShortestOnly {
     }
 }
 
-fn joined_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
-    let groups = best_groups(full_word, exclude);
+fn joined_groups(word: &Normalized, exclude: &ExcludeSet) -> Vec<Choices> {
+    let groups = best_groups(word, exclude);
 
     // If only one grouping is found, just return it
     if groups.len() <= 1 {
@@ -1355,14 +1385,15 @@ fn joined_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
     map.into_iter().rev().map(|(_, choices)| choices).collect()
 }
 
-fn best_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
+fn best_groups(word: &Normalized, exclude: &ExcludeSet) -> Vec<Choices> {
     // Words should not have more than 100 letters
     const MAX_LEN: usize = 100;
 
     // Words should not have more than 10 segments
     const MAX_SEG_COUNT: usize = 10;
 
-    if full_word.len() > MAX_LEN {
+    let len = word.normalized.len();
+    if len > MAX_LEN {
         return Vec::new();
     }
 
@@ -1375,15 +1406,12 @@ fn best_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
     while let Some((&end, _)) = map.iter().next() {
         // Check for matching full word
         let choices = map.remove(&end).unwrap();
-        if end == full_word.len() {
+        if end == len {
             return choices.into_vec();
         }
 
         // Compute the maximum length that may still be useful
-        let max_len = map
-            .get(&full_word.len())
-            .map(|s| s.shortest)
-            .unwrap_or(MAX_SEG_COUNT);
+        let max_len = map.get(&len).map(|s| s.shortest).unwrap_or(MAX_SEG_COUNT);
 
         // If the shortest choice is over the maximum length, all are
         if choices.shortest >= max_len {
@@ -1398,7 +1426,7 @@ fn best_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
         }
 
         // Add new choices to end of existing choices
-        let after = choices_after(full_word, exclude, end);
+        let after = choices_after(word, exclude, end);
         for choices in choices {
             for (end, choice) in after.iter() {
                 let mut choices = choices.clone();
@@ -1417,12 +1445,17 @@ fn best_groups(full_word: &Word, exclude: &ExcludeSet) -> Vec<Choices> {
     Vec::new()
 }
 
-fn choices_after(full_word: &Word, exclude: &ExcludeSet, start: usize) -> Vec<(usize, Rc<Choice>)> {
+fn choices_after(
+    word: &Normalized,
+    exclude: &ExcludeSet,
+    start: usize,
+) -> Vec<(usize, Rc<Choice>)> {
     // If the stem starts with an invalid combination, don't search at all
-    if !is_possible_stem_start(&full_word[start..]) {
+    if !is_possible_stem_start(word, start) {
         return Vec::new();
     }
 
+    let full_word = &word.normalized;
     let stems: &Stems = &STEMS;
 
     let mut results = BTreeMap::new();
@@ -1463,7 +1496,9 @@ fn choices_after(full_word: &Word, exclude: &ExcludeSet, start: usize) -> Vec<(u
         .collect()
 }
 
-fn is_possible_stem_start(stem: &Word) -> bool {
+fn is_possible_stem_start(word: &Normalized, start: usize) -> bool {
+    let stem = &word.normalized[start..];
+
     // Stems starting with a vowel are valid
     if stem.start_matches(LetterSet::vowel()) {
         return true;
@@ -1477,6 +1512,11 @@ fn is_possible_stem_start(stem: &Word) -> bool {
         // Stems starting with lch- are actually ksh-, which is valid
         if stem.starts_with(word![RetroL, Ch]) {
             return true;
+        }
+
+        // Stems starting with n- are only valid if the N is dental
+        if stem.first() == Some(Letter::AlveolarN) {
+            return word.is_n_dental(start);
         }
 
         return false;
@@ -2145,14 +2185,21 @@ impl ExpandChoice {
             }
 
             VowelAdjective => {
+                // Ignore automatically inserted glides
+                if !self.end_matches(ex, LetterSet::vowel()) {
+                    return;
+                }
+
+                // Allow space between (as in ap-padam)
                 if self.end + 1 == ex.full_word.len() {
-                    // Allow space between (as in ap-padam)
                     if ex.full_word.matches(self.end, LetterSet::tamil_initial()) {
                         self.result(ex, results, 1);
                     }
                     return;
-                } else if self.end + 3 >= ex.full_word.len() {
-                    // Otherwise it's probably something else
+                }
+
+                // If it's short, it's probably something else
+                if self.end + 3 >= ex.full_word.len() {
                     return;
                 }
 
