@@ -26,7 +26,7 @@ use crate::search::{Search, SearchRankingEntry};
 use crate::tamil::{self, LetterSet, Word};
 
 const EXAMPLE_REFRESH_TIME_SECS: u64 = 30;
-const EXAMPLE_CYCLE_PERIOD: usize = 12;
+const EXAMPLE_CYCLE_PERIOD: usize = 9;
 
 const MAX_OTHER_SECTIONS: usize = 5;
 const MAX_EXPAND: usize = 250;
@@ -61,17 +61,16 @@ pub struct Example {
 
 impl Example {
     fn new(&(latin, tamil): &(&'static str, &Word)) -> Self {
-        // Check whether the Latin pattern matches the Tamil
-        let matches = Pattern::parse(latin)
-            .expect("invalid pattern")
-            .search(WordSearch::new(tamil), false, true)
-            .unwrap()
-            .end()
-            .unwrap();
-
-        if !matches {
-            panic!("pattern {latin:?} does not match {tamil:?}");
-        }
+        // Check whether the Latin pattern matches the Tamil (only in debug)
+        debug_assert!(
+            Pattern::parse(latin)
+                .expect("invalid pattern")
+                .search(WordSearch::new(tamil), false, true)
+                .unwrap_or_else(|e| match e {})
+                .end()
+                .unwrap_or_else(|e| match e {}),
+            "pattern {latin:?} does not match {tamil:?}",
+        );
 
         Self {
             latin,
@@ -86,6 +85,7 @@ pub fn current_example() -> &'static Example {
         static ref EXAMPLES: Box<[Example]> = {
             let examples = &[
                 ("appuram",    word![A, P, P, U, AlveolarR, A, M]),
+                ("anubavam",   word![A, AlveolarN, U, P, A, V, A, M]),
                 ("aayiram",    word![LongA, Y, I, R, A, M]),
                 ("ippadi",     word![I, P, P, A, RetroT, I]),
                 ("ishtam",     word![I, Sh, RetroT, A, M]),
@@ -93,28 +93,37 @@ pub fn current_example() -> &'static Example {
                 ("utkaar",     word![U, RetroT, K, LongA, R]),
                 ("ulagam",     word![U, AlveolarL, A, K, A, M]),
                 ("ellaam",     word![E, AlveolarL, AlveolarL, LongA, M]),
+                ("emaatru",    word![LongE, M, LongA, AlveolarR, AlveolarR, U]),
+                ("orumai",     word![O, R, U, M, Ai]),
                 ("onbadhu",    word![O, AlveolarN, P, A, T, U]),
+                ("kadai",      word![K, A, RetroT, Ai]),
                 ("kadhai",     word![K, A, T, Ai]),
-                ("kaalam",     word![K, LongA, AlveolarL, A, M]),
+                ("kashtam",    word![K, A, Sh, RetroT, A, M]),
                 ("kaatru",     word![K, LongA, AlveolarR, AlveolarR, U]),
+                ("kaalam",     word![K, LongA, AlveolarL, A, M]),
                 ("koottam",    word![K, LongU, RetroT, RetroT, A, M]),
                 ("kooppidu",   word![K, LongU, P, P, I, RetroT, U]),
                 ("konduvaa",   word![K, O, RetroN, RetroT, U, V, LongA]),
                 ("sattendru",  word![Ch, A, RetroT, RetroT, E, AlveolarN, AlveolarR, U]),
                 ("sandhosham", word![Ch, A, N, T, LongO, Sh, A, M]),
+                ("saappidu",   word![Ch, LongA, P, P, I, RetroT, U]),
                 ("nyaabagam",  word![Ny, LongA, P, A, K, A, M]),
                 ("thangam",    word![T, A, Ng, K, A, M]),
                 ("thamizh",    word![T, A, M, I, Zh]),
+                ("thottam",    word![T, LongO, RetroT, RetroT, A, M]),
+                ("niyaayam",   word![N, I, Y, LongA, Y, A, M]),
                 ("nenjam",     word![N, E, Ny, Ch, A, M]),
+                ("nuzhai",     word![N, U, Zh, Ai]),
                 ("pandhu",     word![P, A, N, T, U]),
                 ("pazham",     word![P, A, Zh, A, M]),
                 ("puthagam",   word![P, U, T, T, A, K, A, M]),
                 ("mazhai",     word![M, A, Zh, Ai]),
+                ("maatram",    word![M, LongA, AlveolarR, AlveolarR, A, M]),
                 ("maunam",     word![M, Au, AlveolarN, A, M]),
                 ("yaanai",     word![Y, LongA, AlveolarN, Ai]),
                 ("vanakkam",   word![V, A, RetroN, A, K, K, A, M]),
-                ("vinyaanam",  word![V, I, Ny, Ny, LongA, AlveolarN, A, M]),
-                ("veedham",    word![V, LongI, T, A, M]),
+                ("vinyaani",   word![V, I, Ny, Ny, LongA, AlveolarN, I]),
+                ("veedu",      word![V, LongI, RetroT, U]),
             ];
 
             examples.iter().map(Example::new).collect()
