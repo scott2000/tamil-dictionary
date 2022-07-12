@@ -34,18 +34,19 @@
                     <p class="center">{{message}}</p>
                 {{~/if}}
             {{~/if}}
-            {{~#if best_count.num}}
+            {{~#if exact_and_best_count.num}}
                 <h2 class="header">Best Matches</h2>
                 <p class="result-count">
-                    {{~> common/plural num=best_count s="result" p="results"~}}
+                    {{~> common/plural num=exact_and_best_count s="result" p="results"~}}
                 </p>
-                {{~#if best}}
                 <div id="best">
+                    {{#each exact~}}
+                        {{> common/definition exact=1}}
+                    {{~/each~}}
                     {{#each best~}}
                         {{> common/definition}}
                     {{~/each~}}
                 </div>
-                {{~/if}}
             {{~/if}}
             {{~#if related}}
                 <div id="related">

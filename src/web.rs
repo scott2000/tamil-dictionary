@@ -411,7 +411,6 @@ impl ResultSection {
 struct ResultEntry {
     uri: String,
     word: &'static str,
-    exact: bool,
     subword: Option<u8>,
     kind: String,
     sections: Vec<ResultSection>,
@@ -427,9 +426,9 @@ impl ResultEntry {
 
     #[rustfmt::skip]
     fn render(entry: SearchRankingEntry, expanded: bool) -> Self {
-        let SearchRankingEntry { entry, words, exact } = entry;
+        let SearchRankingEntry { entry, words } = entry;
 
-        let sections = if expanded || exact || words.len() != 1 || !words.contains(&NO_WORD) {
+        let sections = if expanded || words.len() != 1 || !words.contains(&NO_WORD) {
             ResultSection::render_all(entry, words)
         } else {
             vec![ResultSection::collapsed(entry)]
@@ -444,7 +443,6 @@ impl ResultEntry {
         Self {
             uri: link(entry.primary_word()),
             word: &entry.word,
-            exact,
             subword: entry.subword,
             kind,
             sections,
@@ -491,10 +489,11 @@ struct SearchTemplate<'a> {
     error: bool,
     def_uri: Option<String>,
     message: Option<String>,
+    exact: Vec<ResultEntry>,
     best: Vec<ResultEntry>,
     related: Vec<ResultEntry>,
     other: Vec<ResultEntry>,
-    best_count: NumWithPlural,
+    exact_and_best_count: NumWithPlural,
     related_count: NumWithPlural,
     other_count: NumWithPlural,
 }
@@ -525,10 +524,11 @@ impl<'a> SearchTemplate<'a> {
             error: false,
             def_uri: None,
             message: None,
+            exact: Vec::new(),
             best: Vec::new(),
             related: Vec::new(),
             other: Vec::new(),
-            best_count: 0.into(),
+            exact_and_best_count: 0.into(),
             related_count: 0.into(),
             other_count: 0.into(),
         }
@@ -559,12 +559,13 @@ impl<'a> SearchTemplate<'a> {
                     self.message("No results found.");
                 } else {
                     // Count how many of each result kind there are
-                    self.best_count = ranking.best.len().into();
+                    self.exact_and_best_count = (ranking.exact.len() + ranking.best.len()).into();
                     self.related_count = ranking.related.len().into();
                     self.other_count = ranking.other.len().into();
 
                     // Render the search results so they can be displayed
-                    let mut total = self.best_count.num;
+                    let mut total = self.exact_and_best_count.num;
+                    self.exact = ResultEntry::render_all(ranking.exact, total <= MAX_EXPAND);
                     self.best = ResultEntry::render_all(ranking.best, total <= MAX_EXPAND);
 
                     total += self.related_count.num;
@@ -625,12 +626,11 @@ impl<'a> SearchTemplate<'a> {
             .map(|&index| SearchRankingEntry {
                 entry: &entries[index as usize],
                 words: BTreeSet::new(),
-                exact: true,
             })
             .collect();
 
-        self.best_count = count.into();
-        self.best = ResultEntry::render_all(results, true);
+        self.exact_and_best_count = count.into();
+        self.exact = ResultEntry::render_all(results, true);
         self.hide_other = true;
 
         RESULT_COUNT.fetch_add(count as u64, Ordering::Relaxed);

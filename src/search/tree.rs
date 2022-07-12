@@ -260,7 +260,7 @@ impl Suggest for TreeSearch {
             if branch.prev_letter.is_some() && !branch.is_frozen {
                 branch.append_suggestions(
                     &mut list,
-                    true,
+                    is_single_branch || (branch.prefix.is_empty() && !branch.leaves.is_empty()),
                     is_single_branch && branch.prefix.is_empty(),
                 );
             }

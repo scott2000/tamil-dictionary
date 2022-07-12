@@ -435,10 +435,7 @@ impl SearchResult {
                 Bottom => other,
             };
 
-            // Highlight the entry as exact only if it is in the best ranking
-            let exact = rank == Best && entry.exact;
-
-            ranking.insert(rank, exact, index, entry.words);
+            ranking.insert(rank, entry.exact, index, entry.words);
         }
 
         ranking
@@ -457,12 +454,12 @@ enum SearchRank {
 pub struct SearchRankingEntry {
     pub entry: &'static Entry,
     pub words: BTreeSet<WordIndex>,
-    pub exact: bool,
 }
 
 #[derive(Debug)]
 pub struct SearchRanking {
     pub good_search: bool,
+    pub exact: Vec<SearchRankingEntry>,
     pub best: Vec<SearchRankingEntry>,
     pub related: Vec<SearchRankingEntry>,
     pub other: Vec<SearchRankingEntry>,
@@ -470,12 +467,16 @@ pub struct SearchRanking {
 
 impl SearchRanking {
     pub fn is_empty(&self) -> bool {
-        self.best.is_empty() && self.related.is_empty() && self.other.is_empty()
+        self.exact.is_empty()
+            && self.best.is_empty()
+            && self.related.is_empty()
+            && self.other.is_empty()
     }
 
     fn new(good_search: bool) -> Self {
         Self {
             good_search,
+            exact: Vec::new(),
             best: Vec::new(),
             related: Vec::new(),
             other: Vec::new(),
@@ -494,10 +495,10 @@ impl SearchRanking {
         let entry = SearchRankingEntry {
             entry: &ENTRIES[index as usize],
             words,
-            exact,
         };
 
         match rank {
+            Best if exact => self.exact.push(entry),
             Best => self.best.push(entry),
             Related => self.related.push(entry),
             Other => self.other.push(entry),
