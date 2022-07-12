@@ -1152,7 +1152,13 @@ impl StemData {
         // Check for special adjectives
         let _ = Self::stem_special_adjective(state, word);
 
-        // If doesn't end with -a, treat as unknown
+        // Adjectives ending in -aa or -u can also act fairly "normal"
+        if word.end_matches(letterset![LongA, U, LongU]) {
+            Self::insert(state, word, &[Adjective]);
+            return;
+        }
+
+        // If doesn't end with -a, -aa, or -u, treat as unknown
         Self::insert(state, word, &[Emphasis]);
     }
 
