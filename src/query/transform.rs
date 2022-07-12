@@ -264,7 +264,7 @@ pub fn literal_search<S: Search>(
                         .literal(word![alt])
                         .asserting_next(LetterSet::vowel())
                         .marking_expanded()
-                        .joining(&search.literal(word![lt]))?;
+                        .joining(search.literal(word![lt]))?;
 
                     continue;
                 }
@@ -292,9 +292,9 @@ pub fn literal_search<S: Search>(
                 search = search
                     .asserting_prev_matching(LetterSet::tamil_final())?
                     .asserting_end()
-                    .joining(&search.asserting_next(LetterSet::vowel().difference(letterset![U])))?
+                    .joining(search.asserting_next(LetterSet::vowel().difference(letterset![U])))?
                     .marking_expanded()
-                    .joining(&search.literal(word![U]))?;
+                    .joining(search.literal(word![U]))?;
 
                 continue;
             }
@@ -312,7 +312,7 @@ pub fn literal_search<S: Search>(
                     search = search
                         .literal(word![Ai])
                         .marking_expanded()
-                        .joining(&search.literal(word![A]))?;
+                        .joining(search.literal(word![A]))?;
 
                     continue;
                 }
@@ -324,7 +324,7 @@ pub fn literal_search<S: Search>(
                         .literal(word![I])
                         .asserting_next(LetterSet::retroflex())
                         .marking_expanded()
-                        .joining(&search.literal(word![U]))?;
+                        .joining(search.literal(word![U]))?;
 
                     continue;
                 }
@@ -334,7 +334,7 @@ pub fn literal_search<S: Search>(
                     search = search
                         .literal(word![I])
                         .marking_expanded()
-                        .joining(&search.literal(word![E]))?;
+                        .joining(search.literal(word![E]))?;
 
                     continue;
                 }
@@ -344,7 +344,7 @@ pub fn literal_search<S: Search>(
                     search = search
                         .literal(word![A, Y])
                         .marking_expanded()
-                        .joining(&search.literal(word![Ai]))?;
+                        .joining(search.literal(word![Ai]))?;
 
                     continue;
                 }
@@ -356,9 +356,9 @@ pub fn literal_search<S: Search>(
                             .asserting_prev_matching(letterset![P, M])?
                             .literal(word![I])
                             .asserting_next(LetterSet::retroflex())
-                            .joining(&search.literal(word![U]))?
+                            .joining(search.literal(word![U]))?
                             .marking_expanded()
-                            .joining(&search.literal(word![O]))?;
+                            .joining(search.literal(word![O]))?;
                     } else {
                         // Check for "o" (/e/ -> [o] / #p_R)
                         search = search
@@ -366,7 +366,7 @@ pub fn literal_search<S: Search>(
                             .literal(word![E])
                             .asserting_next(LetterSet::retroflex())
                             .marking_expanded()
-                            .joining(&search.literal(word![O]))?;
+                            .joining(search.literal(word![O]))?;
                     }
 
                     continue;
@@ -377,7 +377,7 @@ pub fn literal_search<S: Search>(
                     search = search
                         .literal(word![A, V, U])
                         .marking_expanded()
-                        .joining(&search.literal(word![Au]))?;
+                        .joining(search.literal(word![Au]))?;
 
                     continue;
                 }
@@ -388,7 +388,7 @@ pub fn literal_search<S: Search>(
                         .literal(word![AlveolarN])
                         .asserting_next(LetterSet::vowel())
                         .marking_expanded()
-                        .joining(&search.literal(word![N]))?;
+                        .joining(search.literal(word![N]))?;
 
                     continue;
                 }
@@ -399,7 +399,7 @@ pub fn literal_search<S: Search>(
                         .literal(word![N])
                         .asserting_next(LetterSet::vowel())
                         .marking_expanded()
-                        .joining(&search.literal(word![AlveolarN]))?;
+                        .joining(search.literal(word![AlveolarN]))?;
 
                     continue;
                 }
@@ -409,7 +409,7 @@ pub fn literal_search<S: Search>(
                     search = search
                         .literal(word![Zh])
                         .marking_expanded()
-                        .joining(&search.literal(word![RetroL]))?;
+                        .joining(search.literal(word![RetroL]))?;
 
                     continue;
                 }
@@ -436,9 +436,9 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
 
             *search = with_double
                 .asserting_next(LetterSet::vowel().difference(letterset![U]))
-                .joining(&with_single.asserting_end())?
+                .joining(with_single.asserting_end())?
                 .marking_expanded()
-                .joining(&with_double.literal(word![U]))?;
+                .joining(with_double.literal(word![U]))?;
 
             return Ok(true);
         }
@@ -507,7 +507,7 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
                             *search = search
                                 .literal(word![P])
                                 .asserting_next(KCP)
-                                .joining(&search.literal(word![M]))?;
+                                .joining(search.literal(word![M]))?;
                         }
                     } else {
                         return Ok(false);
@@ -520,7 +520,7 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
                     *search = search
                         .literal(word![RetroT])
                         .asserting_next(KCP)
-                        .joining(&search.literal(word![RetroL]))?;
+                        .joining(search.literal(word![RetroL]))?;
                 }
 
                 // Handle final alveolar "l"
@@ -529,7 +529,7 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
                     *search = search
                         .literal(word![AlveolarR])
                         .asserting_next(KCP)
-                        .joining(&search.literal(word![AlveolarL]))?;
+                        .joining(search.literal(word![AlveolarL]))?;
                 }
 
                 _ => {
@@ -596,11 +596,11 @@ fn check_initial<S: Search>(
     *search = match lt {
         // Initial "t"
         Letter::T => search.literal(word![lt]).joining(
-            &search
+            search
                 .asserting_prev_matching(letterset![RetroT, RetroN])?
                 .literal(word![RetroT])
                 .joining(
-                    &search
+                    search
                         .asserting_prev_matching(letterset![AlveolarR, AlveolarN])?
                         .literal(word![AlveolarR]),
                 )?
@@ -609,11 +609,11 @@ fn check_initial<S: Search>(
 
         // Initial "n"
         Letter::N => search.literal(word![lt]).joining(
-            &search
+            search
                 .asserting_prev(Letter::RetroN)
                 .literal(word![RetroN])
                 .joining(
-                    &search
+                    search
                         .asserting_prev(Letter::AlveolarN)
                         .literal(word![AlveolarN]),
                 )?
@@ -637,7 +637,7 @@ fn check_expanded_diphthongs<S: Search>(
         (Letter::A, Letter::Y, _) => search
             .literal(word![Ai])
             .marking_expanded()
-            .joining(&search.literal(word![A, Y]))?,
+            .joining(search.literal(word![A, Y]))?,
 
         // Check for "avu"
         (Letter::A, Letter::V, Some(Letter::U)) => {
@@ -646,14 +646,14 @@ fn check_expanded_diphthongs<S: Search>(
             search
                 .literal(word![Au])
                 .marking_expanded()
-                .joining(&search.literal(word![A, V, U]))?
+                .joining(search.literal(word![A, V, U]))?
         }
 
         // Check for "avu"
         (Letter::A, Letter::V, Some(Letter::V)) => search
             .literal(word![Au])
             .marking_expanded()
-            .joining(&search.literal(word![A, V]))?,
+            .joining(search.literal(word![A, V]))?,
 
         _ => return Ok(false),
     };
@@ -684,7 +684,7 @@ fn check_final<S: Search>(
             let final_m = with_vowel
                 .matching(letterset![Ng, Ny, N])?
                 .marking_expanded()
-                .joining(&with_vowel.literal(word![M]))?;
+                .joining(with_vowel.literal(word![M]))?;
 
             // Final "am"
             if lt == Letter::A {
@@ -694,14 +694,14 @@ fn check_final<S: Search>(
                         .asserting_next(LetterSet::vowel())
                         .marking_expanded()
                         .freezing()
-                        .joining(&final_m)?
+                        .joining(final_m)?
                 } else if letters.index > 2 {
                     // Only allow final "m" to be dropped, and only before another word
                     with_vowel
                         .asserting_next(LetterSet::tamil_initial())
                         .marking_expanded()
                         .freezing()
-                        .joining(&final_m)?
+                        .joining(final_m)?
                 } else {
                     final_m
                 }
@@ -712,11 +712,11 @@ fn check_final<S: Search>(
 
         // Final retroflex "l"
         Letter::RetroL => with_vowel.literal(word![next]).joining(
-            &with_vowel
+            with_vowel
                 .literal(word![RetroT])
                 .asserting_next(KCP.union(letterset![RetroT]))
                 .joining(
-                    &with_vowel
+                    with_vowel
                         .literal(word![RetroN])
                         .asserting_next(KCP.union(letterset![RetroN, M])),
                 )?
@@ -725,11 +725,11 @@ fn check_final<S: Search>(
 
         // Final alveolar "l"
         Letter::AlveolarL => with_vowel.literal(word![next]).joining(
-            &with_vowel
+            with_vowel
                 .literal(word![AlveolarR])
                 .asserting_next(KCP.union(letterset![AlveolarR]))
                 .joining(
-                    &with_vowel
+                    with_vowel
                         .literal(word![AlveolarN])
                         .asserting_next(KCP.union(letterset![AlveolarN, M])),
                 )?
@@ -739,7 +739,7 @@ fn check_final<S: Search>(
         // Final alveolar "n"
         Letter::AlveolarN => {
             let with_kcp = with_vowel.literal(word![next]).joining(
-                &with_vowel
+                with_vowel
                     .literal(word![AlveolarR])
                     .asserting_next(KCP)
                     .marking_expanded(),
@@ -748,7 +748,7 @@ fn check_final<S: Search>(
             // Final "an"
             if lt == Letter::A {
                 with_kcp.joining(
-                    &with_vowel
+                    with_vowel
                         .literal(word![R])
                         .asserting_end()
                         .marking_expanded(),
@@ -760,7 +760,7 @@ fn check_final<S: Search>(
 
         // Final "ar"
         Letter::R if lt == Letter::A => with_vowel.literal(word![next]).joining(
-            &with_vowel
+            with_vowel
                 .literal(word![AlveolarN])
                 .asserting_end()
                 .marking_expanded(),
@@ -807,23 +807,23 @@ fn transliterate<S: Search>(
 
                     let mut base = search
                         .literal(word![Ai])
-                        .joining(&search.literal(word![A, Y]))?;
+                        .joining(search.literal(word![A, Y]))?;
 
                     if expand {
-                        base = base.joining(&search.literal(word![LongA, Y]))?;
+                        base = base.joining(search.literal(word![LongA, Y]))?;
                     }
 
-                    base.literal(word![Y]).joining(&base)?
+                    base.literal(word![Y]).joining(base)?
                 }
 
                 // Check for "au"
                 Some(LatinU) => {
                     letters.adv();
                     let av = search.literal(word![A, V]);
-                    let search = search.literal(word![Au]).joining(&av.literal(word![U]))?;
+                    let search = search.literal(word![Au]).joining(av.literal(word![U]))?;
 
                     if expand {
-                        search.joining(&av.marking_expanded())?
+                        search.joining(av.marking_expanded())?
                     } else {
                         search
                     }
@@ -835,15 +835,15 @@ fn transliterate<S: Search>(
                     let av = search.literal(word![A, V]);
                     search
                         .literal(word![Au])
-                        .joining(&av)?
-                        .joining(&av.literal(word![U]))?
+                        .joining(av.literal(word![U]))?
+                        .joining(av)?
                 }
 
                 _ => {
                     if expand {
                         search
                             .literal(word![A])
-                            .joining(&search.matching(letterset![LongA, Ai])?)?
+                            .joining(search.matching(letterset![LongA, Ai])?)?
                     } else {
                         search.literal(word![A])
                     }
@@ -881,7 +881,7 @@ fn transliterate<S: Search>(
                     if expand {
                         search
                             .matching(letterset![O, LongO])?
-                            .joining(&search.literal(word![Au]))?
+                            .joining(search.literal(word![Au]))?
                     } else {
                         search.matching(letterset![O, LongO])?
                     }
@@ -895,7 +895,7 @@ fn transliterate<S: Search>(
             search
                 .matching(letterset![Ng, N, RetroN, AlveolarN])?
                 .literal(word![K])
-                .joining(&optional_double(search, false, false, Letter::Ng)?)?
+                .joining(optional_double(search, false, false, Letter::Ng)?)?
         }
 
         // Check for "ny"
@@ -904,7 +904,7 @@ fn transliterate<S: Search>(
             search
                 .matching(letterset![N, RetroN, AlveolarN])?
                 .literal(word![Y])
-                .joining(&optional_double(search, false, false, Letter::Ny)?)?
+                .joining(optional_double(search, false, false, Letter::Ny)?)?
         }
 
         // Check for "nj"
@@ -919,7 +919,7 @@ fn transliterate<S: Search>(
             search
                 .matching(letterset![T, RetroT])?
                 .literal(word![R])
-                .joining(&search.literal(word![AlveolarR]))?
+                .joining(search.literal(word![AlveolarR]))?
         }
 
         // If not expanding, treat these more strictly
@@ -998,7 +998,7 @@ fn optional_double_set<S: Search>(
     };
 
     lts.iter().try_fold(search.clearing(), |a, b| {
-        a.joining(&optional_double(search, avoid_single, avoid_double, b)?)
+        a.joining(optional_double(search, avoid_single, avoid_double, b)?)
     })
 }
 
@@ -1037,13 +1037,13 @@ fn optional_double<S: Search>(
 
         with_single
             .literal(word![lt])
-            .joining(&end_of_word)?
-            .joining(&double_next)?
-            .joining(&double_prev_only)?
-            .joining(&no_double)
+            .joining(end_of_word)?
+            .joining(double_next)?
+            .joining(double_prev_only)?
+            .joining(no_double)
     } else if !avoid_double {
         // Since there is no preference, the context doesn't matter
-        with_single.literal(word![lt]).joining(&with_single)
+        with_single.literal(word![lt]).joining(with_single)
     } else if LetterSet::vallinam().matches(lt) {
         // Check for end of word
         let end_of_word = with_single.asserting_end().marking_expanded();
@@ -1057,15 +1057,15 @@ fn optional_double<S: Search>(
         with_single
             .literal(word![lt])
             .marking_expanded()
-            .joining(&end_of_word)?
-            .joining(&vowel_next)?
-            .joining(&non_vowel_next)
+            .joining(end_of_word)?
+            .joining(vowel_next)?
+            .joining(non_vowel_next)
     } else {
         // Since the letter isn't a hard consonant, the context doesn't matter
         with_single
             .literal(word![lt])
             .marking_expanded()
-            .joining(&with_single)
+            .joining(with_single)
     }
 }
 

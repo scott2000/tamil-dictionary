@@ -451,7 +451,7 @@ impl Pattern {
             }
             Self::Alternative(a, b) => a
                 .search(search.clone(), expand, trans)?
-                .joining(&b.search(search, expand, trans)?),
+                .joining(b.search(search, expand, trans)?),
         }
     }
 

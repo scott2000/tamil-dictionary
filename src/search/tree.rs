@@ -240,16 +240,33 @@ impl Search for TreeSearch {
         Ok(())
     }
 
-    fn mark_expanded(&mut self) {
+    fn joining(mut self, mut other: Self) -> Result<Self, Self::Error> {
+        if self.branches.len() + other.branches.len() > SEARCH_MAX_BRANCHES {
+            return Err(SearchError::TooComplex);
+        }
+
+        if other.branches.len() > self.branches.len() {
+            mem::swap(&mut self, &mut other);
+        }
+
+        self.branches.append(&mut other.branches);
+        Ok(self)
+    }
+
+    fn marking_expanded(mut self) -> Self {
         for branch in &mut self.branches {
             branch.mark_expanded();
         }
+
+        self
     }
 
-    fn freeze(&mut self) {
+    fn freezing(mut self) -> Self {
         for branch in &mut self.branches {
             branch.freeze();
         }
+
+        self
     }
 
     fn end(self) -> Result<Self::Output, Self::Error> {

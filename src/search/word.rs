@@ -136,12 +136,14 @@ impl<'a> Search for WordSearch<'a> {
         Ok(())
     }
 
-    fn mark_expanded(&mut self) {
+    fn marking_expanded(mut self) -> Self {
         self.branches.clear();
+        self
     }
 
-    fn freeze(&mut self) {
+    fn freezing(mut self) -> Self {
         self.branches.clear();
+        self
     }
 
     fn end(self) -> Result<Self::Output, Self::Error> {

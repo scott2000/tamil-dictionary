@@ -39,24 +39,14 @@ pub trait Search: Clone {
 
     fn join(&mut self, other: &Self) -> Result<(), Self::Error>;
 
-    fn joining(mut self, other: &Self) -> Result<Self, Self::Error> {
-        self.join(other)?;
+    fn joining(mut self, other: Self) -> Result<Self, Self::Error> {
+        self.join(&other)?;
         Ok(self)
     }
 
-    fn mark_expanded(&mut self);
+    fn marking_expanded(self) -> Self;
 
-    fn marking_expanded(mut self) -> Self {
-        self.mark_expanded();
-        self
-    }
-
-    fn freeze(&mut self);
-
-    fn freezing(mut self) -> Self {
-        self.freeze();
-        self
-    }
+    fn freezing(self) -> Self;
 
     fn end(self) -> Result<Self::Output, Self::Error>;
 }

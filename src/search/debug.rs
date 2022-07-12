@@ -76,12 +76,12 @@ impl Search for DebugSearch {
         Ok(())
     }
 
-    fn mark_expanded(&mut self) {
-        *self = self.method("marking_expanded", "");
+    fn marking_expanded(self) -> Self {
+        self.method("marking_expanded", "")
     }
 
-    fn freeze(&mut self) {
-        *self = self.method("freezing", "");
+    fn freezing(self) -> Self {
+        self.method("freezing", "")
     }
 
     fn end(self) -> Result<Self::Output, Self::Error> {
