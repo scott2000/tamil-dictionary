@@ -61,14 +61,19 @@ pub trait Suggest {
     fn suggest(self, count: u32) -> SuggestionList;
 }
 
+// TODO: Reduce repetition for this struct
+// - Could factor out into separate struct with HashSet and BTreeSet?
+// - Add helper function for computing suggestions list
 pub struct SuggestionList {
     count_requested: u32,
     seen_leaves: HashSet<&'static str>,
     seen_branches: HashSet<&'static str>,
-    seen_expanded: HashSet<&'static str>,
+    seen_ex_leaves: HashSet<&'static str>,
+    seen_ex_branches: HashSet<&'static str>,
     from_leaves: BTreeSet<EntryIndex>,
     from_branches: BTreeSet<EntryIndex>,
-    from_expanded: BTreeSet<EntryIndex>,
+    from_ex_leaves: BTreeSet<EntryIndex>,
+    from_ex_branches: BTreeSet<EntryIndex>,
 }
 
 impl SuggestionList {
@@ -77,10 +82,12 @@ impl SuggestionList {
             count_requested,
             seen_leaves: HashSet::default(),
             seen_branches: HashSet::default(),
-            seen_expanded: HashSet::default(),
+            seen_ex_leaves: HashSet::default(),
+            seen_ex_branches: HashSet::default(),
             from_leaves: BTreeSet::new(),
             from_branches: BTreeSet::new(),
-            from_expanded: BTreeSet::new(),
+            from_ex_leaves: BTreeSet::new(),
+            from_ex_branches: BTreeSet::new(),
         }
     }
 
@@ -88,32 +95,42 @@ impl SuggestionList {
         let mut extend_count =
             (self.count_requested as usize).saturating_sub(self.from_leaves.len());
 
-        let expanded = if extend_count == 0 {
-            Vec::new()
-        } else {
-            // Take some branches and add them to try to reach the requested count
-            let to_add: Vec<_> = self
-                .from_branches
-                .difference(&self.from_leaves)
-                .take(extend_count)
-                .cloned()
-                .collect();
+        // Take some branches and add them to try to reach the requested count
+        let to_add: Vec<_> = self
+            .from_branches
+            .difference(&self.from_leaves)
+            .take(extend_count)
+            .copied()
+            .collect();
 
-            extend_count -= to_add.len();
-            self.from_leaves.extend(to_add);
+        extend_count -= to_add.len();
+        self.from_leaves.extend(to_add);
 
-            // Add any left over expanded branches if there's room
-            self.from_expanded
-                .difference(&self.from_leaves)
-                .take(extend_count)
-                .cloned()
-                .collect()
-        };
+        // Delete any expanded leaves which are also regular leaves/branches
+        self.from_ex_leaves = self
+            .from_ex_leaves
+            .difference(&self.from_leaves)
+            .take(extend_count)
+            .copied()
+            .collect();
 
-        // Take the first suggestions alphabetically
+        extend_count -= self.from_ex_leaves.len();
+
+        // Take some expanded branches and add them to try to reach the requested count
+        let to_add: Vec<_> = self
+            .from_ex_branches
+            .difference(&self.from_leaves)
+            .filter(|entry| !self.from_ex_leaves.contains(entry))
+            .take(extend_count)
+            .copied()
+            .collect();
+
+        self.from_ex_leaves.extend(to_add);
+
+        // Take the first suggestions alphabetically from both expanded and non-expanded
         self.from_leaves
             .into_iter()
-            .chain(expanded)
+            .chain(self.from_ex_leaves)
             .take(self.count_requested as usize)
             .map(|index| &ENTRIES[index as usize])
     }
@@ -122,20 +139,26 @@ impl SuggestionList {
         self.from_leaves.len() >= self.count_requested as usize
     }
 
-    pub fn add_suggestion(&mut self, index: EntryIndex, from_leaf: bool, expanded: bool) -> bool {
-        // Treat all expanded leaves as branches
-        let from_leaf = from_leaf && !expanded;
+    pub fn add_suggestion(
+        &mut self,
+        index: EntryIndex,
+        from_any_leaf: bool,
+        expanded: bool,
+    ) -> bool {
+        let from_leaf = from_any_leaf && !expanded;
 
         // If this is a branch and there are enough leaves, return early
         if !from_leaf && self.ignore_branches() {
             return true;
         }
 
-        // Pick which sets to use based on whether this is a leaf
-        let (seen, set) = if expanded {
-            (&mut self.seen_expanded, &mut self.from_expanded)
-        } else if from_leaf {
+        // Pick which sets to use based on whether this is a leaf and/or expanded
+        let (seen, set) = if from_leaf {
             (&mut self.seen_leaves, &mut self.from_leaves)
+        } else if from_any_leaf {
+            (&mut self.seen_ex_leaves, &mut self.from_ex_leaves)
+        } else if expanded {
+            (&mut self.seen_ex_branches, &mut self.from_ex_branches)
         } else {
             (&mut self.seen_branches, &mut self.from_branches)
         };
@@ -153,9 +176,11 @@ impl SuggestionList {
         // If the number of leaf suggestions reaches the limit, clear the branch suggestions
         if from_leaf && set.len() == self.count_requested as usize {
             self.seen_branches = HashSet::default();
-            self.seen_expanded = HashSet::default();
+            self.seen_ex_leaves = HashSet::default();
+            self.seen_ex_branches = HashSet::default();
             self.from_branches = BTreeSet::new();
-            self.from_expanded = BTreeSet::new();
+            self.from_ex_leaves = BTreeSet::new();
+            self.from_ex_branches = BTreeSet::new();
         }
 
         false
