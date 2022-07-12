@@ -10,13 +10,16 @@ pub use crate::dictionary::KindSet;
 pub mod tree;
 pub mod word;
 
+#[cfg(debug_assertions)]
+pub mod debug;
+
 pub trait Search: Clone {
     type Output;
     type Error;
 
-    fn empty() -> Self;
-
     fn is_empty(&self) -> bool;
+
+    fn clearing(&self) -> Self;
 
     fn asserting_start(&self) -> Self;
 

@@ -23,15 +23,15 @@ impl<'a> Search for WordSearch<'a> {
     type Output = bool;
     type Error = Infallible;
 
-    fn empty() -> Self {
+    fn is_empty(&self) -> bool {
+        self.branches.is_empty()
+    }
+
+    fn clearing(&self) -> Self {
         Self {
             word: Word::new(),
             branches: Vec::new(),
         }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.branches.is_empty()
     }
 
     fn asserting_start(&self) -> Self {

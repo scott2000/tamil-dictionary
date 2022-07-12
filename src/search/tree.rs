@@ -123,14 +123,14 @@ impl Search for TreeSearch {
     type Output = SearchResult;
     type Error = SearchError;
 
-    fn empty() -> Self {
+    fn is_empty(&self) -> bool {
+        self.branches.is_empty()
+    }
+
+    fn clearing(&self) -> Self {
         Self {
             branches: Vec::new(),
         }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.branches.is_empty()
     }
 
     fn asserting_start(&self) -> Self {

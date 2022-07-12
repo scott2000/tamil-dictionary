@@ -997,7 +997,7 @@ fn optional_double_set<S: Search>(
         DoubleKind::Force => (true, false),
     };
 
-    lts.iter().try_fold(S::empty(), |a, b| {
+    lts.iter().try_fold(search.clearing(), |a, b| {
         a.joining(&optional_double(search, avoid_single, avoid_double, b)?)
     })
 }
