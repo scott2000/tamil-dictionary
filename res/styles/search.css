@@ -16,7 +16,7 @@
     overflow-wrap: break-word;
 }
 
-.ex {
+#exact > .en {
     outline: 3px solid var(--highlight-color);
 }
 
