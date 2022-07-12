@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Write;
+use std::mem;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -733,13 +734,43 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
 
         // Make the pattern more general if there was a trailing "a"
         if append_a {
-            pat = Pattern::Concat(
-                Box::new(pat),
-                Box::new(Pattern::Alternative(
-                    Box::new(Pattern::Assert(LetterSet::vowel())),
-                    Box::new(Pattern::MarkExpanded),
-                )),
-            );
+            const VOWEL_NOT_A: LetterSet = LetterSet::vowel().difference(letterset![A]);
+
+            // The pattern should always end with a literal, since anything but
+            // concatenation would have added some delimiters at the end.
+            // Since some pattern expansions rely on a literal being unbroken,
+            // we need to directly add the A into the literal, replacing just
+            // the literal with an alternative.
+
+            let last = pat.last_mut();
+            if let Pattern::Literal(lit) = last {
+                let with_a = lit.as_ref() + word![A];
+                let without_a = mem::replace(last, Pattern::Empty);
+
+                *last = Pattern::Alternative(
+                    Box::new(Pattern::Literal(with_a)),
+                    Box::new(Pattern::Concat(
+                        Box::new(without_a),
+                        Box::new(Pattern::Alternative(
+                            Box::new(Pattern::Assert(VOWEL_NOT_A)),
+                            Box::new(Pattern::MarkExpanded),
+                        )),
+                    )),
+                );
+            } else {
+                // If for some reason the pattern doesn't end with a literal,
+                // fall back to adding just a vowel assertion. This is
+                // equivalent since A is always first in dictionary order,
+                // so whether its an exact match will not affect the ordering.
+
+                pat = Pattern::Concat(
+                    Box::new(pat),
+                    Box::new(Pattern::Alternative(
+                        Box::new(Pattern::Assert(LetterSet::vowel())),
+                        Box::new(Pattern::MarkExpanded),
+                    )),
+                );
+            }
         }
 
         if let Some(list) = pat.suggest(count) {

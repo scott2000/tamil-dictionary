@@ -496,6 +496,26 @@ impl Pattern {
         )))
     }
 
+    pub fn last(&self) -> &Self {
+        let mut pat = self;
+
+        while let Self::Concat(_, new_pat) = pat {
+            pat = new_pat;
+        }
+
+        pat
+    }
+
+    pub fn last_mut(&mut self) -> &mut Self {
+        let mut pat = self;
+
+        while let Self::Concat(_, new_pat) = pat {
+            pat = new_pat;
+        }
+
+        pat
+    }
+
     fn parse_group(chars: &mut Chars) -> Result<Self, ParseError> {
         let pat = Self::parse_term(chars, true)?;
 
