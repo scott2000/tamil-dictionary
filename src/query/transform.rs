@@ -554,7 +554,7 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
     }
 
     let without_suffix = mem::replace(search, search.literal(letters.remaining_with_offset(-1)));
-    search.join(&without_suffix.marking_expanded().freezing())?;
+    search.join(&without_suffix.freezing())?;
 
     Ok(true)
 }
@@ -692,14 +692,12 @@ fn check_final<S: Search>(
                     // Allow entire "am" to be removed since the word is long
                     search
                         .asserting_next(LetterSet::vowel())
-                        .marking_expanded()
                         .freezing()
                         .joining(final_m)?
                 } else if letters.index > 2 {
                     // Only allow final "m" to be dropped, and only before another word
                     with_vowel
                         .asserting_next(LetterSet::tamil_initial())
-                        .marking_expanded()
                         .freezing()
                         .joining(final_m)?
                 } else {

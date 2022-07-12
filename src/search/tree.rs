@@ -31,7 +31,10 @@ pub fn search_definition() -> TreeSearch {
 
 pub fn search_word_prefix() -> TreeSearch {
     TreeSearch {
-        branches: vec![SearchBranch::new(&WORD_TREES.prefix_tree, true)],
+        branches: vec![SearchBranch::new(
+            &WORD_TREES.prefix_tree,
+            PrefixMode::Asserted,
+        )],
     }
 }
 
@@ -95,8 +98,8 @@ impl TreeSearch {
             .iter()
             .flat_map(|trees| {
                 [
-                    SearchBranch::new(&trees.prefix_tree, true),
-                    SearchBranch::new(&trees.suffix_tree, false),
+                    SearchBranch::new(&trees.prefix_tree, PrefixMode::Prefix),
+                    SearchBranch::new(&trees.suffix_tree, PrefixMode::Suffix),
                 ]
             })
             .collect();
@@ -187,7 +190,9 @@ impl Search for TreeSearch {
                     Some(_) => None,
 
                     // The branch is initial, so consume the letter directly
-                    None => branch.ignore_prefix().literal(word![lt]),
+                    None => branch
+                        .ignore_prefix()
+                        .and_then(|branch| branch.literal(word![lt])),
                 }
             })
             .collect();
@@ -205,7 +210,11 @@ impl Search for TreeSearch {
                 Some(_) => {}
 
                 // The branch is initial, so consume the letter directly
-                None => branch.ignore_prefix().append_matches(&mut branches, lts)?,
+                None => {
+                    if let Some(branch) = branch.ignore_prefix() {
+                        branch.append_matches(&mut branches, lts)?;
+                    }
+                }
             }
         }
 
@@ -275,7 +284,7 @@ impl Search for TreeSearch {
 
         // Split the branches into prefix and suffix branches
         for branch in self.branches {
-            if branch.is_prefix_tree {
+            if branch.prefix_mode.is_prefix() {
                 prefix_branches.push(branch);
             } else {
                 suffix_branches.push(branch);
@@ -312,7 +321,7 @@ impl Suggest for TreeSearch {
 
         let is_single_branch = self.branches.len() == 1;
         for branch in self.branches {
-            if branch.prev_letter.is_some() && !branch.is_frozen {
+            if branch.prev_letter.is_some() && branch.expand_mode != ExpandMode::Frozen {
                 branch.append_suggestions(
                     &mut list,
                     is_single_branch || (branch.prefix.is_empty() && !branch.leaves.is_empty()),
@@ -325,11 +334,40 @@ impl Suggest for TreeSearch {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(u8)]
+enum PrefixMode {
+    Suffix,
+    Prefix,
+    Asserted,
+}
+
+impl PrefixMode {
+    #[inline(always)]
+    fn is_prefix(self) -> bool {
+        self != Self::Suffix
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(u8)]
+enum ExpandMode {
+    NotExpanded,
+    Expanded,
+    Frozen,
+}
+
+impl ExpandMode {
+    #[inline(always)]
+    fn is_expanded(self) -> bool {
+        self != Self::NotExpanded
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 struct SearchBranch<T: Eq + 'static = Loc> {
-    is_prefix_tree: bool,
-    is_expanded: bool,
-    is_frozen: bool,
+    prefix_mode: PrefixMode,
+    expand_mode: ExpandMode,
     prev_letter: Option<Letter>,
     require: Option<LetterSet>,
     prefix: &'static Word,
@@ -338,11 +376,10 @@ struct SearchBranch<T: Eq + 'static = Loc> {
 }
 
 impl<T: Eq + Copy> SearchBranch<T> {
-    fn new(tree: &'static Tree<T>, is_prefix_tree: bool) -> Self {
+    fn new(tree: &'static Tree<T>, prefix_mode: PrefixMode) -> Self {
         Self {
-            is_prefix_tree,
-            is_expanded: false,
-            is_frozen: false,
+            prefix_mode,
+            expand_mode: ExpandMode::NotExpanded,
             prev_letter: None,
             require: None,
             prefix: tree.prefix,
@@ -371,13 +408,17 @@ impl<T: Eq + Copy> SearchBranch<T> {
         }
     }
 
-    fn ignore_prefix(mut self) -> Self {
-        self.is_prefix_tree = false;
-        self
+    fn ignore_prefix(mut self) -> Option<Self> {
+        if self.prefix_mode != PrefixMode::Asserted {
+            self.prefix_mode = PrefixMode::Suffix;
+            Some(self)
+        } else {
+            None
+        }
     }
 
     fn assert_next(&self, mut lts: LetterSet) -> Option<Self> {
-        if self.is_frozen {
+        if self.expand_mode == ExpandMode::Frozen {
             return None;
         }
 
@@ -419,7 +460,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
     }
 
     fn is_start(&self) -> bool {
-        self.is_prefix_tree && self.prev_letter.is_none()
+        self.prefix_mode.is_prefix() && self.prev_letter.is_none()
     }
 
     fn middle(&self) -> Option<Self> {
@@ -438,7 +479,10 @@ impl<T: Eq + Copy> SearchBranch<T> {
     }
 
     fn suffix(&self, empty: &'static BTreeMap<Letter, Tree<T>>) -> Option<Self> {
-        if self.prefix.is_empty() && !self.leaves.is_empty() && !self.is_frozen {
+        if self.prefix.is_empty()
+            && !self.leaves.is_empty()
+            && self.expand_mode != ExpandMode::Frozen
+        {
             Some(Self {
                 branches: empty,
                 ..*self
@@ -449,11 +493,13 @@ impl<T: Eq + Copy> SearchBranch<T> {
     }
 
     fn mark_expanded(&mut self) {
-        self.is_expanded = true;
+        if self.expand_mode != ExpandMode::Frozen {
+            self.expand_mode = ExpandMode::Expanded;
+        }
     }
 
     fn freeze(&mut self) {
-        self.is_frozen = true;
+        self.expand_mode = ExpandMode::Frozen;
     }
 
     fn literal(mut self, word: &Word) -> Option<Self> {
@@ -461,7 +507,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
             return Some(self);
         }
 
-        if self.is_frozen {
+        if self.expand_mode == ExpandMode::Frozen {
             return None;
         }
 
@@ -498,7 +544,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
             lts = lts.intersect(require);
         }
 
-        if self.is_frozen || lts.is_empty() {
+        if self.expand_mode == ExpandMode::Frozen || lts.is_empty() {
             return Ok(());
         }
 
@@ -541,7 +587,12 @@ impl SearchBranch {
 
         // Add all of the leaves to the result
         for &loc in self.leaves {
-            result.insert(loc, self.is_prefix_tree, suffix, self.is_expanded);
+            result.insert(
+                loc,
+                self.prefix_mode.is_prefix(),
+                suffix,
+                self.expand_mode.is_expanded(),
+            );
         }
 
         // Recursively add all of the matching branches to the result
@@ -569,7 +620,7 @@ impl SearchBranch {
     ) -> bool {
         // Add suggestions for all of the leaves, returning early if one fails
         for leaf in self.leaves {
-            if list.add_suggestion(leaf.entry, from_leaf, self.is_expanded) {
+            if list.add_suggestion(leaf.entry, from_leaf, self.expand_mode.is_expanded()) {
                 return true;
             }
         }
