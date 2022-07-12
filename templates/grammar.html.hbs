@@ -51,14 +51,18 @@ single = '-'                        // Separator (ignored)
        | '%(' alts ')'              // Enable transliteration
        | set                        // Set of possible letters
        | '&amp;' set                    // Lookahead assertion
+       | '&amp;&lt;' set                   // Lookbehind assertion
        | char                       // Single letter
-       | escape                     // Escape sequence
 
 alts = term*                        // Concatenation of terms
      | term* '|' alts               // Alternatives separated by pipes
 
-set = '[' range* ']'                // Set of possible letters
-    | '[^' range* ']'               // Negated set of letters
+set = '[' range+ inter* ']'         // Set of possible letters
+    | '[^' range+ inter* ']'        // Negated set of letters
+    | escape                        // Escape sequence
+
+inter = '&amp;' range+                  // Set intersection
+      | '^' range+                  // Set difference
 
 range = char                        // Single letter
       | char '-' char               // Range of letters

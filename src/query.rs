@@ -36,7 +36,7 @@ pub enum ParseError {
     InvalidExact,
     #[error("Invalid syntax: expected parentheses after percent symbol.")]
     InvalidTransliteration,
-    #[error("Invalid syntax: expected brackets after ampersand for assertion.")]
+    #[error("Invalid syntax: expected character set for zero-width assertion.")]
     InvalidAssert,
     #[error("Invalid repetition: number must be between 0 and 255.")]
     InvalidRepetitionIndex,
@@ -44,6 +44,8 @@ pub enum ParseError {
     MissingPulli,
     #[error("Invalid range: partial ranges are not allowed.")]
     PartialRange,
+    #[error("Invalid syntax: expected character after '{0}' in character set")]
+    EmptyUnion(char),
     #[error("Invalid range: cannot create range between {0} and {1}.")]
     InvalidRange(Category, Category),
     #[error("Invalid syntax: character not allowed in repetition: '{0}'.")]
@@ -378,7 +380,8 @@ pub enum Pattern {
     AssertStart,
     AssertMiddle,
     AssertEnd,
-    Assert(LetterSet),
+    AssertNext(LetterSet),
+    AssertPrev(LetterSet),
     Set(LetterSet),
     Literal(Box<Word>),
     Exact(Box<Pattern>),
@@ -418,7 +421,10 @@ impl Pattern {
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertMiddle => Ok(search.asserting_middle()),
             Self::AssertEnd => Ok(search.asserting_end()),
-            &Self::Assert(lts) => Ok(search.asserting_next(transform::letter_set(lts, trans))),
+            &Self::AssertNext(lts) => Ok(search.asserting_next(transform::letter_set(lts, trans))),
+            &Self::AssertPrev(lts) => {
+                Ok(search.asserting_prev_matching(transform::letter_set(lts, trans))?)
+            }
             &Self::Set(lts) => search.matching(transform::letter_set(lts, trans)),
             Self::Literal(word) => transform::literal_search(search, word, expand, trans),
             Self::Exact(pat) => pat.search(search, false, trans),
@@ -465,7 +471,7 @@ impl Pattern {
 
     pub fn implicit_transliteration(&self) -> bool {
         match self {
-            &Self::Assert(mut lts) | &Self::Set(mut lts) => {
+            &Self::AssertNext(mut lts) | &Self::AssertPrev(mut lts) | &Self::Set(mut lts) => {
                 if lts.is_complement() {
                     lts = lts.complement();
                 }
@@ -643,10 +649,19 @@ impl Pattern {
     fn parse_assert(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
-        if let Some('[') = chars.peek() {
-            Ok(Pattern::Assert(Self::parse_bracket(chars)?))
-        } else {
-            Err(ParseError::InvalidAssert)
+        let mut assert: fn(LetterSet) -> Self = Pattern::AssertNext;
+        if chars.peek() == Some(&'<') {
+            chars.next();
+            assert = Pattern::AssertPrev;
+        }
+
+        match chars.peek() {
+            Some('[') => Ok(assert(Self::parse_bracket(chars)?)),
+            Some('\\') => {
+                chars.next();
+                Ok(assert(Self::parse_escape(chars)?))
+            }
+            _ => Err(ParseError::InvalidAssert),
         }
     }
 
@@ -670,34 +685,72 @@ impl Pattern {
     fn parse_bracket(chars: &mut Chars) -> Result<LetterSet, ParseError> {
         chars.next();
 
-        let mut allowed = LetterSet::empty();
+        let mut allowed = LetterSet::any();
+
+        let mut last_char = '[';
         let mut negated = false;
+
         if let Some('^') = chars.peek() {
             chars.next();
+            last_char = '^';
             negated = true;
         }
 
         loop {
+            let mut set = Self::parse_union(chars)?;
+            if set.is_empty() {
+                return Err(ParseError::EmptyUnion(last_char));
+            }
+
+            if negated {
+                set = set.complement();
+            }
+
+            allowed = allowed.intersect(set);
+
             match chars.next() {
                 None => {
                     return Err(ParseError::Missing(SurroundKind::Bracket));
                 }
+                Some(']') => {
+                    return Ok(allowed);
+                }
+                Some('&') => {
+                    last_char = '&';
+                    negated = false;
+                }
+                Some('^') => {
+                    last_char = '^';
+                    negated = true;
+                }
+                Some(ch) => {
+                    return Err(Query::expected_character(SurroundKind::Bracket, ch));
+                }
+            }
+        }
+    }
+
+    fn parse_union(chars: &mut Chars) -> Result<LetterSet, ParseError> {
+        let mut set = LetterSet::empty();
+
+        loop {
+            match chars.peek() {
+                None | Some(']' | '&' | '^') => {
+                    return Ok(set);
+                }
                 Some('-') => {
                     return Err(ParseError::PartialRange);
                 }
-                Some(']') => {
-                    if negated {
-                        allowed = allowed.complement();
-                    }
-
-                    return Ok(allowed);
-                }
                 Some('\\') => {
-                    allowed = allowed.union(Self::parse_escape(chars)?);
+                    chars.next();
+                    set = set.union(Self::parse_escape(chars)?);
                 }
-                Some(' ') => {}
-                Some(ch) => {
-                    allowed = allowed.union(Self::parse_range(chars, ch)?);
+                Some(' ') => {
+                    chars.next();
+                }
+                Some(&ch) => {
+                    chars.next();
+                    set = set.union(Self::parse_range(chars, ch)?);
                 }
             }
         }

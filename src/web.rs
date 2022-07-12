@@ -756,16 +756,16 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
                 let with_a = lit.as_ref() + word![A];
                 let without_a = mem::replace(last, Pattern::Empty);
 
-                // <last> = (<last>A|<last>(&[\V-A]|(&[^\V]|>)@))
+                // <last> = (<last>A|<last>(&[\V^A]|(&[^\V]|>)@))
                 *last = Pattern::Alternative(
                     Box::new(Pattern::Literal(with_a)),
                     Box::new(Pattern::Concat(
                         Box::new(without_a),
                         Box::new(Pattern::Alternative(
-                            Box::new(Pattern::Assert(VOWEL_NOT_A)),
+                            Box::new(Pattern::AssertNext(VOWEL_NOT_A)),
                             Box::new(Pattern::Concat(
                                 Box::new(Pattern::Alternative(
-                                    Box::new(Pattern::Assert(LetterSet::vowel().complement())),
+                                    Box::new(Pattern::AssertNext(LetterSet::vowel().complement())),
                                     Box::new(Pattern::AssertEnd),
                                 )),
                                 Box::new(Pattern::MarkExpanded),
@@ -779,11 +779,11 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
                 // equivalent since A is always first in dictionary order,
                 // so whether its an exact match will not affect the ordering.
 
-                // <pat> = <pat>(&[\V]|@)
+                // <pat> = <pat>(&\V|@)
                 pat = Pattern::Concat(
                     Box::new(pat),
                     Box::new(Pattern::Alternative(
-                        Box::new(Pattern::Assert(LetterSet::vowel())),
+                        Box::new(Pattern::AssertNext(LetterSet::vowel())),
                         Box::new(Pattern::MarkExpanded),
                     )),
                 );
