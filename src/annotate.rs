@@ -555,18 +555,6 @@ fn get_specials() -> Specials {
         );
     }
 
-    // Treat Ai as a vowel adjective to prevent it being used wrongly
-    let ai = word![Ai];
-
-    map.insert(
-        ai,
-        SpecialWord {
-            if_matches: KindSet::single(PeyarAdai),
-            likelihood: Prefix,
-            then_insert: vec![(ai, &[VowelAdjective])],
-        },
-    );
-
     let aana = word![LongA, AlveolarN, A];
 
     map.insert(
@@ -634,6 +622,18 @@ fn get_specials() -> Specials {
             if_matches: KindSet::single(ThunaiVinai),
             likelihood: Regular,
             then_insert: vec![(maattu, &[GeneralStem, SpecialA]), (maattaa, &[Negative])],
+        },
+    );
+
+    // Require Ai to be a prefix to prevent it being used wrongly
+    let ai = word![Ai];
+
+    map.insert(
+        ai,
+        SpecialWord {
+            if_matches: KindSet::single(PeyarAdai),
+            likelihood: Prefix,
+            then_insert: vec![(ai, &[Done])],
         },
     );
 
