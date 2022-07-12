@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::mem;
 
 use crate::dictionary::{Entry, EntryIndex, Loc, WordData, WordIndex, ENTRIES, NO_WORD};
 use crate::tamil::{Letter, LetterSet, Word};
@@ -297,6 +298,18 @@ impl SearchResult {
 
     fn entry_intersection(&self, set: &mut HashSet<EntryIndex>) {
         set.retain(|entry| self.map.contains_key(entry));
+    }
+
+    pub fn union(mut self, mut other: Self) -> Self {
+        if other.len() > self.len() {
+            mem::swap(&mut self, &mut other);
+        }
+
+        for (index, entry) in other.map {
+            self.insert_entry(index, entry, false);
+        }
+
+        self
     }
 
     pub fn filter(intersect: Vec<Self>, difference: Vec<Self>, kinds: KindSet) -> Self {

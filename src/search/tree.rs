@@ -12,13 +12,13 @@ lazy_static! {
     static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
     static ref DEFINITION_TREES: SearchTrees =
         build_trees("definition", dictionary::definition_words());
-    static ref EMPTY_MAP: BTreeMap<Letter, Tree<Loc>> = BTreeMap::new();
+    static ref EMPTY_MAP: BTreeMap<Letter, Tree> = BTreeMap::new();
 }
 
 #[derive(Debug)]
 struct SearchTrees {
-    prefix_tree: Tree<Loc>,
-    suffix_tree: Tree<Loc>,
+    prefix_tree: Tree,
+    suffix_tree: Tree,
 }
 
 pub fn search_word() -> TreeSearch {
@@ -86,7 +86,7 @@ pub enum SearchError {
 
 #[derive(Clone, Debug)]
 pub struct TreeSearch {
-    branches: Vec<SearchBranch<Loc>>,
+    branches: Vec<SearchBranch>,
 }
 
 impl TreeSearch {
@@ -102,6 +102,20 @@ impl TreeSearch {
             .collect();
 
         Self { branches }
+    }
+
+    fn add_branches(
+        result: &mut SearchResult,
+        total_count: &mut usize,
+        branches: Vec<SearchBranch>,
+    ) -> Result<(), SearchError> {
+        for branch in branches {
+            if branch.prev_letter.is_some() {
+                branch.add_to_result(result, total_count, branch.prefix.is_empty())?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -239,11 +253,35 @@ impl Search for TreeSearch {
     }
 
     fn end(self) -> Result<Self::Output, Self::Error> {
-        let mut result = SearchResult::default();
-        let mut total_count = 0;
+        let mut prefix_branches = Vec::new();
+        let mut suffix_branches = Vec::new();
+
+        // Split the branches into prefix and suffix branches
         for branch in self.branches {
-            if branch.prev_letter.is_some() {
-                branch.add_to_result(&mut result, &mut total_count, branch.prefix.is_empty())?;
+            if branch.is_prefix_tree {
+                prefix_branches.push(branch);
+            } else {
+                suffix_branches.push(branch);
+            }
+        }
+
+        // If the prefix branches are empty, treat suffix as prefix
+        if prefix_branches.is_empty() {
+            mem::swap(&mut prefix_branches, &mut suffix_branches);
+        }
+
+        let mut total_count = 0;
+        let mut result = SearchResult::default();
+
+        // Always require the prefix branches
+        Self::add_branches(&mut result, &mut total_count, prefix_branches)?;
+
+        // If there are suffix branches, attempt to add them too
+        if !suffix_branches.is_empty() {
+            let mut suffix_result = SearchResult::default();
+
+            if Self::add_branches(&mut suffix_result, &mut total_count, suffix_branches).is_ok() {
+                return Ok(result.union(suffix_result));
             }
         }
 
@@ -271,7 +309,7 @@ impl Suggest for TreeSearch {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct SearchBranch<T: Eq + 'static> {
+struct SearchBranch<T: Eq + 'static = Loc> {
     is_prefix_tree: bool,
     is_expanded: bool,
     is_frozen: bool,
@@ -471,7 +509,7 @@ impl<T: Eq + Copy> SearchBranch<T> {
     }
 }
 
-impl SearchBranch<Loc> {
+impl SearchBranch {
     fn add_to_result(
         self,
         result: &mut SearchResult,
@@ -547,7 +585,7 @@ impl SearchBranch<Loc> {
 }
 
 #[derive(Debug)]
-struct Tree<T: Eq> {
+struct Tree<T: Eq = Loc> {
     prefix: &'static Word,
     leaves: Vec<T>,
     branches: BTreeMap<Letter, Tree<T>>,
