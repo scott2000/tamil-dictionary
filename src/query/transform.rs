@@ -568,7 +568,7 @@ fn check_join<S: Search>(
     if let Some(joins) = JOINS.get(lt, next) {
         letters.adv();
 
-        let mut iter = joins.iter().cloned();
+        let mut iter = joins.iter().copied();
         let (left, right) = iter.next().unwrap();
 
         let base = mem::replace(search, two_letter_sets(search, left, right)?);

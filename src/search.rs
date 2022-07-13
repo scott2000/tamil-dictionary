@@ -326,7 +326,7 @@ impl SearchResult {
         }
 
         // Find the intersection of the positive results
-        let mut intersect_set = intersect[0].map.keys().cloned().collect();
+        let mut intersect_set = intersect[0].map.keys().copied().collect();
         for intersect in &intersect[1..] {
             intersect.entry_intersection(&mut intersect_set);
         }

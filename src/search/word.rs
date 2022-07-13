@@ -38,7 +38,7 @@ impl<'a> Search for WordSearch<'a> {
         let branches = self
             .branches
             .iter()
-            .cloned()
+            .copied()
             .filter(|&branch| branch == 0)
             .collect();
 
@@ -49,7 +49,7 @@ impl<'a> Search for WordSearch<'a> {
         let branches = self
             .branches
             .iter()
-            .cloned()
+            .copied()
             .filter(|&branch| branch != 0 && branch != self.word.len())
             .collect();
 
@@ -60,7 +60,7 @@ impl<'a> Search for WordSearch<'a> {
         let branches = self
             .branches
             .iter()
-            .cloned()
+            .copied()
             .filter(|&branch| branch == self.word.len())
             .collect();
 
@@ -71,7 +71,7 @@ impl<'a> Search for WordSearch<'a> {
         let branches = self
             .branches
             .iter()
-            .cloned()
+            .copied()
             .filter(|&branch| {
                 self.word
                     .get(branch)
@@ -91,7 +91,7 @@ impl<'a> Search for WordSearch<'a> {
         let branches = self
             .branches
             .iter()
-            .cloned()
+            .copied()
             .filter(|&branch| {
                 branch
                     .checked_sub(1)
@@ -114,7 +114,7 @@ impl<'a> Search for WordSearch<'a> {
         let branches = self
             .branches
             .iter()
-            .cloned()
+            .copied()
             .filter_map(|branch| {
                 self.word
                     .get(branch)
