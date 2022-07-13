@@ -7,6 +7,9 @@ use crate::tamil::{Letter, LetterSet, Word};
 
 use super::Search;
 
+#[must_use = "This is a debug function call that will not compile in release mode"]
+pub struct DebugResult;
+
 #[derive(Clone)]
 pub struct DebugSearch(Rc<AtomicUsize>, usize);
 
@@ -25,7 +28,7 @@ impl DebugSearch {
 }
 
 impl Search for DebugSearch {
-    type Output = usize;
+    type Output = DebugResult;
     type Error = Infallible;
 
     fn is_empty(&self) -> bool {
@@ -87,6 +90,6 @@ impl Search for DebugSearch {
     fn end(self) -> Result<Self::Output, Self::Error> {
         let Self(_, id) = self;
         eprintln!("res = {id}");
-        Ok(id)
+        Ok(DebugResult)
     }
 }

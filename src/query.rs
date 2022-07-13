@@ -239,30 +239,28 @@ impl Query {
     }
 
     #[cfg(debug_assertions)]
-    pub fn debug(&self) -> usize {
-        let mut total = 0;
-
+    pub fn debug(&self) -> crate::search::debug::DebugResult {
         for pat in &self.pos_word {
             eprintln!("[DEBUG] {pat:?}:");
-            total += pat.debug(ExpandOptions::FULL);
+            let _ = pat.debug(ExpandOptions::FULL);
         }
 
         for pat in &self.neg_word {
             eprintln!("[DEBUG] <neg> {pat:?}:");
-            total += pat.debug(ExpandOptions::TRANS);
+            let _ = pat.debug(ExpandOptions::TRANS);
         }
 
         for pat in &self.pos_def {
             eprintln!("[DEBUG] <def> {pat:?}:");
-            total += pat.debug(ExpandOptions::MINOR);
+            let _ = pat.debug(ExpandOptions::MINOR);
         }
 
         for pat in &self.neg_def {
             eprintln!("[DEBUG] <neg def> {pat:?}:");
-            total += pat.debug(ExpandOptions::MINOR);
+            let _ = pat.debug(ExpandOptions::MINOR);
         }
 
-        total
+        crate::search::debug::DebugResult
     }
 
     pub fn search(&self) -> Result<(SearchResult, SearchKind), tree::SearchError> {
@@ -610,7 +608,7 @@ impl Pattern {
     }
 
     #[cfg(debug_assertions)]
-    pub fn debug(&self, opts: ExpandOptions) -> usize {
+    pub fn debug(&self, opts: ExpandOptions) -> crate::search::debug::DebugResult {
         use crate::search::debug::DebugSearch;
 
         let search = DebugSearch::start();
