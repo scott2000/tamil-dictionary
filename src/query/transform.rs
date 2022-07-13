@@ -286,7 +286,7 @@ lazy_static! {
             None,
         );
 
-        const PALATALIZATION_TRIGGER: LetterSet = letterset![I, LongI, E, LongE, Ai, Y];
+        const PALATALIZATION_TRIGGER: LetterSet = letterset![I, LongI, Ai, Y];
 
         // (AlveolarN, AlveolarN) => (AlveolarN, AlveolarR)
         joins.insert_special(
@@ -491,7 +491,7 @@ pub fn literal_search<S: Search>(
                 // Check for following consonant and either A or Ai
                 let a_transform = || {
                     letters.peek_matches(LetterSet::consonant())
-                        && letters.peek_over_matches(letterset![A, Ai])
+                        && letters.peek_over_matches(letterset![A, E, Ai])
                 };
 
                 // Check for colloquial sound changes
@@ -529,12 +529,21 @@ pub fn literal_search<S: Search>(
                         continue;
                     }
 
-                    // Check for "e" (/i/ -> [e] / #_Ca)
-                    Letter::E if a_transform() => {
-                        search = search
-                            .literal(word![I])
+                    // Check for "e" (/i/ -> [e] / #_Ca, /ai/ -> [e])
+                    Letter::E => {
+                        let with_e = search
+                            .literal(word![Ai])
                             .marking_expanded()
                             .joining(search.literal(word![E]))?;
+
+                        if a_transform() {
+                            search = search
+                                .literal(word![I])
+                                .marking_expanded()
+                                .joining(with_e)?;
+                        } else {
+                            search = with_e;
+                        }
 
                         continue;
                     }
