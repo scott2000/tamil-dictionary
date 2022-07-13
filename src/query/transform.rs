@@ -494,86 +494,139 @@ pub fn literal_search<S: Search>(
                 continue;
             }
 
-            // Check for following consonant and either A or Ai
-            let a_transform = || {
-                letters.peek_matches(LetterSet::consonant())
-                    && letters.peek_over_matches(letterset![A, Ai])
-            };
+            if opts.expand == ExpandLevel::Full {
+                // Check for following consonant and either A or Ai
+                let a_transform = || {
+                    letters.peek_matches(LetterSet::consonant())
+                        && letters.peek_over_matches(letterset![A, Ai])
+                };
+
+                // Check for colloquial sound changes
+                match lt {
+                    // Check for "a" (/ai/ -> [a])
+                    Letter::A => {
+                        search = search
+                            .literal(word![Ai])
+                            .marking_expanded()
+                            .joining(search.literal(word![A]))?;
+
+                        continue;
+                    }
+
+                    // Check for "aa" (/aay/ -> [aa])
+                    Letter::LongA => {
+                        search = search.literal(word![LongA]);
+                        search = search
+                            .literal(word![Y])
+                            .marking_expanded()
+                            .joining(search)?;
+
+                        continue;
+                    }
+
+                    // Check for "u" (/i/ -> [u] / #p_R)
+                    Letter::U if !a_transform() => {
+                        search = search
+                            .asserting_prev_matching(letterset![P, M])?
+                            .literal(word![I])
+                            .asserting_next(LetterSet::retroflex())
+                            .marking_expanded()
+                            .joining(search.literal(word![U]))?;
+
+                        continue;
+                    }
+
+                    // Check for "e" (/i/ -> [e] / #_Ca)
+                    Letter::E if a_transform() => {
+                        search = search
+                            .literal(word![I])
+                            .marking_expanded()
+                            .joining(search.literal(word![E]))?;
+
+                        continue;
+                    }
+
+                    Letter::O => {
+                        if a_transform() {
+                            // Check for "o" (/u/ -> [o] / #_Ca, /i/ -> [o] / #p_Ra)
+                            search = search
+                                .asserting_prev_matching(letterset![P, M])?
+                                .literal(word![I])
+                                .asserting_next(LetterSet::retroflex())
+                                .joining(search.literal(word![U]))?
+                                .marking_expanded()
+                                .joining(search.literal(word![O]))?;
+                        } else {
+                            // Check for "o" (/e/ -> [o] / #p_R)
+                            search = search
+                                .asserting_prev_matching(letterset![P, M])?
+                                .literal(word![E])
+                                .asserting_next(LetterSet::retroflex())
+                                .marking_expanded()
+                                .joining(search.literal(word![O]))?;
+                        }
+
+                        continue;
+                    }
+
+                    // Check for retroflex "n" (alveolar /nr/ -> retroflex [n] / N_V)
+                    Letter::RetroN => {
+                        search = search
+                            .asserting_prev_matching(LetterSet::nedil())?
+                            .literal(word![AlveolarN, AlveolarR])
+                            .asserting_next(LetterSet::vowel())
+                            .marking_expanded()
+                            .joining(search.literal(word![RetroN]))?;
+
+                        continue;
+                    }
+
+                    // Check for "r" (vallinam /r/ -> idaiyinam [r] / V_V)
+                    Letter::R => {
+                        search = search
+                            .asserting_prev_matching(LetterSet::vowel())?
+                            .literal(word![AlveolarR])
+                            .asserting_next(LetterSet::vowel())
+                            .marking_expanded()
+                            .joining(search.literal(word![R]))?;
+
+                        continue;
+                    }
+
+                    // Check for "v" (/p/ -> [v] / V_V)
+                    Letter::V => {
+                        search = search
+                            .asserting_prev_matching(LetterSet::vowel())?
+                            .literal(word![P])
+                            .asserting_next(LetterSet::vowel())
+                            .marking_expanded()
+                            .joining(search.literal(word![V]))?;
+
+                        continue;
+                    }
+
+                    // Check for retroflex "l" (/z/ -> [l])
+                    Letter::RetroL => {
+                        search = search
+                            .literal(word![Zh])
+                            .marking_expanded()
+                            .joining(search.literal(word![RetroL]))?;
+
+                        continue;
+                    }
+
+                    _ => {}
+                }
+            }
 
             // Check for variations of vowels and "n"
             match lt {
-                // Check for "a" (/ai/ -> [a])
-                Letter::A => {
-                    search = search
-                        .literal(word![Ai])
-                        .marking_expanded()
-                        .joining(search.literal(word![A]))?;
-
-                    continue;
-                }
-
-                // Check for "aa" (/aay/ -> [aa])
-                Letter::LongA => {
-                    search = search.literal(word![LongA]);
-                    search = search
-                        .literal(word![Y])
-                        .marking_expanded()
-                        .joining(search)?;
-
-                    continue;
-                }
-
-                // Check for "u" (/i/ -> [u] / #p_R)
-                Letter::U if !a_transform() => {
-                    search = search
-                        .asserting_prev_matching(letterset![P, M])?
-                        .literal(word![I])
-                        .asserting_next(LetterSet::retroflex())
-                        .marking_expanded()
-                        .joining(search.literal(word![U]))?;
-
-                    continue;
-                }
-
-                // Check for "e" (/i/ -> [e] / #_Ca)
-                Letter::E if a_transform() => {
-                    search = search
-                        .literal(word![I])
-                        .marking_expanded()
-                        .joining(search.literal(word![E]))?;
-
-                    continue;
-                }
-
                 // Check for "ai"
                 Letter::Ai => {
                     search = search
                         .literal(word![A, Y])
                         .marking_expanded()
                         .joining(search.literal(word![Ai]))?;
-
-                    continue;
-                }
-
-                Letter::O => {
-                    if a_transform() {
-                        // Check for "o" (/u/ -> [o] / #_Ca, /i/ -> [o] / #p_Ra)
-                        search = search
-                            .asserting_prev_matching(letterset![P, M])?
-                            .literal(word![I])
-                            .asserting_next(LetterSet::retroflex())
-                            .joining(search.literal(word![U]))?
-                            .marking_expanded()
-                            .joining(search.literal(word![O]))?;
-                    } else {
-                        // Check for "o" (/e/ -> [o] / #p_R)
-                        search = search
-                            .asserting_prev_matching(letterset![P, M])?
-                            .literal(word![E])
-                            .asserting_next(LetterSet::retroflex())
-                            .marking_expanded()
-                            .joining(search.literal(word![O]))?;
-                    }
 
                     continue;
                 }
@@ -606,52 +659,6 @@ pub fn literal_search<S: Search>(
                         .asserting_next(LetterSet::vowel())
                         .marking_expanded()
                         .joining(search.literal(word![AlveolarN]))?;
-
-                    continue;
-                }
-
-                // Check for retroflex "l" (/z/ -> [l])
-                Letter::RetroL => {
-                    search = search
-                        .literal(word![Zh])
-                        .marking_expanded()
-                        .joining(search.literal(word![RetroL]))?;
-
-                    continue;
-                }
-
-                // Check for retroflex "n" (alveolar /nr/ -> retroflex [n] / N_V)
-                Letter::RetroN => {
-                    search = search
-                        .asserting_prev_matching(LetterSet::nedil())?
-                        .literal(word![AlveolarN, AlveolarR])
-                        .asserting_next(LetterSet::vowel())
-                        .marking_expanded()
-                        .joining(search.literal(word![RetroN]))?;
-
-                    continue;
-                }
-
-                // Check for "r" (vallinam /r/ -> idaiyinam [r] / V_V)
-                Letter::R => {
-                    search = search
-                        .asserting_prev_matching(LetterSet::vowel())?
-                        .literal(word![AlveolarR])
-                        .asserting_next(LetterSet::vowel())
-                        .marking_expanded()
-                        .joining(search.literal(word![R]))?;
-
-                    continue;
-                }
-
-                // Check for "v" (/p/ -> [v] / V_V)
-                Letter::V => {
-                    search = search
-                        .asserting_prev_matching(LetterSet::vowel())?
-                        .literal(word![P])
-                        .asserting_next(LetterSet::vowel())
-                        .marking_expanded()
-                        .joining(search.literal(word![V]))?;
 
                     continue;
                 }

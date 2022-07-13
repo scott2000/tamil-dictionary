@@ -238,6 +238,33 @@ impl Query {
         }
     }
 
+    #[cfg(debug_assertions)]
+    pub fn debug(&self) -> usize {
+        let mut total = 0;
+
+        for pat in &self.pos_word {
+            eprintln!("[DEBUG] {pat:?}:");
+            total += pat.debug(ExpandOptions::FULL);
+        }
+
+        for pat in &self.neg_word {
+            eprintln!("[DEBUG] <neg> {pat:?}:");
+            total += pat.debug(ExpandOptions::TRANS);
+        }
+
+        for pat in &self.pos_def {
+            eprintln!("[DEBUG] <def> {pat:?}:");
+            total += pat.debug(ExpandOptions::MINOR);
+        }
+
+        for pat in &self.neg_def {
+            eprintln!("[DEBUG] <neg def> {pat:?}:");
+            total += pat.debug(ExpandOptions::MINOR);
+        }
+
+        total
+    }
+
     pub fn search(&self) -> Result<(SearchResult, SearchKind), tree::SearchError> {
         let mut intersect = Vec::new();
         let mut difference = Vec::new();
@@ -580,6 +607,17 @@ impl Pattern {
         }
 
         pat
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn debug(&self, opts: ExpandOptions) -> usize {
+        use crate::search::debug::DebugSearch;
+
+        let search = DebugSearch::start();
+        self.search(search, opts)
+            .unwrap_or_else(|e| match e {})
+            .end()
+            .unwrap_or_else(|e| match e {})
     }
 
     fn parse_group(chars: &mut Chars) -> Result<Self, ParseError> {
