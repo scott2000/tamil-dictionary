@@ -35,7 +35,7 @@ pub enum ParseError {
     #[error("Invalid syntax: expected parentheses after hash symbol.")]
     InvalidExact,
     #[error("Invalid syntax: expected parentheses after percent symbol.")]
-    InvalidTransliteration,
+    InvalidExpand,
     #[error("Invalid syntax: expected character set for zero-width assertion.")]
     InvalidAssert,
     #[error("Invalid repetition: number must be between 0 and 255.")]
@@ -244,23 +244,35 @@ impl Query {
 
         // Search using positive word patterns
         for pat in &self.pos_word {
-            intersect.push(pat.search(tree::search_word(), true, true)?.end()?);
+            intersect.push(
+                pat.search(tree::search_word(), ExpandOptions::FULL)?
+                    .end()?,
+            );
         }
 
         // Search using positive definition patterns
         for pat in &self.pos_def {
-            intersect.push(pat.search(tree::search_definition(), true, false)?.end()?);
+            intersect.push(
+                pat.search(tree::search_definition(), ExpandOptions::MINOR)?
+                    .end()?,
+            );
         }
 
         let mut process_negatives = || {
             // Search using negative word patterns
             for pat in &self.neg_word {
-                difference.push(pat.search(tree::search_word(), false, true)?.end()?);
+                difference.push(
+                    pat.search(tree::search_word(), ExpandOptions::TRANS)?
+                        .end()?,
+                );
             }
 
             // Search using negative definition patterns
             for pat in &self.neg_def {
-                difference.push(pat.search(tree::search_definition(), false, false)?.end()?);
+                difference.push(
+                    pat.search(tree::search_definition(), ExpandOptions::MINOR)?
+                        .end()?,
+                );
             }
 
             Ok(())
@@ -281,12 +293,18 @@ impl Query {
             let mut process_definitions = || -> Result<(), tree::SearchError> {
                 // Search using positive word patterns as definition patterns
                 for pat in &self.pos_word {
-                    intersect.push(pat.search(tree::search_definition(), true, false)?.end()?);
+                    intersect.push(
+                        pat.search(tree::search_definition(), ExpandOptions::FULL_NO_TRANS)?
+                            .end()?,
+                    );
                 }
 
                 // Search using negative words patterns as definition patterns
                 for pat in &self.neg_word {
-                    difference.push(pat.search(tree::search_definition(), false, false)?.end()?);
+                    difference.push(
+                        pat.search(tree::search_definition(), ExpandOptions::MINOR)?
+                            .end()?,
+                    );
                 }
 
                 Ok(())
@@ -373,6 +391,47 @@ impl Query {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(u8)]
+pub enum ExpandLevel {
+    Exact,
+    Minor,
+    Full,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct ExpandOptions {
+    pub transliterate: bool,
+    pub expand: ExpandLevel,
+}
+
+impl ExpandOptions {
+    pub const EXACT: Self = Self {
+        transliterate: false,
+        expand: ExpandLevel::Exact,
+    };
+
+    pub const MINOR: Self = Self {
+        transliterate: false,
+        expand: ExpandLevel::Minor,
+    };
+
+    pub const TRANS: Self = Self {
+        transliterate: true,
+        expand: ExpandLevel::Minor,
+    };
+
+    pub const FULL_NO_TRANS: Self = Self {
+        transliterate: false,
+        expand: ExpandLevel::Full,
+    };
+
+    pub const FULL: Self = Self {
+        transliterate: true,
+        expand: ExpandLevel::Full,
+    };
+}
+
 #[derive(Debug)]
 pub enum Pattern {
     Empty,
@@ -384,8 +443,7 @@ pub enum Pattern {
     AssertPrev(LetterSet),
     Set(LetterSet),
     Literal(Box<Word>),
-    Exact(Box<Pattern>),
-    Trans(Box<Pattern>),
+    Expand(Box<Pattern>, ExpandOptions),
     Repeat(Box<Pattern>, u8, u8),
     Concat(Box<Pattern>, Box<Pattern>),
     Alternative(Box<Pattern>, Box<Pattern>),
@@ -410,7 +468,7 @@ impl Pattern {
         }
     }
 
-    pub fn search<S: Search>(&self, search: S, expand: bool, trans: bool) -> Result<S, S::Error> {
+    pub fn search<S: Search>(&self, search: S, opts: ExpandOptions) -> Result<S, S::Error> {
         if search.is_empty() {
             return Ok(search);
         }
@@ -421,18 +479,17 @@ impl Pattern {
             Self::AssertStart => Ok(search.asserting_start()),
             Self::AssertMiddle => Ok(search.asserting_middle()),
             Self::AssertEnd => Ok(search.asserting_end()),
-            &Self::AssertNext(lts) => Ok(search.asserting_next(transform::letter_set(lts, trans))),
+            &Self::AssertNext(lts) => Ok(search.asserting_next(transform::letter_set(lts, opts))),
             &Self::AssertPrev(lts) => {
-                Ok(search.asserting_prev_matching(transform::letter_set(lts, trans))?)
+                Ok(search.asserting_prev_matching(transform::letter_set(lts, opts))?)
             }
-            &Self::Set(lts) => search.matching(transform::letter_set(lts, trans)),
-            Self::Literal(word) => transform::literal_search(search, word, expand, trans),
-            Self::Exact(pat) => pat.search(search, false, trans),
-            Self::Trans(pat) => pat.search(search, expand, true),
+            &Self::Set(lts) => search.matching(transform::letter_set(lts, opts)),
+            Self::Literal(word) => transform::literal_search(search, word, opts),
+            &Self::Expand(ref pat, opts) => pat.search(search, opts),
             &Self::Repeat(ref pat, a, b) => {
                 let mut search = search;
                 for _ in 0..a {
-                    search = pat.search(search, expand, trans)?;
+                    search = pat.search(search, opts)?;
                 }
 
                 let mut result = search.clone();
@@ -441,28 +498,28 @@ impl Pattern {
                         break;
                     }
 
-                    search = pat.search(search, expand, trans)?;
+                    search = pat.search(search, opts)?;
                     result.join(&search)?;
                 }
 
                 Ok(result)
             }
             Self::Concat(a, b) => {
-                let search = a.search(search, expand, trans)?;
+                let search = a.search(search, opts)?;
                 if search.is_empty() {
                     Ok(search)
                 } else {
-                    b.search(search, expand, trans)
+                    b.search(search, opts)
                 }
             }
             Self::Alternative(a, b) => a
-                .search(search.clone(), expand, trans)?
-                .joining(b.search(search, expand, trans)?),
+                .search(search.clone(), opts)?
+                .joining(b.search(search, opts)?),
         }
     }
 
     pub fn suggest(&self, count: u32) -> Option<SuggestionList> {
-        if let Ok(search) = self.search(tree::search_word_prefix(), true, true) {
+        if let Ok(search) = self.search(tree::search_word_prefix(), ExpandOptions::FULL) {
             Some(search.suggest(count))
         } else {
             None
@@ -493,13 +550,16 @@ impl Pattern {
 
     pub fn quoted(self) -> Self {
         // Replace "X" with #(<X>)
-        Pattern::Exact(Box::new(Pattern::Concat(
-            Box::new(Pattern::AssertStart),
+        Pattern::Expand(
             Box::new(Pattern::Concat(
-                Box::new(self),
-                Box::new(Pattern::AssertEnd),
+                Box::new(Pattern::AssertStart),
+                Box::new(Pattern::Concat(
+                    Box::new(self),
+                    Box::new(Pattern::AssertEnd),
+                )),
             )),
-        )))
+            ExpandOptions::EXACT,
+        )
     }
 
     pub fn last(&self) -> &Self {
@@ -544,7 +604,7 @@ impl Pattern {
         let pat = match chars.peek() {
             None => Self::Empty,
             Some('#') => Self::parse_exact(chars)?,
-            Some('%') => Self::parse_trans(chars)?,
+            Some('%') => Self::parse_expand(chars)?,
             Some('&') => Self::parse_assert(chars)?,
             Some('(') => Self::parse_paren(chars)?,
             Some('[') => Self::Set(Self::parse_bracket(chars)?),
@@ -630,19 +690,25 @@ impl Pattern {
         chars.next();
 
         if let Some('(') = chars.peek() {
-            Ok(Pattern::Exact(Box::new(Self::parse_paren(chars)?)))
+            Ok(Pattern::Expand(
+                Box::new(Self::parse_paren(chars)?),
+                ExpandOptions::EXACT,
+            ))
         } else {
             Err(ParseError::InvalidExact)
         }
     }
 
-    fn parse_trans(chars: &mut Chars) -> Result<Self, ParseError> {
+    fn parse_expand(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
         if let Some('(') = chars.peek() {
-            Ok(Pattern::Trans(Box::new(Self::parse_paren(chars)?)))
+            Ok(Pattern::Expand(
+                Box::new(Self::parse_paren(chars)?),
+                ExpandOptions::FULL,
+            ))
         } else {
-            Err(ParseError::InvalidTransliteration)
+            Err(ParseError::InvalidExpand)
         }
     }
 

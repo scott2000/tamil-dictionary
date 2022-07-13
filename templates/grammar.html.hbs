@@ -21,8 +21,7 @@ separate patterns: '&lt;A B C&gt;'.
 
 During search, some expansions are applied to queries. These expansions help
 find related words even if they don't exactly match what you entered.
-Expansions are enabled by default for patterns unless they start with '-',
-excluding them from the results. Use '#(...)' to disable expansions.
+Expansions are enabled by default. Use '#(...)' to disable them.
 
 When searching for a word, you can either use Tamil letters directly, or
 search with transliteration using Latin letters (a-z). In definition searches,
@@ -47,8 +46,8 @@ single = '-'                        // Separator (ignored)
        | '@'                        // Mark branch as unlikely
        | '_'                        // Match any letter
        | '(' alts ')'               // Parentheses for grouping
-       | '#(' alts ')'              // Disable expansions
-       | '%(' alts ')'              // Enable transliteration
+       | '#(' alts ')'              // Disable expansions and transliteration
+       | '%(' alts ')'              // Enable expansions and transliteration
        | set                        // Set of possible letters
        | '&amp;' set                    // Lookahead assertion
        | '&amp;&lt;' set                   // Lookbehind assertion

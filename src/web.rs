@@ -20,7 +20,7 @@ use rocket_dyn_templates::Template;
 
 use crate::annotate::{TextSegment, WordCount};
 use crate::dictionary::*;
-use crate::query::{Pattern, Query, SearchKind};
+use crate::query::{ExpandOptions, Pattern, Query, SearchKind};
 use crate::search::word::WordSearch;
 use crate::search::{Search, SearchRankingEntry};
 use crate::tamil::{self, LetterSet, Word};
@@ -65,7 +65,7 @@ impl Example {
         debug_assert!(
             Pattern::parse(latin)
                 .expect("invalid pattern")
-                .search(WordSearch::new(tamil), false, true)
+                .search(WordSearch::new(tamil), ExpandOptions::TRANS)
                 .unwrap_or_else(|e| match e {})
                 .end()
                 .unwrap_or_else(|e| match e {}),

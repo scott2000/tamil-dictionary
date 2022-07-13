@@ -4,11 +4,13 @@ use crate::search::Search;
 use crate::tamil::{Letter, LetterSet, Word, WordIter};
 use crate::HashMap;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+use super::{ExpandLevel, ExpandOptions};
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct JoinEntry {
     left: LetterSet,
     right: LetterSet,
-    expanded: bool,
+    expand: ExpandLevel,
     prev: Option<LetterSet>,
 }
 
@@ -21,10 +23,10 @@ impl JoinEntry {
             two_letter_sets(search, self.left, self.right)?
         };
 
-        if self.expanded {
-            Ok(search)
-        } else {
+        if self.expand != ExpandLevel::Exact {
             Ok(search.marking_expanded())
+        } else {
+            Ok(search)
         }
     }
 }
@@ -52,7 +54,7 @@ impl Joins {
         let to = JoinEntry {
             left: to.0,
             right: to.1,
-            expanded: true,
+            expand: ExpandLevel::Exact,
             prev: None,
         };
 
@@ -70,7 +72,7 @@ impl Joins {
             JoinEntry {
                 left: letterset![from.0],
                 right: letterset![from.1],
-                expanded: true,
+                expand: ExpandLevel::Full,
                 prev: None,
             },
         );
@@ -80,20 +82,41 @@ impl Joins {
             JoinEntry {
                 left: letterset![to.0],
                 right: letterset![to.1],
-                expanded: false,
+                expand: ExpandLevel::Full,
                 prev,
             },
         );
     }
 
-    pub fn insert_pair(&mut self, a: (Letter, Letter), b: (Letter, Letter)) {
-        let a_set = (letterset![a.0], letterset![a.1]);
-        let b_set = (letterset![b.0], letterset![b.1]);
+    pub fn insert_entry_pair(
+        &mut self,
+        a: (Letter, Letter),
+        b: (Letter, Letter),
+        expand: ExpandLevel,
+        prev: Option<LetterSet>,
+    ) {
+        let a_entry = JoinEntry {
+            left: letterset![a.0],
+            right: letterset![a.1],
+            expand,
+            prev,
+        };
 
-        self.insert(a, a_set);
-        self.insert(a, b_set);
-        self.insert(b, a_set);
-        self.insert(b, b_set);
+        let b_entry = JoinEntry {
+            left: letterset![b.0],
+            right: letterset![b.1],
+            expand,
+            prev,
+        };
+
+        self.insert_entry(a, a_entry);
+        self.insert_entry(a, b_entry);
+        self.insert_entry(b, a_entry);
+        self.insert_entry(b, b_entry);
+    }
+
+    pub fn insert_pair(&mut self, a: (Letter, Letter), b: (Letter, Letter)) {
+        self.insert_entry_pair(a, b, ExpandLevel::Exact, None);
     }
 
     pub fn get(&self, left: Letter, right: Letter) -> Option<&[JoinEntry]> {
@@ -254,35 +277,19 @@ lazy_static! {
             (Letter::AlveolarN, Letter::M),
         );
 
-        // TODO: Allow these even when the other "special" transformations aren't allowed.
-        //       Alternatively, make both these and the single letter (N <=> AlveolarN)
-        //       transformations be non-expanded.
-
         // (K, Sh)
-        joins.insert_special(
+        joins.insert_entry_pair(
             (Letter::K, Letter::Sh),
             (Letter::RetroT, Letter::Ch),
-            None,
-        );
-
-        // (RetroT, Ch)
-        joins.insert_special(
-            (Letter::RetroT, Letter::Ch),
-            (Letter::K, Letter::Sh),
+            ExpandLevel::Minor,
             None,
         );
 
         // (N, N)
-        joins.insert_special(
+        joins.insert_entry_pair(
             (Letter::N, Letter::N),
             (Letter::AlveolarN, Letter::AlveolarN),
-            None,
-        );
-
-        // (AlveolarN, AlveolarN)
-        joins.insert_special(
-            (Letter::AlveolarN, Letter::AlveolarN),
-            (Letter::N, Letter::N),
+            ExpandLevel::Minor,
             None,
         );
 
@@ -394,8 +401,8 @@ pub fn grantha_transform(lt: Letter) -> Option<(Letter, bool)> {
     }
 }
 
-pub fn letter_set(mut lts: LetterSet, trans: bool) -> LetterSet {
-    if trans {
+pub fn letter_set(mut lts: LetterSet, opts: ExpandOptions) -> LetterSet {
+    if opts.transliterate {
         // If the letter set is negated, transliterate the non-negated version
         let complement = lts.is_complement();
 
@@ -416,10 +423,9 @@ pub fn letter_set(mut lts: LetterSet, trans: bool) -> LetterSet {
 pub fn literal_search<S: Search>(
     mut search: S,
     word: &Word,
-    expand: bool,
-    trans: bool,
+    opts: ExpandOptions,
 ) -> Result<S, S::Error> {
-    if !expand && !trans {
+    if opts == ExpandOptions::EXACT {
         return Ok(search.literal(word));
     }
 
@@ -430,7 +436,9 @@ pub fn literal_search<S: Search>(
             break;
         }
 
-        if trans {
+        if opts.transliterate {
+            let expand = opts.expand == ExpandLevel::Full;
+
             // Check for transliteration
             if let Some(result) = transliterate(&search, expand, &mut letters, lt)? {
                 search = result;
@@ -438,7 +446,7 @@ pub fn literal_search<S: Search>(
             }
         }
 
-        if expand {
+        if opts.expand != ExpandLevel::Exact {
             // Check for intervocalic grantha transformations
             if let Some((alt, allow_start)) = grantha_transform(lt) {
                 let prev_vowel = letters.prev().map(Letter::is_vowel).unwrap_or(allow_start);
@@ -456,7 +464,10 @@ pub fn literal_search<S: Search>(
 
             if let Some(next) = letters.peek() {
                 // Check for various common suffixes to make optional
-                if letters.index > 1 && check_suffix(&mut search, &mut letters)? {
+                if opts.expand == ExpandLevel::Full
+                    && letters.index > 1
+                    && check_suffix(&mut search, &mut letters)?
+                {
                     break;
                 }
 
@@ -467,7 +478,7 @@ pub fn literal_search<S: Search>(
                     check_expanded_diphthongs,
                     check_final,
                 ] {
-                    if check(&mut search, &mut letters, lt, next)? {
+                    if check(&mut search, &mut letters, opts.expand, lt, next)? {
                         continue 'outer;
                     }
                 }
@@ -666,7 +677,7 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
             let mut with_double = with_single.literal(word![lt]);
 
             // Also check for joining transformations
-            if check_join(search, letters, lt, next)? {
+            if check_join(search, letters, ExpandLevel::Full, lt, next)? {
                 with_double.join(search)?;
             }
 
@@ -798,30 +809,33 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
 fn check_join<S: Search>(
     search: &mut S,
     letters: &mut WordIter,
+    expand: ExpandLevel,
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
     if let Some(joins) = JOINS.get(lt, next) {
-        letters.adv();
+        let mut iter = joins.iter().filter(|entry| entry.expand <= expand);
 
-        let mut iter = joins.iter();
+        if let Some(entry) = iter.next() {
+            letters.adv();
 
-        let entry = iter.next().unwrap();
-        let base = mem::replace(search, entry.matching(search)?);
+            let base = mem::replace(search, entry.matching(search)?);
 
-        for entry in iter {
-            search.join(&entry.matching(&base)?)?;
+            for entry in iter {
+                search.join(&entry.matching(&base)?)?;
+            }
+
+            return Ok(true);
         }
-
-        Ok(true)
-    } else {
-        Ok(false)
     }
+
+    Ok(false)
 }
 
 fn check_initial<S: Search>(
     search: &mut S,
     letters: &mut WordIter,
+    _expand: ExpandLevel,
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
@@ -865,6 +879,7 @@ fn check_initial<S: Search>(
 fn check_expanded_diphthongs<S: Search>(
     search: &mut S,
     letters: &mut WordIter,
+    _expand: ExpandLevel,
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
@@ -902,6 +917,7 @@ fn check_expanded_diphthongs<S: Search>(
 fn check_final<S: Search>(
     search: &mut S,
     letters: &mut WordIter,
+    _expand: ExpandLevel,
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
