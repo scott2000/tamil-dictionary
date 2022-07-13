@@ -4,13 +4,38 @@ use crate::search::Search;
 use crate::tamil::{Letter, LetterSet, Word, WordIter};
 use crate::HashMap;
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct JoinEntry {
+    left: LetterSet,
+    right: LetterSet,
+    expanded: bool,
+    prev: Option<LetterSet>,
+}
+
+impl JoinEntry {
+    pub fn matching<S: Search>(&self, search: &S) -> Result<S, S::Error> {
+        let search = if let Some(prev) = self.prev {
+            let search = search.asserting_prev_matching(prev)?;
+            two_letter_sets(&search, self.left, self.right)?
+        } else {
+            two_letter_sets(search, self.left, self.right)?
+        };
+
+        if self.expanded {
+            Ok(search)
+        } else {
+            Ok(search.marking_expanded())
+        }
+    }
+}
+
 #[derive(Default, Debug)]
-pub struct Joins(HashMap<(Letter, Letter), Vec<(LetterSet, LetterSet)>>);
+pub struct Joins(HashMap<(Letter, Letter), Vec<JoinEntry>>);
 
 impl Joins {
-    pub fn insert(&mut self, from: (Letter, Letter), to: (LetterSet, LetterSet)) {
+    pub fn insert_entry(&mut self, from: (Letter, Letter), to: JoinEntry) {
         debug_assert!(letterset![from.0, from.1]
-            .union(to.0.union(to.1))
+            .union(to.left.union(to.right))
             .intersect(LetterSet::consonant().complement())
             .is_empty());
 
@@ -23,6 +48,44 @@ impl Joins {
         }
     }
 
+    pub fn insert(&mut self, from: (Letter, Letter), to: (LetterSet, LetterSet)) {
+        let to = JoinEntry {
+            left: to.0,
+            right: to.1,
+            expanded: true,
+            prev: None,
+        };
+
+        self.insert_entry(from, to);
+    }
+
+    pub fn insert_special(
+        &mut self,
+        from: (Letter, Letter),
+        to: (Letter, Letter),
+        prev: Option<LetterSet>,
+    ) {
+        self.insert_entry(
+            from,
+            JoinEntry {
+                left: letterset![from.0],
+                right: letterset![from.1],
+                expanded: true,
+                prev: None,
+            },
+        );
+
+        self.insert_entry(
+            from,
+            JoinEntry {
+                left: letterset![to.0],
+                right: letterset![to.1],
+                expanded: false,
+                prev,
+            },
+        );
+    }
+
     pub fn insert_pair(&mut self, a: (Letter, Letter), b: (Letter, Letter)) {
         let a_set = (letterset![a.0], letterset![a.1]);
         let b_set = (letterset![b.0], letterset![b.1]);
@@ -33,7 +96,7 @@ impl Joins {
         self.insert(b, b_set);
     }
 
-    pub fn get(&self, left: Letter, right: Letter) -> Option<&[(LetterSet, LetterSet)]> {
+    pub fn get(&self, left: Letter, right: Letter) -> Option<&[JoinEntry]> {
         self.0.get(&(left, right)).map(|vec| vec.as_ref())
     }
 }
@@ -147,13 +210,13 @@ lazy_static! {
             );
         }
 
-        // (RetroL, N);
+        // (RetroL, N)
         joins.insert_pair(
             (Letter::RetroL, Letter::N),
             (Letter::RetroN, Letter::RetroN),
         );
 
-        // (AlveolarL, N);
+        // (AlveolarL, N)
         joins.insert_pair(
             (Letter::AlveolarL, Letter::N),
             (Letter::AlveolarN, Letter::AlveolarN),
@@ -179,17 +242,138 @@ lazy_static! {
             );
         }
 
-        // (RetroL, M);
+        // (RetroL, M)
         joins.insert_pair(
             (Letter::RetroL, Letter::M),
             (Letter::RetroN, Letter::M),
         );
 
-        // (AlveolarL, M);
+        // (AlveolarL, M)
         joins.insert_pair(
             (Letter::AlveolarL, Letter::M),
             (Letter::AlveolarN, Letter::M),
         );
+
+        // TODO: Allow these even when the other "special" transformations aren't allowed.
+        //       Alternatively, make both these and the single letter (N <=> AlveolarN)
+        //       transformations be non-expanded.
+
+        // (K, Sh)
+        joins.insert_special(
+            (Letter::K, Letter::Sh),
+            (Letter::RetroT, Letter::Ch),
+            None,
+        );
+
+        // (RetroT, Ch)
+        joins.insert_special(
+            (Letter::RetroT, Letter::Ch),
+            (Letter::K, Letter::Sh),
+            None,
+        );
+
+        // (N, N)
+        joins.insert_special(
+            (Letter::N, Letter::N),
+            (Letter::AlveolarN, Letter::AlveolarN),
+            None,
+        );
+
+        // (AlveolarN, AlveolarN)
+        joins.insert_special(
+            (Letter::AlveolarN, Letter::AlveolarN),
+            (Letter::N, Letter::N),
+            None,
+        );
+
+        const PALATALIZATION_TRIGGER: LetterSet = letterset![I, LongI, E, LongE, Ai, Y];
+
+        // (AlveolarN, AlveolarN) => (AlveolarN, AlveolarR)
+        joins.insert_special(
+            (Letter::AlveolarN, Letter::AlveolarN),
+            (Letter::AlveolarN, Letter::AlveolarR),
+            None,
+        );
+
+        // (RetroN, RetroN) => (AlveolarN, AlveolarR)
+        joins.insert_special(
+            (Letter::RetroN, Letter::RetroN),
+            (Letter::AlveolarN, Letter::AlveolarR),
+            None,
+        );
+
+        // (T, T) => (AlveolarR, AlveolarR)
+        joins.insert_special(
+            (Letter::T, Letter::T),
+            (Letter::AlveolarR, Letter::AlveolarR),
+            None,
+        );
+
+        // (Ny, Ch) => (Y, T)
+        joins.insert_special(
+            (Letter::Ny, Letter::Ch),
+            (Letter::Y, Letter::T),
+            None,
+        );
+
+        // (Ny, Ch) => (N, T) with palatalization
+        joins.insert_special(
+            (Letter::Ny, Letter::Ch),
+            (Letter::N, Letter::T),
+            Some(PALATALIZATION_TRIGGER),
+        );
+
+        // (Ch, Ch) => (T, T) with palatalization
+        joins.insert_special(
+            (Letter::Ch, Letter::Ch),
+            (Letter::T, Letter::T),
+            Some(PALATALIZATION_TRIGGER),
+        );
+
+        // (Ch, Ch) => (AlveolarR, AlveolarR) with palatalization
+        joins.insert_special(
+            (Letter::Ch, Letter::Ch),
+            (Letter::AlveolarR, Letter::AlveolarR),
+            Some(PALATALIZATION_TRIGGER),
+        );
+
+        let options = letterset![AlveolarN, RetroN];
+
+        for left in options.iter() {
+            // (Ng, K) => (Mellinam, K)
+            joins.insert_special(
+                (Letter::Ng, Letter::K),
+                (left, Letter::K),
+                None,
+            );
+
+            // (M, P) => (Mellinam, P)
+            joins.insert_special(
+                (Letter::M, Letter::P),
+                (left, Letter::P),
+                None,
+            );
+
+            // (N, T) => (Mellinam, T)
+            joins.insert_special(
+                (Letter::N, Letter::T),
+                (left, Letter::T),
+                None,
+            );
+        }
+
+        let options = letterset![AlveolarR, AlveolarL, RetroT, RetroL];
+
+        for left in options.iter() {
+            for right in KCP.iter() {
+                // (K, K) => (RetroT, K), etc.
+                joins.insert_special(
+                    (right, right),
+                    (left, right),
+                    None,
+                );
+            }
+        }
 
         joins
     };
@@ -259,7 +443,7 @@ pub fn literal_search<S: Search>(
             if let Some((alt, allow_start)) = grantha_transform(lt) {
                 let prev_vowel = letters.prev().map(Letter::is_vowel).unwrap_or(allow_start);
 
-                if prev_vowel {
+                if prev_vowel && letters.peek_matches(LetterSet::vowel()) {
                     search = search
                         .literal(word![alt])
                         .asserting_next(LetterSet::vowel())
@@ -313,6 +497,17 @@ pub fn literal_search<S: Search>(
                         .literal(word![Ai])
                         .marking_expanded()
                         .joining(search.literal(word![A]))?;
+
+                    continue;
+                }
+
+                // Check for "aa" (/aay/ -> [aa])
+                Letter::LongA => {
+                    search = search.literal(word![LongA]);
+                    search = search
+                        .literal(word![Y])
+                        .marking_expanded()
+                        .joining(search)?;
 
                     continue;
                 }
@@ -414,6 +609,42 @@ pub fn literal_search<S: Search>(
                     continue;
                 }
 
+                // Check for retroflex "n" (alveolar /nr/ -> retroflex [n] / N_V)
+                Letter::RetroN => {
+                    search = search
+                        .asserting_prev_matching(LetterSet::nedil())?
+                        .literal(word![AlveolarN, AlveolarR])
+                        .asserting_next(LetterSet::vowel())
+                        .marking_expanded()
+                        .joining(search.literal(word![RetroN]))?;
+
+                    continue;
+                }
+
+                // Check for "r" (vallinam /r/ -> idaiyinam [r] / V_V)
+                Letter::R => {
+                    search = search
+                        .asserting_prev_matching(LetterSet::vowel())?
+                        .literal(word![AlveolarR])
+                        .asserting_next(LetterSet::vowel())
+                        .marking_expanded()
+                        .joining(search.literal(word![R]))?;
+
+                    continue;
+                }
+
+                // Check for "v" (/p/ -> [v] / V_V)
+                Letter::V => {
+                    search = search
+                        .asserting_prev_matching(LetterSet::vowel())?
+                        .literal(word![P])
+                        .asserting_next(LetterSet::vowel())
+                        .marking_expanded()
+                        .joining(search.literal(word![V]))?;
+
+                    continue;
+                }
+
                 _ => {}
             }
         }
@@ -432,7 +663,12 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
         // Check for double letter followed by U
         &[_, lt, next, Letter::U] if next == lt && LetterSet::tamil_final().matches(lt) => {
             let with_single = search.literal(word![lt]);
-            let with_double = with_single.literal(word![lt]);
+            let mut with_double = with_single.literal(word![lt]);
+
+            // Also check for joining transformations
+            if check_join(search, letters, lt, next)? {
+                with_double.join(search)?;
+            }
 
             *search = with_double
                 .asserting_next(LetterSet::vowel().difference(letterset![U]))
@@ -568,13 +804,13 @@ fn check_join<S: Search>(
     if let Some(joins) = JOINS.get(lt, next) {
         letters.adv();
 
-        let mut iter = joins.iter().copied();
-        let (left, right) = iter.next().unwrap();
+        let mut iter = joins.iter();
 
-        let base = mem::replace(search, two_letter_sets(search, left, right)?);
+        let entry = iter.next().unwrap();
+        let base = mem::replace(search, entry.matching(search)?);
 
-        for (left, right) in iter {
-            search.join(&two_letter_sets(&base, left, right)?)?;
+        for entry in iter {
+            search.join(&entry.matching(&base)?)?;
         }
 
         Ok(true)
