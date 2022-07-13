@@ -6,7 +6,7 @@ use crate::HashMap;
 
 use super::{ExpandLevel, ExpandOptions};
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct JoinEntry {
     left: LetterSet,
     right: LetterSet,
@@ -72,7 +72,7 @@ impl Joins {
             JoinEntry {
                 left: letterset![from.0],
                 right: letterset![from.1],
-                expand: ExpandLevel::Full,
+                expand: ExpandLevel::Exact,
                 prev: None,
             },
         );
@@ -95,24 +95,17 @@ impl Joins {
         expand: ExpandLevel,
         prev: Option<LetterSet>,
     ) {
-        let a_entry = JoinEntry {
-            left: letterset![a.0],
-            right: letterset![a.1],
+        let entry = |(left, right), expand| JoinEntry {
+            left: letterset![left],
+            right: letterset![right],
             expand,
             prev,
         };
 
-        let b_entry = JoinEntry {
-            left: letterset![b.0],
-            right: letterset![b.1],
-            expand,
-            prev,
-        };
-
-        self.insert_entry(a, a_entry);
-        self.insert_entry(a, b_entry);
-        self.insert_entry(b, a_entry);
-        self.insert_entry(b, b_entry);
+        self.insert_entry(a, entry(a, ExpandLevel::Exact));
+        self.insert_entry(a, entry(b, expand));
+        self.insert_entry(b, entry(a, expand));
+        self.insert_entry(b, entry(b, ExpandLevel::Exact));
     }
 
     pub fn insert_pair(&mut self, a: (Letter, Letter), b: (Letter, Letter)) {
