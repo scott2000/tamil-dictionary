@@ -305,20 +305,29 @@ impl From<RawEntry> for Entry {
         // Parse the words in the text, recording their start and end indices
         let mut parsed_text = Vec::new();
         let mut word_ranges = Vec::new();
-        let mut paren_depth = 0;
+        let mut closing_brackets = Vec::new();
+        let mut is_initial = true;
         let mut chars = text.char_indices().peekable();
         loop {
             // Skip non-word characters
             while let Some((_, ch)) = chars.next_if(|&(_, ch)| Self::skip_char(ch)) {
                 match ch {
-                    '(' => paren_depth += 1,
-                    ')' => {
-                        if paren_depth == 0 {
-                            eprintln!("Warning: unmatched closing parenthesis in {}", raw.word);
-                        } else {
-                            paren_depth -= 1;
+                    '(' => closing_brackets.push(')'),
+                    '[' => closing_brackets.push(']'),
+                    '{' => closing_brackets.push('}'),
+                    ')' | ']' | '}' => match closing_brackets.pop() {
+                        None => {
+                            eprintln!("Warning: unmatched '{ch}' in {}", raw.word);
                         }
-                    }
+                        Some(ex) => {
+                            if ch != ex {
+                                eprintln!(
+                                    "Warning: expected '{ex}' but found '{ch}' in {}",
+                                    raw.word,
+                                );
+                            }
+                        }
+                    },
                     _ => {}
                 }
             }
@@ -329,16 +338,28 @@ impl From<RawEntry> for Entry {
 
                 let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
 
+                // Parse the word and make sure it isn't empty
+                let word = Word::parse(&text[start..end]);
+                if word.is_empty() {
+                    continue;
+                }
+
                 // Push the parsed word and the indices
-                parsed_text.push(intern::word(Word::parse(&text[start..end])));
-                word_ranges.push(WordRange::new(start, end, paren_depth > 0));
+                parsed_text.push(intern::word(word));
+
+                // Only mark a word as "in brackets" if it isn't initial parentheses
+                let in_brackets = !closing_brackets.is_empty();
+                let first_paren = is_initial && closing_brackets == [')'];
+
+                word_ranges.push(WordRange::new(start, end, in_brackets && !first_paren));
+                is_initial &= in_brackets;
             } else {
                 break;
             }
         }
 
-        if paren_depth != 0 {
-            eprintln!("Warning: unmatched opening parenthesis in {}", raw.word);
+        if let Some(ch) = closing_brackets.first() {
+            eprintln!("Warning: missing '{ch}' in {}", raw.word);
         }
 
         let kind_strs = Self::kind_strs(&raw.kind).into_boxed_slice();
