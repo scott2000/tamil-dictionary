@@ -888,16 +888,32 @@ fn check_initial<S: Search>(
 fn check_expanded_diphthongs<S: Search>(
     search: &mut S,
     letters: &mut WordIter,
-    _expand: ExpandLevel,
+    expand: ExpandLevel,
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
+    let with_a_suffix = |suffix: &'static Word| -> Result<S, S::Error> {
+        Ok({
+            debug_assert!(suffix.starts_with(word![A]));
+
+            if expand == ExpandLevel::Full {
+                search
+                    .literal(word![Ai])
+                    .marking_expanded()
+                    .joining(search.literal(word![A]))?
+                    .literal(&suffix[1..])
+            } else {
+                search.literal(suffix)
+            }
+        })
+    };
+
     *search = match (lt, next, letters.peek_over()) {
         // Check for "ay"
         (Letter::A, Letter::Y, _) => search
             .literal(word![Ai])
             .marking_expanded()
-            .joining(search.literal(word![A, Y]))?,
+            .joining(with_a_suffix(word![A, Y])?)?,
 
         // Check for "avu"
         (Letter::A, Letter::V, Some(Letter::U)) => {
@@ -906,14 +922,14 @@ fn check_expanded_diphthongs<S: Search>(
             search
                 .literal(word![Au])
                 .marking_expanded()
-                .joining(search.literal(word![A, V, U]))?
+                .joining(with_a_suffix(word![A, V, U])?)?
         }
 
         // Check for "avu"
         (Letter::A, Letter::V, Some(Letter::V)) => search
             .literal(word![Au])
             .marking_expanded()
-            .joining(search.literal(word![A, V]))?,
+            .joining(with_a_suffix(word![A, V])?)?,
 
         _ => return Ok(false),
     };
