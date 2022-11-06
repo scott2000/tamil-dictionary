@@ -424,6 +424,7 @@ impl ResultSection {
 struct ResultEntry {
     uri: String,
     word: &'static str,
+    index: u16,
     subword: Option<u8>,
     kind: String,
     sections: Vec<ResultSection>,
@@ -456,6 +457,7 @@ impl ResultEntry {
         Self {
             uri: link(entry.primary_word()),
             word: &entry.word,
+            index: entry.index,
             subword: entry.subword,
             kind,
             sections,
