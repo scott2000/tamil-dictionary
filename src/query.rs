@@ -711,41 +711,41 @@ impl Pattern {
     }
 
     fn parse_escape(chars: &mut Chars) -> Result<LetterSet, ParseError> {
-        if let Some(ch) = chars.next() {
-            if let Some(lts) = LetterSet::parse_escape(ch) {
-                Ok(lts)
-            } else {
-                Err(Query::invalid_character(ch, ParseError::InvalidEscape))
-            }
-        } else {
-            Err(ParseError::TrailingBackslash)
-        }
+        let Some(ch) = chars.next() else {
+            return Err(ParseError::TrailingBackslash);
+        };
+
+        let Some(lts) = LetterSet::parse_escape(ch) else {
+            return Err(Query::invalid_character(ch, ParseError::InvalidEscape));
+        };
+
+        Ok(lts)
     }
 
     fn parse_exact(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
-        if let Some('(') = chars.peek() {
-            Ok(Pattern::Expand(
-                Box::new(Self::parse_paren(chars)?),
-                ExpandOptions::EXACT,
-            ))
-        } else {
-            Err(ParseError::InvalidExact)
-        }
+        let Some('(') = chars.peek() else {
+            return Err(ParseError::InvalidExact);
+        };
+
+        Ok(Pattern::Expand(
+            Box::new(Self::parse_paren(chars)?),
+            ExpandOptions::EXACT,
+        ))
     }
 
     fn parse_expand(chars: &mut Chars) -> Result<Self, ParseError> {
         chars.next();
 
-        if let Some('(') = chars.peek() {
-            Ok(Pattern::Expand(
-                Box::new(Self::parse_paren(chars)?),
-                ExpandOptions::FULL,
-            ))
-        } else {
-            Err(ParseError::InvalidExpand)
-        }
+        let Some('(') = chars.peek() else {
+            return Err(ParseError::InvalidExpand);
+        };
+
+        Ok(Pattern::Expand(
+            Box::new(Self::parse_paren(chars)?),
+            ExpandOptions::FULL,
+        ))
     }
 
     fn parse_assert(chars: &mut Chars) -> Result<Self, ParseError> {
@@ -859,31 +859,31 @@ impl Pattern {
     }
 
     fn parse_range(chars: &mut Chars, ch: char) -> Result<LetterSet, ParseError> {
-        if let Some(start) = Letter::parse(ch) {
-            Self::parse_pulli(chars, start)?;
+        let Some(start) = Letter::parse(ch) else {
+            return Err(Query::expected_character(SurroundKind::Bracket, ch));
+        };
 
-            if let Some('-') = chars.peek() {
-                chars.next();
+        Self::parse_pulli(chars, start)?;
 
-                if let Some(ch) = chars.next() {
-                    if let Some(end) = Letter::parse(ch) {
-                        Self::parse_pulli(chars, end)?;
+        let Some('-') = chars.peek() else {
+            return Ok(letterset![start]);
+        };
 
-                        start
-                            .range(end)
-                            .map_err(|(a, b)| ParseError::InvalidRange(a, b))
-                    } else {
-                        Err(ParseError::PartialRange)
-                    }
-                } else {
-                    Err(ParseError::PartialRange)
-                }
-            } else {
-                Ok(letterset![start])
-            }
-        } else {
-            Err(Query::expected_character(SurroundKind::Bracket, ch))
-        }
+        chars.next();
+
+        let Some(ch) = chars.next() else {
+            return Err(ParseError::PartialRange);
+        };
+
+        let Some(end) = Letter::parse(ch) else {
+            return Err(ParseError::PartialRange);
+        };
+
+        Self::parse_pulli(chars, end)?;
+
+        start
+            .range(end)
+            .map_err(|(a, b)| ParseError::InvalidRange(a, b))
     }
 
     fn parse_pulli(chars: &mut Chars, lt: Letter) -> Result<(), ParseError> {

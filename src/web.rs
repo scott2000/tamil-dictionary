@@ -1,3 +1,7 @@
+#![allow(clippy::result_large_err)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::unnecessary_lazy_evaluations)]
+
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -738,64 +742,66 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
     }
 
     // Parse the query into a single pattern
-    if let Ok(mut pat) = Pattern::parse(&query) {
-        let count = n.min(100);
+    let Ok(mut pat) = Pattern::parse(&query) else {
+        return Json(Vec::new());
+    };
 
-        // Make the pattern more general if there was a trailing "a"
-        if append_a {
-            const VOWEL_NOT_A: LetterSet = LetterSet::vowel().difference(letterset![A]);
+    let count = n.min(100);
 
-            // The pattern should always end with a literal, since anything but
-            // concatenation would have added some delimiters at the end.
-            // Since some pattern expansions rely on a literal being unbroken,
-            // we need to directly add the A into the literal, replacing just
-            // the literal with an alternative.
+    // Make the pattern more general if there was a trailing "a"
+    if append_a {
+        const VOWEL_NOT_A: LetterSet = LetterSet::vowel().difference(letterset![A]);
 
-            let last = pat.last_mut();
-            if let Pattern::Literal(lit) = last {
-                let with_a = lit.as_ref() + word![A];
-                let without_a = mem::replace(last, Pattern::Empty);
+        // The pattern should always end with a literal, since anything but
+        // concatenation would have added some delimiters at the end.
+        // Since some pattern expansions rely on a literal being unbroken,
+        // we need to directly add the A into the literal, replacing just
+        // the literal with an alternative.
 
-                // <last> = (<last>A|<last>(&[\V^A]|(&[^\V]|>)@))
-                *last = Pattern::Alternative(
-                    Box::new(Pattern::Literal(with_a)),
-                    Box::new(Pattern::Concat(
-                        Box::new(without_a),
-                        Box::new(Pattern::Alternative(
-                            Box::new(Pattern::AssertNext(VOWEL_NOT_A)),
-                            Box::new(Pattern::Concat(
-                                Box::new(Pattern::Alternative(
-                                    Box::new(Pattern::AssertNext(LetterSet::vowel().complement())),
-                                    Box::new(Pattern::AssertEnd),
-                                )),
-                                Box::new(Pattern::MarkExpanded),
+        let last = pat.last_mut();
+        if let Pattern::Literal(lit) = last {
+            let with_a = lit.as_ref() + word![A];
+            let without_a = mem::replace(last, Pattern::Empty);
+
+            // <last> = (<last>A|<last>(&[\V^A]|(&[^\V]|>)@))
+            *last = Pattern::Alternative(
+                Box::new(Pattern::Literal(with_a)),
+                Box::new(Pattern::Concat(
+                    Box::new(without_a),
+                    Box::new(Pattern::Alternative(
+                        Box::new(Pattern::AssertNext(VOWEL_NOT_A)),
+                        Box::new(Pattern::Concat(
+                            Box::new(Pattern::Alternative(
+                                Box::new(Pattern::AssertNext(LetterSet::vowel().complement())),
+                                Box::new(Pattern::AssertEnd),
                             )),
+                            Box::new(Pattern::MarkExpanded),
                         )),
                     )),
-                );
-            } else {
-                // If for some reason the pattern doesn't end with a literal,
-                // fall back to adding just a vowel assertion. This is
-                // equivalent since A is always first in dictionary order,
-                // so whether its an exact match will not affect the ordering.
+                )),
+            );
+        } else {
+            // If for some reason the pattern doesn't end with a literal,
+            // fall back to adding just a vowel assertion. This is
+            // equivalent since A is always first in dictionary order,
+            // so whether its an exact match will not affect the ordering.
 
-                // <pat> = <pat>(&\V|@)
-                pat = Pattern::Concat(
-                    Box::new(pat),
-                    Box::new(Pattern::Alternative(
-                        Box::new(Pattern::AssertNext(LetterSet::vowel())),
-                        Box::new(Pattern::MarkExpanded),
-                    )),
-                );
-            }
-        }
-
-        if let Some(list) = pat.suggest(count) {
-            return Json(list.suggestions().map(SuggestResponseEntry::from).collect());
+            // <pat> = <pat>(&\V|@)
+            pat = Pattern::Concat(
+                Box::new(pat),
+                Box::new(Pattern::Alternative(
+                    Box::new(Pattern::AssertNext(LetterSet::vowel())),
+                    Box::new(Pattern::MarkExpanded),
+                )),
+            );
         }
     }
 
-    Json(Vec::new())
+    let Some(list) = pat.suggest(count) else {
+        return Json(Vec::new());
+    };
+
+    Json(list.suggestions().map(SuggestResponseEntry::from).collect())
 }
 
 #[get("/api/annotate?<q>")]

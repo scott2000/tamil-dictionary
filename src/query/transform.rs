@@ -822,23 +822,25 @@ fn check_join<S: Search>(
     lt: Letter,
     next: Letter,
 ) -> Result<bool, S::Error> {
-    if let Some(joins) = JOINS.get(lt, next) {
-        let mut iter = joins.iter().filter(|entry| entry.expand <= expand);
+    let Some(joins) = JOINS.get(lt, next) else {
+        return Ok(false);
+    };
 
-        if let Some(entry) = iter.next() {
-            letters.adv();
+    let mut iter = joins.iter().filter(|entry| entry.expand <= expand);
 
-            let base = mem::replace(search, entry.matching(search)?);
+    let Some(entry) = iter.next() else {
+        return Ok(false);
+    };
 
-            for entry in iter {
-                search.join(&entry.matching(&base)?)?;
-            }
+    letters.adv();
 
-            return Ok(true);
-        }
+    let base = mem::replace(search, entry.matching(search)?);
+
+    for entry in iter {
+        search.join(&entry.matching(&base)?)?;
     }
 
-    Ok(false)
+    Ok(true)
 }
 
 fn check_initial<S: Search>(
@@ -1203,57 +1205,56 @@ fn transliterate<S: Search>(
         LatinU if !expand => search.literal(word![U]),
 
         _ => {
-            if let Some(tr) = Transliteration::get(lt) {
-                let mut double_kind = tr.double_kind;
-
-                // Record whether at the start of the word or not before advancing
-                let start_of_word = letters.index == 1;
-
-                // Decide which letters are likely and unlikely
-                let (mut likely, mut unlikely) = if tr.with_h.is_empty() {
-                    tr.without_h()
-                } else if let Some(LatinH) = letters.peek() {
-                    letters.adv();
-                    tr.with_h()
-                } else {
-                    tr.without_h()
-                };
-
-                if start_of_word {
-                    // Also allow any grantha letters as initial
-                    const INITIAL: LetterSet =
-                        LetterSet::tamil_initial().union(LetterSet::grantha());
-
-                    // If at the start of the word, allow unlikely valid initial characters
-                    if INITIAL.intersect(likely).is_empty() {
-                        likely = INITIAL.intersect(unlikely).union(likely);
-                    }
-
-                    // If at the start of the word, allow single letters always
-                    double_kind.allow_single();
-                }
-
-                if expand {
-                    // Remove any overlap between the likely and unlikely characters
-                    unlikely = likely.complement().intersect(unlikely);
-                } else {
-                    // Ignore unlikely characters since expansions are disabled
-                    unlikely = LetterSet::empty();
-                }
-
-                let mut result = optional_double_set(search, double_kind, likely)?;
-
-                // Only join the unlikely set if it is non-empty
-                if !unlikely.is_empty() {
-                    result.join(
-                        &optional_double_set(search, double_kind, unlikely)?.marking_expanded(),
-                    )?;
-                }
-
-                result
-            } else {
+            let Some(tr) = Transliteration::get(lt) else {
                 return Ok(None);
+            };
+
+            let mut double_kind = tr.double_kind;
+
+            // Record whether at the start of the word or not before advancing
+            let start_of_word = letters.index == 1;
+
+            // Decide which letters are likely and unlikely
+            let (mut likely, mut unlikely) = if tr.with_h.is_empty() {
+                tr.without_h()
+            } else if let Some(LatinH) = letters.peek() {
+                letters.adv();
+                tr.with_h()
+            } else {
+                tr.without_h()
+            };
+
+            if start_of_word {
+                // Also allow any grantha letters as initial
+                const INITIAL: LetterSet = LetterSet::tamil_initial().union(LetterSet::grantha());
+
+                // If at the start of the word, allow unlikely valid initial characters
+                if INITIAL.intersect(likely).is_empty() {
+                    likely = INITIAL.intersect(unlikely).union(likely);
+                }
+
+                // If at the start of the word, allow single letters always
+                double_kind.allow_single();
             }
+
+            if expand {
+                // Remove any overlap between the likely and unlikely characters
+                unlikely = likely.complement().intersect(unlikely);
+            } else {
+                // Ignore unlikely characters since expansions are disabled
+                unlikely = LetterSet::empty();
+            }
+
+            let mut result = optional_double_set(search, double_kind, likely)?;
+
+            // Only join the unlikely set if it is non-empty
+            if !unlikely.is_empty() {
+                result.join(
+                    &optional_double_set(search, double_kind, unlikely)?.marking_expanded(),
+                )?;
+            }
+
+            result
         }
     };
 

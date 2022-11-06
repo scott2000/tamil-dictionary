@@ -61,25 +61,25 @@ impl<'a> TextSegment<'a> {
     }
 
     pub fn strip_exclude(text: &'a str) -> (ExcludeSet, &'a str) {
-        let mut text = text.trim();
+        let text = text.trim();
 
-        let exclude = if let Some(without_exclude) = text.strip_prefix("[exclude:") {
-            if let Some((excluded, new_text)) = without_exclude.split_once(']') {
-                text = new_text.trim_start();
-
-                excluded.split(',').map(str::trim).map(Word::parse).fold(
-                    ExcludeSet::default(),
-                    |mut exclude, word| {
-                        exclude.insert(&word);
-                        exclude
-                    },
-                )
-            } else {
-                ExcludeSet::default()
-            }
-        } else {
-            ExcludeSet::default()
+        let Some(without_exclude) = text.strip_prefix("[exclude:") else {
+            return (ExcludeSet::default(), text);
         };
+
+        let Some((excluded, new_text)) = without_exclude.split_once(']') else {
+            return (ExcludeSet::default(), text);
+        };
+
+        let text = new_text.trim_start();
+
+        let exclude = excluded.split(',').map(str::trim).map(Word::parse).fold(
+            ExcludeSet::default(),
+            |mut exclude, word| {
+                exclude.insert(&word);
+                exclude
+            },
+        );
 
         (exclude, text)
     }
@@ -96,23 +96,23 @@ impl<'a> TextSegment<'a> {
                 let groups = joined_groups(&word, exclude);
 
                 // Only take the first group, if there is one
-                if let Some(choices) = groups.into_iter().next() {
-                    choices
-                        .into_iter()
-                        .scan(0, |index, choice| {
-                            // Find the start and end of this segment
-                            let start = *index;
-                            let end = choice.letter_end;
-                            *index = end;
+                let Some(choices) = groups.into_iter().next() else {
+                    return vec![TextSegment::Tamil(original_word, None)];
+                };
 
-                            // Return just that segment, along with the corresponding choice
-                            let word = word.slice_original(start, end);
-                            Some(TextSegment::Tamil(word.into(), Some(choice)))
-                        })
-                        .collect()
-                } else {
-                    vec![TextSegment::Tamil(original_word, None)]
-                }
+                choices
+                    .into_iter()
+                    .scan(0, |index, choice| {
+                        // Find the start and end of this segment
+                        let start = *index;
+                        let end = choice.letter_end;
+                        *index = end;
+
+                        // Return just that segment, along with the corresponding choice
+                        let word = word.slice_original(start, end);
+                        Some(TextSegment::Tamil(word.into(), Some(choice)))
+                    })
+                    .collect()
             }
         }
     }
@@ -719,7 +719,7 @@ lazy_static! {
                 // For compount words, only the last word is conjugated
                 if let Some(index) = verb.word.rfind(' ') {
                     // Make sure that there aren't multiple parts
-                    if verb.word.contains(&[',', ';']) {
+                    if verb.word.contains([',', ';']) {
                         panic!("compound verb cannot be conjugated: {}", verb.word);
                     }
 

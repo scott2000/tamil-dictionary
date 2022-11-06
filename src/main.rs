@@ -74,7 +74,7 @@ pub fn version() -> &'static str {
 
 #[launch]
 #[rustfmt::skip]
-async fn rocket() -> _ {
+fn rocket() -> _ {
     // Initialize the examples for the front page
     web::current_example();
 

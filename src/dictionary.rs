@@ -332,30 +332,30 @@ impl From<RawEntry> for Entry {
                 }
             }
 
-            if let Some((start, _)) = chars.next() {
-                // Skip word characters
-                while chars.next_if(|&(_, ch)| !Self::skip_char(ch)).is_some() {}
-
-                let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
-
-                // Parse the word and make sure it isn't empty
-                let word = Word::parse(&text[start..end]);
-                if word.is_empty() {
-                    continue;
-                }
-
-                // Push the parsed word and the indices
-                parsed_text.push(intern::word(word));
-
-                // Only mark a word as "in brackets" if it isn't initial parentheses
-                let in_brackets = !closing_brackets.is_empty();
-                let first_paren = is_initial && closing_brackets == [')'];
-
-                word_ranges.push(WordRange::new(start, end, in_brackets && !first_paren));
-                is_initial &= in_brackets;
-            } else {
+            let Some((start, _)) = chars.next() else {
                 break;
+            };
+
+            // Skip word characters
+            while chars.next_if(|&(_, ch)| !Self::skip_char(ch)).is_some() {}
+
+            let end = chars.peek().map(|&(i, _)| i).unwrap_or_else(|| text.len());
+
+            // Parse the word and make sure it isn't empty
+            let word = Word::parse(&text[start..end]);
+            if word.is_empty() {
+                continue;
             }
+
+            // Push the parsed word and the indices
+            parsed_text.push(intern::word(word));
+
+            // Only mark a word as "in brackets" if it isn't initial parentheses
+            let in_brackets = !closing_brackets.is_empty();
+            let first_paren = is_initial && closing_brackets == [')'];
+
+            word_ranges.push(WordRange::new(start, end, in_brackets && !first_paren));
+            is_initial &= in_brackets;
         }
 
         if let Some(ch) = closing_brackets.first() {

@@ -118,7 +118,7 @@ impl<'a> Search for WordSearch<'a> {
             .filter_map(|branch| {
                 self.word
                     .get(branch)
-                    .and_then(|lt| lts.matches(lt).then(|| branch + 1))
+                    .and_then(|lt| lts.matches(lt).then_some(branch + 1))
             })
             .collect();
 
