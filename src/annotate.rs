@@ -5,6 +5,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::rc::Rc;
 
+use once_cell::sync::Lazy;
+
 use serde::Deserialize;
 
 use crate::dictionary::{Entry, EntryIndex, EntryKind, KindSet, ENTRIES};
@@ -118,39 +120,37 @@ impl<'a> TextSegment<'a> {
     }
 }
 
-lazy_static! {
-    static ref EXCLUDED_WORDS: HashSet<&'static str> = {
-        let mut set = HashSet::default();
+static EXCLUDED_WORDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut set = HashSet::default();
 
-        let excluded: &[&Word] = &[
-            word![E, AlveolarN],
-            word![E, M],
-            word![E, Ng, K, A, RetroL],
-            word![N, A, M],
-            word![U, AlveolarN],
-            word![U, M],
-            word![U, Ng, K, A, RetroL],
-            word![T, A, AlveolarN],
-            word![T, A, M],
-            word![T, A, Ng, K, A, RetroL],
-            word![M, U, RetroT, I],
-            word![U, RetroL, RetroL, A],
-            word![I, AlveolarL, AlveolarL, LongA, T, A],
-            word![I, AlveolarL, AlveolarL, LongA, M, A, AlveolarL],
-            word![LongO, R],
-            word![O, R, U],
-            word![O, R, U, V, A, RetroL],
-            word![O, R, U, V, A, AlveolarN],
-            word![O, R, U, V, A, R],
-        ];
+    let excluded: &[&Word] = &[
+        word![E, AlveolarN],
+        word![E, M],
+        word![E, Ng, K, A, RetroL],
+        word![N, A, M],
+        word![U, AlveolarN],
+        word![U, M],
+        word![U, Ng, K, A, RetroL],
+        word![T, A, AlveolarN],
+        word![T, A, M],
+        word![T, A, Ng, K, A, RetroL],
+        word![M, U, RetroT, I],
+        word![U, RetroL, RetroL, A],
+        word![I, AlveolarL, AlveolarL, LongA, T, A],
+        word![I, AlveolarL, AlveolarL, LongA, M, A, AlveolarL],
+        word![LongO, R],
+        word![O, R, U],
+        word![O, R, U, V, A, RetroL],
+        word![O, R, U, V, A, AlveolarN],
+        word![O, R, U, V, A, R],
+    ];
 
-        for &word in excluded {
-            set.insert(&*Box::leak(word.to_string().into_boxed_str()));
-        }
+    for &word in excluded {
+        set.insert(&*Box::leak(word.to_string().into_boxed_str()));
+    }
 
-        set
-    };
-}
+    set
+});
 
 const ADVERB: KindSet =
     KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::InaiIdaiChol));
@@ -690,80 +690,78 @@ type Verbs = HashMap<(String, Option<u8>), Vec<String>>;
 // Map from stems to stem data
 type Stems = HashMap<&'static Word, Vec<StemData>>;
 
-lazy_static! {
-    static ref STEMS: Stems = {
-        lazy_static::initialize(&ENTRIES);
-        eprintln!("Loading verbs...");
+static STEMS: Lazy<Stems> = Lazy::new(|| {
+    Lazy::force(&ENTRIES);
+    eprintln!("Loading verbs...");
 
-        let file = match File::open("verbs.json") {
-            Ok(file) => file,
-            Err(_) => return HashMap::default(),
-        };
+    let file = match File::open("verbs.json") {
+        Ok(file) => file,
+        Err(_) => return HashMap::default(),
+    };
 
-        let verb_list: Vec<RawVerbData> = serde_json::from_reader(BufReader::new(file))
-            .expect("verbs parse error");
+    let verb_list: Vec<RawVerbData> =
+        serde_json::from_reader(BufReader::new(file)).expect("verbs parse error");
 
-        eprintln!(" => {} verbs", verb_list.len());
-        eprintln!("Building stems...");
+    eprintln!(" => {} verbs", verb_list.len());
+    eprintln!("Building stems...");
 
-        // Process the raw verb list by creating maps (Ves and Verbs)
-        let mut ves = Ves::default();
-        let mut verbs = Verbs::default();
-        for mut verb in verb_list {
-            for ve in verb.ve.iter_mut() {
-                // Vinaiyechams starting with a hyphen are incomplete
-                if ve.starts_with('-') {
-                    continue;
-                }
-
-                // For compount words, only the last word is conjugated
-                if let Some(index) = verb.word.rfind(' ') {
-                    // Make sure that there aren't multiple parts
-                    if verb.word.contains([',', ';']) {
-                        panic!("compound verb cannot be conjugated: {}", verb.word);
-                    }
-
-                    ve.insert_str(0, &verb.word[..=index]);
-                    continue;
-                }
-
-                // Record this vinaiyecham and the word it came from (in Ves)
-                let word = intern::word(Word::parse(&verb.word));
-                if let Some(set) = ves.get_mut(ve) {
-                    set.insert(word);
-                } else {
-                    let mut set = BTreeSet::new();
-                    set.insert(word);
-                    ves.insert(ve.clone(), set);
-                }
+    // Process the raw verb list by creating maps (Ves and Verbs)
+    let mut ves = Ves::default();
+    let mut verbs = Verbs::default();
+    for mut verb in verb_list {
+        for ve in verb.ve.iter_mut() {
+            // Vinaiyechams starting with a hyphen are incomplete
+            if ve.starts_with('-') {
+                continue;
             }
 
-            // Remember the vinaiyecham for this word and subword
-            verbs.insert((verb.word, verb.sub), verb.ve);
+            // For compount words, only the last word is conjugated
+            if let Some(index) = verb.word.rfind(' ') {
+                // Make sure that there aren't multiple parts
+                if verb.word.contains([',', ';']) {
+                    panic!("compound verb cannot be conjugated: {}", verb.word);
+                }
+
+                ve.insert_str(0, &verb.word[..=index]);
+                continue;
+            }
+
+            // Record this vinaiyecham and the word it came from (in Ves)
+            let word = intern::word(Word::parse(&verb.word));
+            if let Some(set) = ves.get_mut(ve) {
+                set.insert(word);
+            } else {
+                let mut set = BTreeSet::new();
+                set.insert(word);
+                ves.insert(ve.clone(), set);
+            }
         }
 
-        // Get a map of special words which are expanded differently
-        let specials = get_specials();
+        // Remember the vinaiyecham for this word and subword
+        verbs.insert((verb.word, verb.sub), verb.ve);
+    }
 
-        // Create a map of stems using all these data structures
-        let mut stems = Stems::default();
-        for entry in ENTRIES.iter() {
-            StemData::parse(&mut StemState {
-                stems: &mut stems,
-                ves: &ves,
-                verbs: &verbs,
-                specials: &specials,
-                entry,
-            });
-        }
+    // Get a map of special words which are expanded differently
+    let specials = get_specials();
 
-        // Clear the interning metadata since it won't be used anymore
-        intern::done();
+    // Create a map of stems using all these data structures
+    let mut stems = Stems::default();
+    for entry in ENTRIES.iter() {
+        StemData::parse(&mut StemState {
+            stems: &mut stems,
+            ves: &ves,
+            verbs: &verbs,
+            specials: &specials,
+            entry,
+        });
+    }
 
-        eprintln!(" => {} stems", stems.len());
-        stems
-    };
-}
+    // Clear the interning metadata since it won't be used anymore
+    intern::done();
+
+    eprintln!(" => {} stems", stems.len());
+    stems
+});
 
 struct StemState<'a> {
     stems: &'a mut Stems,

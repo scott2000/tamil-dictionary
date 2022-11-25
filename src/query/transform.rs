@@ -1,5 +1,7 @@
 use std::mem;
 
+use once_cell::sync::Lazy;
+
 use crate::search::Search;
 use crate::tamil::{Letter, LetterSet, Word, WordIter};
 use crate::HashMap;
@@ -117,267 +119,212 @@ impl Joins {
     }
 }
 
-lazy_static! {
-    pub static ref JOINS: Joins = {
-        let mut joins = Joins::default();
+pub static JOINS: Lazy<Joins> = Lazy::new(|| {
+    let mut joins = Joins::default();
 
-        for right in letterset![K, Ch, P].iter() {
-            // (RetroL, Vallinam)
-            joins.insert_pair(
-                (Letter::RetroL, right),
-                (Letter::RetroT, right),
-            );
+    for right in letterset![K, Ch, P].iter() {
+        // (RetroL, Vallinam)
+        joins.insert_pair((Letter::RetroL, right), (Letter::RetroT, right));
 
-            let options = letterset![AlveolarR, AlveolarN, AlveolarL];
+        let options = letterset![AlveolarR, AlveolarN, AlveolarL];
 
-            // (AlveolarR, Vallinam)
-            joins.insert(
-                (Letter::AlveolarR, right),
-                (options, letterset![right]),
-            );
+        // (AlveolarR, Vallinam)
+        joins.insert((Letter::AlveolarR, right), (options, letterset![right]));
 
-            let options = letterset![AlveolarR, AlveolarL];
+        let options = letterset![AlveolarR, AlveolarL];
 
-            // (AlveolarL, Vallinam)
-            joins.insert(
-                (Letter::AlveolarL, right),
-                (options, letterset![right]),
-            );
+        // (AlveolarL, Vallinam)
+        joins.insert((Letter::AlveolarL, right), (options, letterset![right]));
 
-            let options = letterset![AlveolarR, AlveolarN];
+        let options = letterset![AlveolarR, AlveolarN];
 
-            // (AlveolarN, Vallinam)
-            joins.insert(
-                (Letter::AlveolarN, right),
-                (options, letterset![right]),
-            );
-        }
+        // (AlveolarN, Vallinam)
+        joins.insert((Letter::AlveolarN, right), (options, letterset![right]));
+    }
 
-        // (RetroL, T) - Strong
-        joins.insert_pair(
-            (Letter::RetroL, Letter::T),
-            (Letter::RetroT, Letter::RetroT),
-        );
+    // (RetroL, T) - Strong
+    joins.insert_pair(
+        (Letter::RetroL, Letter::T),
+        (Letter::RetroT, Letter::RetroT),
+    );
 
-        // (AlveolarL, T) - Strong
-        joins.insert_pair(
-            (Letter::AlveolarL, Letter::T),
-            (Letter::AlveolarR, Letter::AlveolarR),
-        );
+    // (AlveolarL, T) - Strong
+    joins.insert_pair(
+        (Letter::AlveolarL, Letter::T),
+        (Letter::AlveolarR, Letter::AlveolarR),
+    );
 
-        // (RetroL, T) - Weak
-        joins.insert_pair(
-            (Letter::RetroL, Letter::T),
-            (Letter::RetroN, Letter::RetroT),
-        );
+    // (RetroL, T) - Weak
+    joins.insert_pair(
+        (Letter::RetroL, Letter::T),
+        (Letter::RetroN, Letter::RetroT),
+    );
 
-        // (AlveolarL, T) - Weak
-        joins.insert_pair(
-            (Letter::AlveolarL, Letter::T),
-            (Letter::AlveolarN, Letter::AlveolarR),
-        );
+    // (AlveolarL, T) - Weak
+    joins.insert_pair(
+        (Letter::AlveolarL, Letter::T),
+        (Letter::AlveolarN, Letter::AlveolarR),
+    );
 
-        let options = letterset![T, RetroT];
+    let options = letterset![T, RetroT];
 
-        // (RetroN, T)
-        for right in options.iter() {
-            joins.insert(
-                (Letter::RetroN, right),
-                (letterset![RetroN], options),
-            );
-        }
+    // (RetroN, T)
+    for right in options.iter() {
+        joins.insert((Letter::RetroN, right), (letterset![RetroN], options));
+    }
 
-        let options = letterset![T, AlveolarR];
+    let options = letterset![T, AlveolarR];
 
-        // (AlveolarN, T)
-        for right in options.iter() {
-            joins.insert(
-                (Letter::AlveolarN, right),
-                (letterset![AlveolarN], options),
-            );
-        }
+    // (AlveolarN, T)
+    for right in options.iter() {
+        joins.insert((Letter::AlveolarN, right), (letterset![AlveolarN], options));
+    }
 
-        for right in letterset![K, Ch, T].iter() {
-            let options = letterset![M, right.paired().unwrap()];
+    for right in letterset![K, Ch, T].iter() {
+        let options = letterset![M, right.paired().unwrap()];
 
-            // (M, Vallinam)
-            for left in options.iter() {
-                joins.insert((left, right), (options, letterset![right]));
-            }
-        }
-
-        let options = letterset![M, Ny];
-
-        // (M, Ny)
+        // (M, Vallinam)
         for left in options.iter() {
-            joins.insert(
-                (left, Letter::Ny),
-                (options, letterset![Ny]),
-            );
+            joins.insert((left, right), (options, letterset![right]));
         }
+    }
 
-        let options = letterset![M, N];
+    let options = letterset![M, Ny];
 
-        // (M, N)
-        for right in options.iter() {
-            joins.insert(
-                (Letter::M, right),
-                (letterset![M], options),
-            );
+    // (M, Ny)
+    for left in options.iter() {
+        joins.insert((left, Letter::Ny), (options, letterset![Ny]));
+    }
+
+    let options = letterset![M, N];
+
+    // (M, N)
+    for right in options.iter() {
+        joins.insert((Letter::M, right), (letterset![M], options));
+    }
+
+    // (RetroL, N)
+    joins.insert_pair(
+        (Letter::RetroL, Letter::N),
+        (Letter::RetroN, Letter::RetroN),
+    );
+
+    // (AlveolarL, N)
+    joins.insert_pair(
+        (Letter::AlveolarL, Letter::N),
+        (Letter::AlveolarN, Letter::AlveolarN),
+    );
+
+    let options = letterset![RetroN, N];
+
+    // (RetroN, N)
+    for right in options.iter() {
+        joins.insert((Letter::RetroN, right), (letterset![RetroN], options));
+    }
+
+    let options = letterset![AlveolarN, N];
+
+    // (AlveolarN, N)
+    for right in options.iter() {
+        joins.insert((Letter::AlveolarN, right), (letterset![AlveolarN], options));
+    }
+
+    // (RetroL, M)
+    joins.insert_pair((Letter::RetroL, Letter::M), (Letter::RetroN, Letter::M));
+
+    // (AlveolarL, M)
+    joins.insert_pair(
+        (Letter::AlveolarL, Letter::M),
+        (Letter::AlveolarN, Letter::M),
+    );
+
+    // (K, Sh)
+    joins.insert_entry_pair(
+        (Letter::K, Letter::Sh),
+        (Letter::RetroT, Letter::Ch),
+        ExpandLevel::Minor,
+        None,
+    );
+
+    // (N, N)
+    joins.insert_entry_pair(
+        (Letter::N, Letter::N),
+        (Letter::AlveolarN, Letter::AlveolarN),
+        ExpandLevel::Minor,
+        None,
+    );
+
+    const PALATALIZATION_TRIGGER: LetterSet = letterset![I, LongI, Ai, Y];
+
+    // (AlveolarN, AlveolarN) => (AlveolarN, AlveolarR)
+    joins.insert_special(
+        (Letter::AlveolarN, Letter::AlveolarN),
+        (Letter::AlveolarN, Letter::AlveolarR),
+        None,
+    );
+
+    // (RetroN, RetroN) => (AlveolarN, AlveolarR)
+    joins.insert_special(
+        (Letter::RetroN, Letter::RetroN),
+        (Letter::AlveolarN, Letter::AlveolarR),
+        None,
+    );
+
+    // (T, T) => (AlveolarR, AlveolarR)
+    joins.insert_special(
+        (Letter::T, Letter::T),
+        (Letter::AlveolarR, Letter::AlveolarR),
+        None,
+    );
+
+    // (Ny, Ch) => (Y, T)
+    joins.insert_special((Letter::Ny, Letter::Ch), (Letter::Y, Letter::T), None);
+
+    // (Ny, Ch) => (N, T) with palatalization
+    joins.insert_special(
+        (Letter::Ny, Letter::Ch),
+        (Letter::N, Letter::T),
+        Some(PALATALIZATION_TRIGGER),
+    );
+
+    // (Ch, Ch) => (T, T) with palatalization
+    joins.insert_special(
+        (Letter::Ch, Letter::Ch),
+        (Letter::T, Letter::T),
+        Some(PALATALIZATION_TRIGGER),
+    );
+
+    // (Ch, Ch) => (AlveolarR, AlveolarR) with palatalization
+    joins.insert_special(
+        (Letter::Ch, Letter::Ch),
+        (Letter::AlveolarR, Letter::AlveolarR),
+        Some(PALATALIZATION_TRIGGER),
+    );
+
+    let options = letterset![AlveolarN, RetroN];
+
+    for left in options.iter() {
+        // (Ng, K) => (Mellinam, K)
+        joins.insert_special((Letter::Ng, Letter::K), (left, Letter::K), None);
+
+        // (M, P) => (Mellinam, P)
+        joins.insert_special((Letter::M, Letter::P), (left, Letter::P), None);
+
+        // (N, T) => (Mellinam, T)
+        joins.insert_special((Letter::N, Letter::T), (left, Letter::T), None);
+    }
+
+    let options = letterset![AlveolarR, AlveolarL, RetroT, RetroL];
+
+    for left in options.iter() {
+        for right in KCP.iter() {
+            // (K, K) => (RetroT, K), etc.
+            joins.insert_special((right, right), (left, right), None);
         }
+    }
 
-        // (RetroL, N)
-        joins.insert_pair(
-            (Letter::RetroL, Letter::N),
-            (Letter::RetroN, Letter::RetroN),
-        );
-
-        // (AlveolarL, N)
-        joins.insert_pair(
-            (Letter::AlveolarL, Letter::N),
-            (Letter::AlveolarN, Letter::AlveolarN),
-        );
-
-        let options = letterset![RetroN, N];
-
-        // (RetroN, N)
-        for right in options.iter() {
-            joins.insert(
-                (Letter::RetroN, right),
-                (letterset![RetroN], options),
-            );
-        }
-
-        let options = letterset![AlveolarN, N];
-
-        // (AlveolarN, N)
-        for right in options.iter() {
-            joins.insert(
-                (Letter::AlveolarN, right),
-                (letterset![AlveolarN], options),
-            );
-        }
-
-        // (RetroL, M)
-        joins.insert_pair(
-            (Letter::RetroL, Letter::M),
-            (Letter::RetroN, Letter::M),
-        );
-
-        // (AlveolarL, M)
-        joins.insert_pair(
-            (Letter::AlveolarL, Letter::M),
-            (Letter::AlveolarN, Letter::M),
-        );
-
-        // (K, Sh)
-        joins.insert_entry_pair(
-            (Letter::K, Letter::Sh),
-            (Letter::RetroT, Letter::Ch),
-            ExpandLevel::Minor,
-            None,
-        );
-
-        // (N, N)
-        joins.insert_entry_pair(
-            (Letter::N, Letter::N),
-            (Letter::AlveolarN, Letter::AlveolarN),
-            ExpandLevel::Minor,
-            None,
-        );
-
-        const PALATALIZATION_TRIGGER: LetterSet = letterset![I, LongI, Ai, Y];
-
-        // (AlveolarN, AlveolarN) => (AlveolarN, AlveolarR)
-        joins.insert_special(
-            (Letter::AlveolarN, Letter::AlveolarN),
-            (Letter::AlveolarN, Letter::AlveolarR),
-            None,
-        );
-
-        // (RetroN, RetroN) => (AlveolarN, AlveolarR)
-        joins.insert_special(
-            (Letter::RetroN, Letter::RetroN),
-            (Letter::AlveolarN, Letter::AlveolarR),
-            None,
-        );
-
-        // (T, T) => (AlveolarR, AlveolarR)
-        joins.insert_special(
-            (Letter::T, Letter::T),
-            (Letter::AlveolarR, Letter::AlveolarR),
-            None,
-        );
-
-        // (Ny, Ch) => (Y, T)
-        joins.insert_special(
-            (Letter::Ny, Letter::Ch),
-            (Letter::Y, Letter::T),
-            None,
-        );
-
-        // (Ny, Ch) => (N, T) with palatalization
-        joins.insert_special(
-            (Letter::Ny, Letter::Ch),
-            (Letter::N, Letter::T),
-            Some(PALATALIZATION_TRIGGER),
-        );
-
-        // (Ch, Ch) => (T, T) with palatalization
-        joins.insert_special(
-            (Letter::Ch, Letter::Ch),
-            (Letter::T, Letter::T),
-            Some(PALATALIZATION_TRIGGER),
-        );
-
-        // (Ch, Ch) => (AlveolarR, AlveolarR) with palatalization
-        joins.insert_special(
-            (Letter::Ch, Letter::Ch),
-            (Letter::AlveolarR, Letter::AlveolarR),
-            Some(PALATALIZATION_TRIGGER),
-        );
-
-        let options = letterset![AlveolarN, RetroN];
-
-        for left in options.iter() {
-            // (Ng, K) => (Mellinam, K)
-            joins.insert_special(
-                (Letter::Ng, Letter::K),
-                (left, Letter::K),
-                None,
-            );
-
-            // (M, P) => (Mellinam, P)
-            joins.insert_special(
-                (Letter::M, Letter::P),
-                (left, Letter::P),
-                None,
-            );
-
-            // (N, T) => (Mellinam, T)
-            joins.insert_special(
-                (Letter::N, Letter::T),
-                (left, Letter::T),
-                None,
-            );
-        }
-
-        let options = letterset![AlveolarR, AlveolarL, RetroT, RetroL];
-
-        for left in options.iter() {
-            for right in KCP.iter() {
-                // (K, K) => (RetroT, K), etc.
-                joins.insert_special(
-                    (right, right),
-                    (left, right),
-                    None,
-                );
-            }
-        }
-
-        joins
-    };
-}
+    joins
+});
 
 #[inline]
 pub fn grantha_transform(lt: Letter) -> Option<(Letter, bool)> {
@@ -677,7 +624,6 @@ pub fn literal_search<S: Search>(
 
 const KCP: LetterSet = letterset![K, Ch, P];
 
-#[rustfmt::skip]
 fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<bool, S::Error> {
     match letters.remaining_with_offset(-2).as_ref() {
         // Check for double letter followed by U
@@ -700,8 +646,7 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
         }
 
         // Check for "aaga" and "aana"
-        [_, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
-            if letters.index > 2 => {}
+        [_, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A] if letters.index > 2 => {}
 
         // Check for "aaga" and "aana"  with "y" joiner
         &[lt, Letter::Y, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
@@ -712,47 +657,21 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
             if LetterSet::vowel_with_v().matches(lt) => {}
 
         // Check for "endru" and "endra"
-        &[
-            lt,
-            Letter::E,
-            Letter::AlveolarN,
-            Letter::AlveolarR,
-            Letter::U | Letter::A,
-        ] if LetterSet::tamil_final().matches(lt) => {}
+        &[lt, Letter::E, Letter::AlveolarN, Letter::AlveolarR, Letter::U | Letter::A]
+            if LetterSet::tamil_final().matches(lt) => {}
 
         // Check for "endru" and "endra" with "y" joiner
-        &[
-            lt,
-            Letter::Y,
-            Letter::E,
-            Letter::AlveolarN,
-            Letter::AlveolarR,
-            Letter::U | Letter::A,
-        ] if LetterSet::vowel_with_y().matches(lt) => {}
+        &[lt, Letter::Y, Letter::E, Letter::AlveolarN, Letter::AlveolarR, Letter::U | Letter::A]
+            if LetterSet::vowel_with_y().matches(lt) => {}
 
         // Check for "endru" and "endra" with "v" joiner
-        &[
-            lt,
-            Letter::V,
-            Letter::E,
-            Letter::AlveolarN,
-            Letter::AlveolarR,
-            Letter::U | Letter::A,
-        ] if LetterSet::vowel_with_v().matches(lt) => {}
+        &[lt, Letter::V, Letter::E, Letter::AlveolarN, Letter::AlveolarR, Letter::U | Letter::A]
+            if LetterSet::vowel_with_v().matches(lt) => {}
 
         // Check for "padu", "paadu", or "paduthu"
         &[prev, lt, Letter::P, Letter::A | Letter::LongA, Letter::RetroT, Letter::U]
-        | &[
-            prev,
-            lt,
-            Letter::P,
-            Letter::A,
-            Letter::RetroT,
-            Letter::U,
-            Letter::T,
-            Letter::T,
-            Letter::U,
-        ] => {
+        | &[prev, lt, Letter::P, Letter::A, Letter::RetroT, Letter::U, Letter::T, Letter::T, Letter::U] =>
+        {
             match lt {
                 // Handle doubling of "p"
                 Letter::P => {

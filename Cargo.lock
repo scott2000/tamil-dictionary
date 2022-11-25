@@ -1448,8 +1448,8 @@ dependencies = [
 name = "tamil_dictionary"
 version = "0.1.0"
 dependencies = [
- "lazy_static",
  "num_enum",
+ "once_cell",
  "rand",
  "regex",
  "rocket",

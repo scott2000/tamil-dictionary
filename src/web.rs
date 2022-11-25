@@ -9,6 +9,8 @@ use std::mem;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use once_cell::sync::Lazy;
+
 use serde::Serialize;
 
 use rand::seq::SliceRandom;
@@ -85,70 +87,68 @@ impl Example {
 
 pub fn current_example() -> &'static Example {
     #[rustfmt::skip]
-    lazy_static! {
-        static ref EXAMPLES: Box<[Example]> = {
-            let examples = &[
-                ("appuram",    word![A, P, P, U, AlveolarR, A, M]),
-                ("anubavam",   word![A, AlveolarN, U, P, A, V, A, M]),
-                ("aayiram",    word![LongA, Y, I, R, A, M]),
-                ("ippadi",     word![I, P, P, A, RetroT, I]),
-                ("ishtam",     word![I, Sh, RetroT, A, M]),
-                ("eeram",      word![LongI, R, A, M]),
-                ("utkaar",     word![U, RetroT, K, LongA, R]),
-                ("ulagam",     word![U, AlveolarL, A, K, A, M]),
-                ("ellaam",     word![E, AlveolarL, AlveolarL, LongA, M]),
-                ("emaatru",    word![LongE, M, LongA, AlveolarR, AlveolarR, U]),
-                ("orumai",     word![O, R, U, M, Ai]),
-                ("onbadhu",    word![O, AlveolarN, P, A, T, U]),
-                ("kadai",      word![K, A, RetroT, Ai]),
-                ("kadhai",     word![K, A, T, Ai]),
-                ("kashtam",    word![K, A, Sh, RetroT, A, M]),
-                ("kaatru",     word![K, LongA, AlveolarR, AlveolarR, U]),
-                ("kaalam",     word![K, LongA, AlveolarL, A, M]),
-                ("koottam",    word![K, LongU, RetroT, RetroT, A, M]),
-                ("kooppidu",   word![K, LongU, P, P, I, RetroT, U]),
-                ("konduvaa",   word![K, O, RetroN, RetroT, U, V, LongA]),
-                ("sattendru",  word![Ch, A, RetroT, RetroT, E, AlveolarN, AlveolarR, U]),
-                ("sandhosham", word![Ch, A, N, T, LongO, Sh, A, M]),
-                ("saappidu",   word![Ch, LongA, P, P, I, RetroT, U]),
-                ("nyaabagam",  word![Ny, LongA, P, A, K, A, M]),
-                ("thangam",    word![T, A, Ng, K, A, M]),
-                ("thamizh",    word![T, A, M, I, Zh]),
-                ("thottam",    word![T, LongO, RetroT, RetroT, A, M]),
-                ("niyaayam",   word![N, I, Y, LongA, Y, A, M]),
-                ("nenjam",     word![N, E, Ny, Ch, A, M]),
-                ("nuzhai",     word![N, U, Zh, Ai]),
-                ("pandhu",     word![P, A, N, T, U]),
-                ("pazham",     word![P, A, Zh, A, M]),
-                ("puthagam",   word![P, U, T, T, A, K, A, M]),
-                ("mazhai",     word![M, A, Zh, Ai]),
-                ("maatram",    word![M, LongA, AlveolarR, AlveolarR, A, M]),
-                ("maunam",     word![M, Au, AlveolarN, A, M]),
-                ("yaanai",     word![Y, LongA, AlveolarN, Ai]),
-                ("vanakkam",   word![V, A, RetroN, A, K, K, A, M]),
-                ("vinyaani",   word![V, I, Ny, Ny, LongA, AlveolarN, I]),
-                ("veedu",      word![V, LongI, RetroT, U]),
-            ];
+    static EXAMPLES: Lazy<Box<[Example]>> = Lazy::new(|| {
+        let examples = &[
+            ("appuram",    word![A, P, P, U, AlveolarR, A, M]),
+            ("anubavam",   word![A, AlveolarN, U, P, A, V, A, M]),
+            ("aayiram",    word![LongA, Y, I, R, A, M]),
+            ("ippadi",     word![I, P, P, A, RetroT, I]),
+            ("ishtam",     word![I, Sh, RetroT, A, M]),
+            ("eeram",      word![LongI, R, A, M]),
+            ("utkaar",     word![U, RetroT, K, LongA, R]),
+            ("ulagam",     word![U, AlveolarL, A, K, A, M]),
+            ("ellaam",     word![E, AlveolarL, AlveolarL, LongA, M]),
+            ("emaatru",    word![LongE, M, LongA, AlveolarR, AlveolarR, U]),
+            ("orumai",     word![O, R, U, M, Ai]),
+            ("onbadhu",    word![O, AlveolarN, P, A, T, U]),
+            ("kadai",      word![K, A, RetroT, Ai]),
+            ("kadhai",     word![K, A, T, Ai]),
+            ("kashtam",    word![K, A, Sh, RetroT, A, M]),
+            ("kaatru",     word![K, LongA, AlveolarR, AlveolarR, U]),
+            ("kaalam",     word![K, LongA, AlveolarL, A, M]),
+            ("koottam",    word![K, LongU, RetroT, RetroT, A, M]),
+            ("kooppidu",   word![K, LongU, P, P, I, RetroT, U]),
+            ("konduvaa",   word![K, O, RetroN, RetroT, U, V, LongA]),
+            ("sattendru",  word![Ch, A, RetroT, RetroT, E, AlveolarN, AlveolarR, U]),
+            ("sandhosham", word![Ch, A, N, T, LongO, Sh, A, M]),
+            ("saappidu",   word![Ch, LongA, P, P, I, RetroT, U]),
+            ("nyaabagam",  word![Ny, LongA, P, A, K, A, M]),
+            ("thangam",    word![T, A, Ng, K, A, M]),
+            ("thamizh",    word![T, A, M, I, Zh]),
+            ("thottam",    word![T, LongO, RetroT, RetroT, A, M]),
+            ("niyaayam",   word![N, I, Y, LongA, Y, A, M]),
+            ("nenjam",     word![N, E, Ny, Ch, A, M]),
+            ("nuzhai",     word![N, U, Zh, Ai]),
+            ("pandhu",     word![P, A, N, T, U]),
+            ("pazham",     word![P, A, Zh, A, M]),
+            ("puthagam",   word![P, U, T, T, A, K, A, M]),
+            ("mazhai",     word![M, A, Zh, Ai]),
+            ("maatram",    word![M, LongA, AlveolarR, AlveolarR, A, M]),
+            ("maunam",     word![M, Au, AlveolarN, A, M]),
+            ("yaanai",     word![Y, LongA, AlveolarN, Ai]),
+            ("vanakkam",   word![V, A, RetroN, A, K, K, A, M]),
+            ("vinyaani",   word![V, I, Ny, Ny, LongA, AlveolarN, I]),
+            ("veedu",      word![V, LongI, RetroT, U]),
+        ];
 
-            examples.iter().map(Example::new).collect()
-        };
+        examples.iter().map(Example::new).collect()
+    });
 
-        static ref INDICES: Box<[u8]> = {
-            let count = EXAMPLES.len();
-            assert!(count <= u8::MAX as usize);
+    static INDICES: Lazy<Box<[u8]>> = Lazy::new(|| {
+        let count = EXAMPLES.len();
+        assert!(count <= u8::MAX as usize);
 
-            let mut indices = Vec::with_capacity(count * EXAMPLE_CYCLE_PERIOD);
+        let mut indices = Vec::with_capacity(count * EXAMPLE_CYCLE_PERIOD);
 
-            let mut rng = rand::thread_rng();
-            for _ in 0..EXAMPLE_CYCLE_PERIOD {
-                let mut slice: Box<[u8]> = (0..count).map(|i| i as u8).collect();
-                slice.shuffle(&mut rng);
-                indices.extend_from_slice(&slice);
-            }
+        let mut rng = rand::thread_rng();
+        for _ in 0..EXAMPLE_CYCLE_PERIOD {
+            let mut slice: Box<[u8]> = (0..count).map(|i| i as u8).collect();
+            slice.shuffle(&mut rng);
+            indices.extend_from_slice(&slice);
+        }
 
-            indices.into_boxed_slice()
-        };
-    }
+        indices.into_boxed_slice()
+    });
 
     let uptime = crate::uptime();
     let num_refreshes = uptime.as_secs() / EXAMPLE_REFRESH_TIME_SECS;
@@ -213,8 +213,8 @@ pub struct QueryKindSet {
 impl uri::fmt::Ignorable<uri::fmt::Query> for QueryKindSet {}
 
 impl QueryKindSet {
-    #[rustfmt::skip]
     pub fn to_kind_set(&self) -> KindSet {
+        #[rustfmt::skip]
         let &QueryKindSet { v, va, vm, tv, p, pa, sp, vp, i, ii } = self;
 
         [v, va, vm, tv, p, pa, sp, vp, i, ii]
@@ -438,7 +438,6 @@ impl ResultEntry {
             .collect()
     }
 
-    #[rustfmt::skip]
     fn render(entry: SearchRankingEntry, expanded: bool) -> Self {
         let SearchRankingEntry { entry, words } = entry;
 
@@ -481,12 +480,12 @@ impl From<usize> for NumWithPlural {
 }
 
 fn looks_english(s: &str) -> bool {
-    lazy_static! {
-        static ref ENGLISH_REGEX: Regex = Regex::new(
-            r#"^[td]r|[kgcspbw][lrwsy]|[td][lwsy]|s[ckmnpsty]|[fqx]|[kghcjstdpb]$|ng$|[aeiou].e$"#
+    static ENGLISH_REGEX: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r#"^[td]r|[kgcspbw][lrwsy]|[td][lwsy]|s[ckmnpsty]|[fqx]|[kghcjstdpb]$|ng$|[aeiou].e$"#,
         )
-        .unwrap();
-    }
+        .unwrap()
+    });
 
     ENGLISH_REGEX.is_match(s)
 }

@@ -2,9 +2,11 @@ use std::cmp::Ordering;
 use std::fmt::{self, Debug, Display};
 use std::ops::*;
 
-use crate::HashSet;
-
 use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
+
+use once_cell::sync::Lazy;
+
+use crate::HashSet;
 
 pub const PULLI: char = '\u{bcd}';
 pub const COMBINING_LA: char = '\u{bd7}';
@@ -73,20 +75,26 @@ gen_map!(TAMIL_CONSONANTS, parse_consonant, CONSONANT_START, CONSONANT_END, [
     'ஜ', 'ஷ', 'ஸ', 'ஹ',
 ], 'ஶ' Letter::S);
 
-#[rustfmt::skip]
-lazy_static! {
-    static ref VALID_LETTERS: HashSet<char> = {
-        TAMIL_VOWELS
-            .iter()
-            .chain(TAMIL_VOWEL_SIGNS)
-            .chain(TAMIL_CONSONANTS)
-            .copied()
-            .chain([AAYDHAM, GRANTHA_SSH, PULLI, COMBINING_LA, OM, '\u{200b}', '\u{200c}', '\u{200d}'])
-            .chain('a'..='z')
-            .chain('A'..='Z')
-            .collect()
-    };
-}
+static VALID_LETTERS: Lazy<HashSet<char>> = Lazy::new(|| {
+    TAMIL_VOWELS
+        .iter()
+        .chain(TAMIL_VOWEL_SIGNS)
+        .chain(TAMIL_CONSONANTS)
+        .copied()
+        .chain([
+            AAYDHAM,
+            GRANTHA_SSH,
+            PULLI,
+            COMBINING_LA,
+            OM,
+            '\u{200b}',
+            '\u{200c}',
+            '\u{200d}',
+        ])
+        .chain('a'..='z')
+        .chain('A'..='Z')
+        .collect()
+});
 
 pub fn is_consonant(ch: char) -> bool {
     parse_consonant(ch).is_some()
@@ -280,24 +288,13 @@ impl Letter {
         }
     }
 
-    #[rustfmt::skip]
     pub fn category(self) -> Category {
         match self as u8 {
-            Self::VOWEL_START..=Self::VOWEL_END =>
-                Category::TamilVowel,
-
-            Self::AAYDHAM =>
-                Category::TamilAaydham,
-
-            Self::TAMIL_CONSONANT_START..=Self::TAMIL_CONSONANT_END =>
-                Category::TamilConsonant,
-
-            Self::GRANTHA_START..=Self::GRANTHA_END =>
-                Category::TamilGrantha,
-
-            Self::LATIN_START..=Self::LATIN_END =>
-                Category::LatinAlpha,
-
+            Self::VOWEL_START..=Self::VOWEL_END => Category::TamilVowel,
+            Self::AAYDHAM => Category::TamilAaydham,
+            Self::TAMIL_CONSONANT_START..=Self::TAMIL_CONSONANT_END => Category::TamilConsonant,
+            Self::GRANTHA_START..=Self::GRANTHA_END => Category::TamilGrantha,
+            Self::LATIN_START..=Self::LATIN_END => Category::LatinAlpha,
             ch => unreachable!("invalid character: {ch}"),
         }
     }

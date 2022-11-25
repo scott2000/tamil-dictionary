@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::BufReader;
 
+use once_cell::sync::Lazy;
+
 use rand::seq::SliceRandom;
 
 use serde::Deserialize;
@@ -8,40 +10,39 @@ use serde::Deserialize;
 use crate::intern;
 use crate::tamil::{Letter, Word};
 
-lazy_static! {
-    pub static ref ENTRIES: Box<[Entry]> = {
-        eprintln!("Loading dictionary...");
+pub static ENTRIES: Lazy<Box<[Entry]>> = Lazy::new(|| {
+    eprintln!("Loading dictionary...");
 
-        let file = match File::open("dictionary.json") {
-            Ok(file) => file,
-            Err(_) => {
-                // Exit nicely with an error message if the file doesn't exist
-                eprintln!("Cannot open 'dictionary.json'. Make sure the file exists and is in the current directory.");
-                std::process::exit(1)
-            }
-        };
-
-        let mut entries: Box<[Entry]> = serde_json::from_reader(BufReader::new(file))
-            .expect("dictionary parse error");
-
-        // Clear the interning metadata since it won't be used anymore
-        intern::done();
-
-        // Sort by the parsed words (using natural joining only)
-        entries.sort_by(|a, b| {
-            a.parsed_words().cmp(b.parsed_words())
-                .then_with(|| a.subword.cmp(&b.subword))
-        });
-
-        // Record the index of each entry
-        for (i, entry) in entries.iter_mut().enumerate() {
-            entry.index = i as EntryIndex;
+    let file = match File::open("dictionary.json") {
+        Ok(file) => file,
+        Err(_) => {
+            // Exit nicely with an error message if the file doesn't exist
+            eprintln!("Cannot open 'dictionary.json'. Make sure the file exists and is in the current directory.");
+            std::process::exit(1)
         }
-
-        eprintln!(" => {} entries", entries.len());
-        entries
     };
-}
+
+    let mut entries: Box<[Entry]> =
+        serde_json::from_reader(BufReader::new(file)).expect("dictionary parse error");
+
+    // Clear the interning metadata since it won't be used anymore
+    intern::done();
+
+    // Sort by the parsed words (using natural joining only)
+    entries.sort_by(|a, b| {
+        a.parsed_words()
+            .cmp(b.parsed_words())
+            .then_with(|| a.subword.cmp(&b.subword))
+    });
+
+    // Record the index of each entry
+    for (i, entry) in entries.iter_mut().enumerate() {
+        entry.index = i as EntryIndex;
+    }
+
+    eprintln!(" => {} entries", entries.len());
+    entries
+});
 
 pub fn words() -> impl Iterator<Item = (&'static Word, Loc)> {
     ENTRIES.iter().enumerate().flat_map(|(a, entry)| {

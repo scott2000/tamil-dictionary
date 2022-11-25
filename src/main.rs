@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate rocket;
-#[macro_use]
-extern crate lazy_static;
 
 use std::hash::BuildHasherDefault;
 use std::time::{Duration, Instant};
+
+use once_cell::sync::Lazy;
 
 use rocket::fs::{relative, FileServer};
 use rocket_dyn_templates::Template;
@@ -49,31 +49,26 @@ pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<SeaH
 pub type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<SeaHasher>>;
 
 pub fn uptime() -> Duration {
-    lazy_static! {
-        static ref START: Instant = Instant::now();
-    }
+    static START: Lazy<Instant> = Lazy::new(|| Instant::now());
 
     Instant::now().saturating_duration_since(*START)
 }
 
 pub fn version() -> &'static str {
-    lazy_static! {
-        static ref VERSION: Box<str> = {
-            if let Ok(version) = std::env::var("RES_VERSION") {
-                assert!(!version.is_empty());
-                assert!(version.chars().all(|ch| ch.is_ascii_alphanumeric()));
-                version.into_boxed_str()
-            } else {
-                Box::from("dev")
-            }
-        };
-    }
+    static VERSION: Lazy<Box<str>> = Lazy::new(|| {
+        if let Ok(version) = std::env::var("RES_VERSION") {
+            assert!(!version.is_empty());
+            assert!(version.chars().all(|ch| ch.is_ascii_alphanumeric()));
+            version.into_boxed_str()
+        } else {
+            Box::from("dev")
+        }
+    });
 
     &VERSION
 }
 
 #[launch]
-#[rustfmt::skip]
 fn rocket() -> _ {
     // Initialize the examples for the front page
     web::current_example();
@@ -97,14 +92,12 @@ fn rocket() -> _ {
                 web::advanced,
                 web::grammar,
                 web::annotate,
-
                 // Search pages
                 web::entries,
                 web::random,
                 web::search_all,
                 web::search,
                 web::search_no_query,
-
                 // API endpoints
                 web::annotate_api_get,
                 web::annotate_raw_get,

@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::mem;
 
+use once_cell::sync::Lazy;
+
 use thiserror::Error;
 
 use crate::dictionary::{self, Loc, ENTRIES};
@@ -8,12 +10,12 @@ use crate::tamil::{Letter, LetterSet, Word};
 
 use super::{Search, SearchResult, Suggest, SuggestionList};
 
-lazy_static! {
-    static ref WORD_TREES: SearchTrees = build_trees("word", dictionary::words());
-    static ref DEFINITION_TREES: SearchTrees =
-        build_trees("definition", dictionary::definition_words());
-    static ref EMPTY_MAP: BTreeMap<Letter, Tree> = BTreeMap::new();
-}
+static WORD_TREES: Lazy<SearchTrees> = Lazy::new(|| build_trees("word", dictionary::words()));
+
+static DEFINITION_TREES: Lazy<SearchTrees> =
+    Lazy::new(|| build_trees("definition", dictionary::definition_words()));
+
+static EMPTY_MAP: Lazy<BTreeMap<Letter, Tree>> = Lazy::new(BTreeMap::new);
 
 #[derive(Debug)]
 struct SearchTrees {
@@ -39,7 +41,7 @@ pub fn search_word_prefix() -> TreeSearch {
 }
 
 fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
-    lazy_static::initialize(&ENTRIES);
+    Lazy::force(&ENTRIES);
     eprintln!("Building {kind} trees...");
 
     let mut prefix_tree = Tree::default();

@@ -1,11 +1,11 @@
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
+use once_cell::sync::Lazy;
+
 use crate::tamil::Word;
 
-lazy_static! {
-    static ref WORDS: Mutex<BTreeSet<&'static Word>> = Mutex::new(BTreeSet::new());
-}
+static WORDS: Lazy<Mutex<BTreeSet<&'static Word>>> = Lazy::new(|| Mutex::new(BTreeSet::new()));
 
 pub fn word(word: Box<Word>) -> &'static Word {
     // Cast the word reference to a pointer
