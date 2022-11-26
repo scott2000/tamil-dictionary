@@ -466,6 +466,7 @@ impl ResultSection {
 struct ResultEntry {
     uri: String,
     word: &'static str,
+    pronunciation: Option<&'static str>,
     index: u16,
     subword: Option<u8>,
     kind: String,
@@ -498,6 +499,7 @@ impl ResultEntry {
         Self {
             uri: link(entry.primary_word()),
             word: &entry.word,
+            pronunciation: entry.pronunciation_str.as_deref(),
             index: entry.index,
             subword: entry.subword,
             kind,

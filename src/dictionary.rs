@@ -123,6 +123,7 @@ impl WordData {
 struct RawEntry {
     word: String,
     sub: Option<u8>,
+    formal: Option<bool>,
     hint: Option<String>,
     kind: Vec<RawEntryKind>,
     secs: Vec<Vec<Vec<(SegmentKind, String)>>>,
@@ -198,6 +199,8 @@ pub enum SegmentKind {
 pub struct Entry {
     pub word: Box<str>,
     pub parsed_word: Box<[&'static Word]>,
+    pub pronunciation: Option<&'static Word>,
+    pub pronunciation_str: Option<Box<str>>,
     pub subword: Option<u8>,
     pub index: EntryIndex,
     pub hint: Option<Box<str>>,
@@ -371,9 +374,29 @@ impl From<RawEntry> for Entry {
         let kind_strs = Self::kind_strs(&raw.kind).into_boxed_slice();
         let kind_set = Self::kind_set(&raw.kind);
 
+        // If there is a single word with a single part which is not formal, guess the pronunciation
+        let pronunciation = {
+            if raw.formal != Some(true)
+                && parsed_word.len() == 1
+                && !raw.word.contains([' ', '-', ',', ';'])
+            {
+                let only = parsed_word[0];
+                let guess = only.guess_pronunciation(kind_set);
+                if &*guess != only {
+                    Some(intern::word(guess))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
         Self {
             word: raw.word.into_boxed_str(),
             parsed_word,
+            pronunciation,
+            pronunciation_str: pronunciation.map(|word| word.to_string().into_boxed_str()),
             subword: raw.sub,
             index: 0,
             hint: raw.hint.map(String::into_boxed_str),

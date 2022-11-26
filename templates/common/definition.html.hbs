@@ -2,6 +2,7 @@
     {{~#if subword~}}
         <sup>{{subword}}</sup>
     {{~/if}}
+    {{~#if pronunciation}} ("{{pronunciation}}"){{/if~}}
     {{~#if 1}} {{kind}} {{/if~}}
     {{#each sections}}
         {{~#if is_header}}

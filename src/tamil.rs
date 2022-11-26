@@ -6,6 +6,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 
 use once_cell::sync::OnceCell;
 
+use crate::dictionary::{EntryKind, KindSet};
 use crate::HashSet;
 
 pub const PULLI: char = '\u{bcd}';
@@ -711,6 +712,307 @@ impl Word {
 
     pub fn remove_end(&self, count: usize) -> &Self {
         &self[..(self.len() - count)]
+    }
+
+    pub fn guess_pronunciation(&self, kind_set: KindSet) -> Box<Word> {
+        use Letter::*;
+
+        let mut this = &self.0;
+        let mut word = Vec::new();
+
+        const BEFORE_A: LetterSet = LetterSet::consonant().difference(LetterSet::glide());
+
+        // Transformations only at the head of words
+        match this {
+            // aaga => aa
+            [LongA, K, A] => {
+                return word![LongA];
+            }
+
+            // padhinmoondru => padhimoonu
+            [P, A, T, I, AlveolarN, M, LongU, AlveolarN, AlveolarR, U] => {
+                return word![P, A, T, I, M, LongU, RetroN, U];
+            }
+
+            // naangu => naalu
+            [N, LongA, AlveolarN, K, U] => {
+                return word![N, LongA, AlveolarL, U];
+            }
+
+            // padhinaangu => padhinaalu
+            [P, A, T, I, AlveolarN, LongA, AlveolarN, K, U] => {
+                return word![P, A, T, I, AlveolarN, LongA, AlveolarL, U];
+            }
+
+            // aindhu => anju
+            [Ai, N, T, U] => {
+                return word![A, Ny, Ch, U];
+            }
+
+            // padhinaindhu => padhinanju
+            [P, A, T, I, AlveolarN, Ai, N, T, U] => {
+                return word![P, A, T, I, AlveolarN, A, Ny, Ch, U];
+            }
+
+            // aimbadhu => ambadhu
+            [Ai, M, P, A, T, U] => {
+                return word![A, M, P, A, T, U];
+            }
+
+            // enbadhu => embadhu
+            [E, RetroN, P, A, T, U] => {
+                return word![E, M, P, A, T, U];
+            }
+
+            // endru => -nnu
+            [E, AlveolarN, AlveolarR, U] if kind_set.matches(EntryKind::InaiIdaiChol) => {
+                return word![AlveolarN, AlveolarN, U];
+            }
+
+            // enendraal => ennaal
+            [LongE, AlveolarN, E, AlveolarN, AlveolarR, LongA, AlveolarL] => {
+                return word![LongE, AlveolarN, AlveolarN, LongA, AlveolarL];
+            }
+
+            // endraal => -nnaal
+            [E, AlveolarN, AlveolarR, LongA, AlveolarL] => {
+                return word![AlveolarN, AlveolarN, LongA, AlveolarL];
+            }
+
+            // endra => engira
+            [E, AlveolarN, AlveolarR, A] if kind_set.matches(EntryKind::IdaiChol) => {
+                return word![E, AlveolarN, K, I, AlveolarR, A];
+            }
+
+            // vidu => -du
+            [V, I, RetroT, U] if kind_set.matches(EntryKind::ThunaiVinai) => {
+                return word![RetroT, U];
+            }
+
+            // andru => annaikku
+            &[v @ (A | I | E), AlveolarN, AlveolarR, U, ..]
+                if !kind_set.matches(EntryKind::VinaiMutru) =>
+            {
+                word.extend_from_slice(&[v, AlveolarN, AlveolarN, Ai, K, K, U]);
+                this = &this[4..];
+            }
+
+            // pi(R)a- => po(R)a-
+            &[P, I, c2, A | Ai | Au, ..] if LetterSet::retroflex().matches(c2) => {
+                word.extend_from_slice(&[P, O]);
+                this = &this[2..];
+            }
+
+            // i_a => e_a
+            &[I, c2, A | Ai | Au, ..] if BEFORE_A.matches(c2) => {
+                word.push(E);
+                this = &this[1..];
+            }
+
+            // u_a => o_a
+            &[U, c2, A | Ai | Au, ..] if BEFORE_A.matches(c2) => {
+                word.push(O);
+                this = &this[1..];
+            }
+
+            // _i_a => _e_a
+            &[c1, I, c2, A | Ai | Au, ..]
+                if c1.is_consonant() && c1 != V && BEFORE_A.matches(c2) =>
+            {
+                word.extend_from_slice(&[c1, E]);
+                this = &this[2..];
+            }
+
+            // _u_a => _o_a
+            &[c1, U, c2, A | Ai | Au, ..]
+                if c1.is_consonant() && c1 != Y && BEFORE_A.matches(c2) =>
+            {
+                word.extend_from_slice(&[c1, O]);
+                this = &this[2..];
+            }
+
+            _ => {}
+        }
+
+        const ADVERB: KindSet =
+            KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::IdaiChol));
+
+        let is_adv = kind_set.matches_any(ADVERB) && self.end_matches(letterset![U, I]);
+        let is_adj = kind_set.matches(EntryKind::PeyarAdai) && self.ends_with(word![A]);
+
+        // Transformations anywhere in words
+        while let Some((&lt, tail)) = this.split_first() {
+            match this {
+                // auv- => avv-
+                [Au, V, ..] => {
+                    word.extend_from_slice(&[A, V]);
+                    this = tail;
+                }
+
+                // au- => av-
+                [Au, ..] => {
+                    word.extend_from_slice(&[A, V, U]);
+                    this = tail;
+                }
+
+                // pi(R)- => pu(R)-
+                &[P, I, c2, ..] if LetterSet::retroflex().matches(c2) => {
+                    word.extend_from_slice(&[P, U]);
+                    this = &this[2..];
+                }
+
+                // adharku => adhukku
+                &[v @ (A | I | E), T, A, AlveolarR, K, ..] => {
+                    word.extend_from_slice(&[v, T, U, K]);
+                    this = &this[4..];
+                }
+
+                // avvalavu => avlo
+                &[v @ (A | I | E), V, V, A, RetroL, A, V, U, ..] => {
+                    word.extend_from_slice(&[v, V, RetroL, LongO]);
+                    this = &this[8..];
+                }
+
+                // vaithu => vechu
+                [V, Ai, T, T, U, ..] => {
+                    word.extend_from_slice(&[V, E, Ch, Ch]);
+                    this = &this[4..];
+                }
+
+                // vaithiru => vechiru
+                [V, Ai, T, T, I, R, U, ..] => {
+                    word.extend_from_slice(&[V, E, Ch, Ch]);
+                    this = &this[4..];
+                }
+
+                // -rgal => -ngal
+                [R, K, A, RetroL, ..] => {
+                    word.push(Ng);
+                    this = tail;
+                }
+
+                // hard consonant assimilation
+                &[AlveolarR | RetroT, right @ (K | Ch | P), ..] => {
+                    word.push(right);
+                    this = tail;
+                }
+
+                // tr => th
+                [AlveolarR, AlveolarR, ..] => {
+                    word.extend_from_slice(&[T, T]);
+                    this = &this[2..];
+                }
+
+                // ndr => nn
+                [AlveolarN, AlveolarR, ..] if word != [N, A] => {
+                    word.extend_from_slice(&[AlveolarN, AlveolarN]);
+                    this = &this[2..];
+                }
+
+                // (N)ndr => (N)n
+                &[v, AlveolarN, AlveolarR, ..] if LetterSet::nedil().matches(v) => {
+                    word.extend_from_slice(&[v, RetroN]);
+                    this = &this[3..];
+                }
+
+                // indhu => inju
+                &[v @ (I | Ai), N, T, U, ..] if is_adv || is_adj => {
+                    word.extend_from_slice(&[v, Ny, Ch]);
+                    this = &this[3..];
+                }
+
+                // ithu => ichu
+                &[v @ (I | Ai | Y), T, T, U, ..] if is_adv || is_adj => {
+                    word.extend_from_slice(&[v, Ch, Ch]);
+                    this = &this[3..];
+                }
+
+                // indha => inja
+                &[v @ (I | Ai), N, T, A] if is_adj => {
+                    word.extend_from_slice(&[v, Ny, Ch, A]);
+                    this = &[];
+                }
+
+                // itha => icha
+                &[v @ (I | Ai | Y), T, T, A] if is_adj => {
+                    word.extend_from_slice(&[v, Ch, Ch, A]);
+                    this = &[];
+                }
+
+                // -kondu => -kittu
+                [K, O, RetroN, RetroT, U] if is_adv && !word.is_empty() => {
+                    word.extend_from_slice(&[K, I, RetroT, RetroT, U]);
+                    this = &[];
+                }
+
+                // -kol => -ko
+                [K, O, RetroL] if !word.is_empty() || kind_set.matches(EntryKind::ThunaiVinai) => {
+                    word.extend_from_slice(&[K, LongO]);
+                    this = &[];
+                }
+
+                // -indhukol => -injuko
+                &[v @ (I | Ai), N, T, U, K, O, RetroL] => {
+                    word.extend_from_slice(&[v, Ny, Ch, U, K, LongO]);
+                    this = &[];
+                }
+
+                // -ithukkol => -ichukko
+                &[v @ (I | Ai | Y), T, T, U, K, K, O, RetroL] => {
+                    word.extend_from_slice(&[v, Ch, Ch, U, K, K, LongO]);
+                    this = &[];
+                }
+
+                // -vidu => -du
+                &[v @ (I | U), V, I, RetroT, U] if kind_set.matches(EntryKind::VinaiChol) => {
+                    word.extend_from_slice(&[v, RetroT, U]);
+                    this = &[];
+                }
+
+                // -indhuvidu => -injidu
+                &[v @ (I | Ai), N, T, U, V, I, RetroT, U] => {
+                    word.extend_from_slice(&[v, Ny, Ch, I, RetroT, U]);
+                    this = &[];
+                }
+
+                // -ithuvidu => -ichidu
+                &[v @ (I | Ai | Y), T, T, U, V, I, RetroT, U] => {
+                    word.extend_from_slice(&[v, Ch, Ch, I, RetroT, U]);
+                    this = &[];
+                }
+
+                // -ubadhu => -uvadhu
+                [U, P, A, T, U] => {
+                    word.extend_from_slice(&[U, V, A, T, U]);
+                    this = &[];
+                }
+
+                // onbadhu => ombadhu
+                [O, AlveolarN, P, A, T, U] => {
+                    word.extend_from_slice(&[O, M, P, A, T, U]);
+                    this = &[];
+                }
+
+                // aayitru => aachu
+                [LongA, Y, I, AlveolarR, AlveolarR, U] => {
+                    word.extend_from_slice(&[LongA, Ch, Ch, U]);
+                    this = &[];
+                }
+
+                // poyitru => pochu
+                [P, LongO, Y, I, AlveolarR, AlveolarR, U] => {
+                    word.extend_from_slice(&[P, LongO, Ch, Ch, U]);
+                    this = &[];
+                }
+
+                _ => {
+                    word.push(lt);
+                    this = tail;
+                }
+            }
+        }
+
+        word.into()
     }
 
     pub fn parse(s: &str) -> Box<Word> {
