@@ -35,10 +35,12 @@
                 {{~/if}}
             {{~/if}}
             {{~#if exact_and_best_count.num}}
+                {{#unless explicit~}}
                 <h2 class="header">Best Matches</h2>
                 <p class="result-count">
                     {{~> common/plural num=exact_and_best_count s="result" p="results"~}}
                 </p>
+                {{~/unless}}
                 {{~#if exact}}
                 <div id="exact">
                     {{#each exact~}}

@@ -502,7 +502,7 @@ pub type Section = Box<[Paragraph]>;
 
 pub type Paragraph = Box<[Segment]>;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Segment {
     kind: SegmentKind,
     start: u32,

@@ -41,6 +41,7 @@ pub mod annotate;
 pub mod dictionary;
 pub mod intern;
 pub mod query;
+pub mod refs;
 pub mod search;
 pub mod tamil;
 pub mod web;
@@ -49,7 +50,7 @@ pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<SeaH
 pub type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<SeaHasher>>;
 
 pub fn uptime() -> Duration {
-    static START: Lazy<Instant> = Lazy::new(|| Instant::now());
+    static START: Lazy<Instant> = Lazy::new(Instant::now);
 
     Instant::now().saturating_duration_since(*START)
 }

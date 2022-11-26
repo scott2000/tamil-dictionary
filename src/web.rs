@@ -27,6 +27,7 @@ use rocket_dyn_templates::Template;
 use crate::annotate::{TextSegment, WordCount};
 use crate::dictionary::*;
 use crate::query::{ExpandOptions, Pattern, Query, SearchKind};
+use crate::refs::{self, RefWithSub};
 use crate::search::word::WordSearch;
 use crate::search::{Search, SearchRankingEntry};
 use crate::tamil::{self, LetterSet, Word};
@@ -273,9 +274,38 @@ impl ResultSegment {
         }
     }
 
+    fn render_ref_with_sub(state: &RenderState, ref_with_sub: RefWithSub) -> Vec<Self> {
+        let (word, sub_str) = ref_with_sub.get_parts(&state.entry.text);
+
+        let Ok(sub) = sub_str.parse() else {
+            return vec![Self::new(SegmentKind::Reference, word)];
+        };
+
+        let uri = refs::get_entry(word, sub)
+            .map(|entry| uri!(entries(entry.to_string())).to_string())
+            .unwrap_or_else(|| link(word));
+
+        let ref_seg = Self {
+            text: word,
+            uri,
+            tag: None,
+            close_tag: true,
+        };
+
+        let sub_seg = Self::new(SegmentKind::Superscript, sub_str);
+
+        vec![ref_seg, sub_seg]
+    }
+
     fn render(state: &mut RenderState, seg: &'static Segment) -> Vec<Self> {
         let entry = state.entry;
-        let mut segments = Vec::new();
+
+        if seg.kind() == SegmentKind::Reference {
+            let text = &entry.text[seg.start()..seg.end()];
+            return vec![Self::new(SegmentKind::Reference, text)];
+        }
+
+        let mut segments = Vec::with_capacity(1);
         let mut push = |kind, start, end| {
             let text = &entry.text[start..end];
             if !text.is_empty() {
@@ -290,6 +320,13 @@ impl ResultSegment {
             let range_start = range.start();
             let range_end = range.end();
 
+            // If this highlight was meant for a previous ref, ignore it
+            if range_end < start {
+                state.highlight_ranges.pop();
+                continue;
+            }
+
+            // If this highlight was meant for the next segment, leave it
             if range_end > end {
                 break;
             }
@@ -314,9 +351,11 @@ struct ResultParagraph {
 
 impl ResultParagraph {
     fn render(state: &mut RenderState, para: &'static Paragraph) -> Self {
-        let segments = para
-            .iter()
-            .flat_map(|seg| ResultSegment::render(state, seg))
+        let segments = refs::group_refs(para.iter())
+            .flat_map(|seg| match seg {
+                Ok(seg) => ResultSegment::render_ref_with_sub(state, seg),
+                Err(seg) => ResultSegment::render(state, seg),
+            })
             .collect();
 
         Self { segments }
@@ -498,6 +537,7 @@ struct SearchTemplate<'a> {
     kinds: QueryKindSet,
     #[serde(skip)]
     kind_set: KindSet,
+    explicit: bool,
     advanced: bool,
     hide_other: bool,
     error: bool,
@@ -533,6 +573,7 @@ impl<'a> SearchTemplate<'a> {
             other_uri,
             kinds,
             kind_set,
+            explicit: false,
             advanced,
             hide_other: !all,
             error: false,
@@ -627,6 +668,8 @@ impl<'a> SearchTemplate<'a> {
     }
 
     fn explicit(&mut self, results: &BTreeSet<EntryIndex>) {
+        self.explicit = true;
+
         let count = results.len();
         if count == 0 {
             self.message("No results found.");
@@ -651,7 +694,7 @@ impl<'a> SearchTemplate<'a> {
     }
 }
 
-#[get("/entries?<ids>")]
+#[get("/entries/<ids>")]
 pub fn entries(ids: &str) -> Template {
     SEARCH_COUNT.fetch_add(1, Ordering::Relaxed);
 

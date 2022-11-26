@@ -379,6 +379,10 @@ impl SearchResult {
         result
     }
 
+    pub fn entries(&self) -> impl Iterator<Item = EntryIndex> + '_ {
+        self.map.keys().copied()
+    }
+
     pub fn rank(self) -> SearchRanking {
         use SearchPrecedence::*;
         use SearchRank::*;
