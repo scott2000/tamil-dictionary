@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 
-use crate::dictionary::{Entry, EntryIndex, Loc, WordData, WordIndex, ENTRIES, NO_WORD};
+use crate::dictionary::{self, Entry, EntryIndex, Loc, WordData, WordIndex, NO_WORD};
 use crate::tamil::{Letter, LetterSet, Word};
 use crate::HashSet;
 
@@ -121,12 +121,14 @@ impl SuggestionList {
 
         self.from_ex_leaves.extend(to_add);
 
+        let entries = dictionary::entries();
+
         // Take the first suggestions alphabetically from both expanded and non-expanded
         self.from_leaves
             .into_iter()
             .chain(self.from_ex_leaves)
             .take(self.count_requested as usize)
-            .map(|index| &ENTRIES[index as usize])
+            .map(|index| &entries[index as usize])
     }
 
     pub fn ignore_branches(&self) -> bool {
@@ -158,7 +160,8 @@ impl SuggestionList {
         };
 
         // If the word was seen (even if it's a different entry), return early
-        let word = &ENTRIES[index as usize].word[..];
+        let entries = dictionary::entries();
+        let word = &entries[index as usize].word[..];
         if seen.contains(&word) {
             return false;
         }
@@ -331,8 +334,7 @@ impl SearchResult {
             intersect.entry_intersection(&mut intersect_set);
         }
 
-        // Get a direct slice for the entries array
-        let entries: &[Entry] = &ENTRIES;
+        let entries = dictionary::entries();
 
         // Combine results which are in intersection but not union, and match in kind
         let mut intersect_difference = Self::default();
@@ -360,7 +362,7 @@ impl SearchResult {
     fn filter_all(difference_set: HashSet<EntryIndex>, kinds: KindSet) -> Self {
         // Similar logic to filter(), but with full set of entries
         let mut result = Self::default();
-        for (i, entry) in ENTRIES.iter().enumerate() {
+        for (i, entry) in dictionary::entries().iter().enumerate() {
             let index = i as EntryIndex;
 
             if difference_set.contains(&index) {
@@ -502,8 +504,10 @@ impl SearchRanking {
     ) {
         use SearchRank::*;
 
+        let entries = dictionary::entries();
+
         let entry = SearchRankingEntry {
-            entry: &ENTRIES[index as usize],
+            entry: &entries[index as usize],
             words,
         };
 

@@ -1,21 +1,32 @@
 use std::collections::BTreeMap;
 use std::mem;
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use thiserror::Error;
 
-use crate::dictionary::{self, Loc, ENTRIES};
+use crate::dictionary::{self, Loc};
 use crate::tamil::{Letter, LetterSet, Word};
 
 use super::{Search, SearchResult, Suggest, SuggestionList};
 
-static WORD_TREES: Lazy<SearchTrees> = Lazy::new(|| build_trees("word", dictionary::words()));
+fn word_trees() -> &'static SearchTrees {
+    static INSTANCE: OnceCell<SearchTrees> = OnceCell::new();
 
-static DEFINITION_TREES: Lazy<SearchTrees> =
-    Lazy::new(|| build_trees("definition", dictionary::definition_words()));
+    INSTANCE.get_or_init(|| build_trees("word", dictionary::words()))
+}
 
-static EMPTY_MAP: Lazy<BTreeMap<Letter, Tree>> = Lazy::new(BTreeMap::new);
+fn definition_trees() -> &'static SearchTrees {
+    static INSTANCE: OnceCell<SearchTrees> = OnceCell::new();
+
+    INSTANCE.get_or_init(|| build_trees("definition", dictionary::definition_words()))
+}
+
+fn empty_map() -> &'static BTreeMap<Letter, Tree> {
+    static INSTANCE: OnceCell<BTreeMap<Letter, Tree>> = OnceCell::new();
+
+    INSTANCE.get_or_init(BTreeMap::new)
+}
 
 #[derive(Debug)]
 struct SearchTrees {
@@ -24,24 +35,25 @@ struct SearchTrees {
 }
 
 pub fn search_word() -> TreeSearch {
-    TreeSearch::new(&[&WORD_TREES])
+    TreeSearch::new(&[word_trees()])
 }
 
 pub fn search_definition() -> TreeSearch {
-    TreeSearch::new(&[&DEFINITION_TREES, &WORD_TREES])
+    TreeSearch::new(&[definition_trees(), word_trees()])
 }
 
 pub fn search_word_prefix() -> TreeSearch {
     TreeSearch {
         branches: vec![SearchBranch::new(
-            &WORD_TREES.prefix_tree,
+            &word_trees().prefix_tree,
             PrefixMode::Asserted,
         )],
     }
 }
 
 fn build_trees(kind: &str, iter: impl Iterator<Item = (&'static Word, Loc)>) -> SearchTrees {
-    Lazy::force(&ENTRIES);
+    let _ = dictionary::entries();
+
     eprintln!("Building {kind} trees...");
 
     let mut prefix_tree = Tree::default();
@@ -160,7 +172,7 @@ impl Search for TreeSearch {
     }
 
     fn asserting_end(&self) -> Self {
-        let empty_map = &EMPTY_MAP;
+        let empty_map = empty_map();
 
         let branches = self
             .branches

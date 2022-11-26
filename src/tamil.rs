@@ -4,7 +4,7 @@ use std::ops::*;
 
 use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use crate::HashSet;
 
@@ -75,26 +75,30 @@ gen_map!(TAMIL_CONSONANTS, parse_consonant, CONSONANT_START, CONSONANT_END, [
     'ஜ', 'ஷ', 'ஸ', 'ஹ',
 ], 'ஶ' Letter::S);
 
-static VALID_LETTERS: Lazy<HashSet<char>> = Lazy::new(|| {
-    TAMIL_VOWELS
-        .iter()
-        .chain(TAMIL_VOWEL_SIGNS)
-        .chain(TAMIL_CONSONANTS)
-        .copied()
-        .chain([
-            AAYDHAM,
-            GRANTHA_SSH,
-            PULLI,
-            COMBINING_LA,
-            OM,
-            '\u{200b}',
-            '\u{200c}',
-            '\u{200d}',
-        ])
-        .chain('a'..='z')
-        .chain('A'..='Z')
-        .collect()
-});
+fn valid_letters() -> &'static HashSet<char> {
+    static INSTANCE: OnceCell<HashSet<char>> = OnceCell::new();
+
+    INSTANCE.get_or_init(|| {
+        TAMIL_VOWELS
+            .iter()
+            .chain(TAMIL_VOWEL_SIGNS)
+            .chain(TAMIL_CONSONANTS)
+            .copied()
+            .chain([
+                AAYDHAM,
+                GRANTHA_SSH,
+                PULLI,
+                COMBINING_LA,
+                OM,
+                '\u{200b}',
+                '\u{200c}',
+                '\u{200d}',
+            ])
+            .chain('a'..='z')
+            .chain('A'..='Z')
+            .collect()
+    })
+}
 
 pub fn is_consonant(ch: char) -> bool {
     parse_consonant(ch).is_some()
@@ -173,11 +177,11 @@ impl Letter {
     }
 
     pub fn is_valid(ch: char) -> bool {
-        VALID_LETTERS.contains(&ch)
+        valid_letters().contains(&ch)
     }
 
     pub fn is_tamil(ch: char) -> bool {
-        !ch.is_ascii() && VALID_LETTERS.contains(&ch)
+        !ch.is_ascii() && valid_letters().contains(&ch)
     }
 
     pub fn parse(ch: char) -> Option<Self> {

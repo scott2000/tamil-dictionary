@@ -5,11 +5,11 @@ use std::fs::File;
 use std::io::BufReader;
 use std::rc::Rc;
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use serde::Deserialize;
 
-use crate::dictionary::{Entry, EntryIndex, EntryKind, KindSet, ENTRIES};
+use crate::dictionary::{self, Entry, EntryIndex, EntryKind, KindSet};
 use crate::tamil::{Letter, LetterCombination, LetterSet, Word};
 use crate::{intern, HashMap, HashSet};
 
@@ -120,37 +120,41 @@ impl<'a> TextSegment<'a> {
     }
 }
 
-static EXCLUDED_WORDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let mut set = HashSet::default();
+fn excluded_words() -> &'static HashSet<&'static str> {
+    static INSTANCE: OnceCell<HashSet<&'static str>> = OnceCell::new();
 
-    let excluded: &[&Word] = &[
-        word![E, AlveolarN],
-        word![E, M],
-        word![E, Ng, K, A, RetroL],
-        word![N, A, M],
-        word![U, AlveolarN],
-        word![U, M],
-        word![U, Ng, K, A, RetroL],
-        word![T, A, AlveolarN],
-        word![T, A, M],
-        word![T, A, Ng, K, A, RetroL],
-        word![M, U, RetroT, I],
-        word![U, RetroL, RetroL, A],
-        word![I, AlveolarL, AlveolarL, LongA, T, A],
-        word![I, AlveolarL, AlveolarL, LongA, M, A, AlveolarL],
-        word![LongO, R],
-        word![O, R, U],
-        word![O, R, U, V, A, RetroL],
-        word![O, R, U, V, A, AlveolarN],
-        word![O, R, U, V, A, R],
-    ];
+    INSTANCE.get_or_init(|| {
+        let mut set = HashSet::default();
 
-    for &word in excluded {
-        set.insert(&*Box::leak(word.to_string().into_boxed_str()));
-    }
+        let excluded: &[&Word] = &[
+            word![E, AlveolarN],
+            word![E, M],
+            word![E, Ng, K, A, RetroL],
+            word![N, A, M],
+            word![U, AlveolarN],
+            word![U, M],
+            word![U, Ng, K, A, RetroL],
+            word![T, A, AlveolarN],
+            word![T, A, M],
+            word![T, A, Ng, K, A, RetroL],
+            word![M, U, RetroT, I],
+            word![U, RetroL, RetroL, A],
+            word![I, AlveolarL, AlveolarL, LongA, T, A],
+            word![I, AlveolarL, AlveolarL, LongA, M, A, AlveolarL],
+            word![LongO, R],
+            word![O, R, U],
+            word![O, R, U, V, A, RetroL],
+            word![O, R, U, V, A, AlveolarN],
+            word![O, R, U, V, A, R],
+        ];
 
-    set
-});
+        for &word in excluded {
+            set.insert(&*Box::leak(word.to_string().into_boxed_str()));
+        }
+
+        set
+    })
+}
 
 const ADVERB: KindSet =
     KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::InaiIdaiChol));
@@ -170,8 +174,8 @@ pub struct WordCount {
 
 impl WordCount {
     pub fn insert(&mut self, choice: &Choice) {
-        let entries: &[Entry] = &ENTRIES;
-        let excluded: &HashSet<_> = &EXCLUDED_WORDS;
+        let entries = dictionary::entries();
+        let excluded = excluded_words();
 
         let mut has_vinai = false;
         for &index in choice.entries.iter() {
@@ -690,78 +694,83 @@ type Verbs = HashMap<(String, Option<u8>), Vec<String>>;
 // Map from stems to stem data
 type Stems = HashMap<&'static Word, Vec<StemData>>;
 
-static STEMS: Lazy<Stems> = Lazy::new(|| {
-    Lazy::force(&ENTRIES);
-    eprintln!("Loading verbs...");
+fn stems() -> &'static Stems {
+    static INSTANCE: OnceCell<Stems> = OnceCell::new();
 
-    let file = match File::open("verbs.json") {
-        Ok(file) => file,
-        Err(_) => return HashMap::default(),
-    };
+    INSTANCE.get_or_init(|| {
+        let _ = dictionary::entries();
 
-    let verb_list: Vec<RawVerbData> =
-        serde_json::from_reader(BufReader::new(file)).expect("verbs parse error");
+        eprintln!("Loading verbs...");
 
-    eprintln!(" => {} verbs", verb_list.len());
-    eprintln!("Building stems...");
+        let file = match File::open("verbs.json") {
+            Ok(file) => file,
+            Err(_) => return HashMap::default(),
+        };
 
-    // Process the raw verb list by creating maps (Ves and Verbs)
-    let mut ves = Ves::default();
-    let mut verbs = Verbs::default();
-    for mut verb in verb_list {
-        for ve in verb.ve.iter_mut() {
-            // Vinaiyechams starting with a hyphen are incomplete
-            if ve.starts_with('-') {
-                continue;
-            }
+        let verb_list: Vec<RawVerbData> =
+            serde_json::from_reader(BufReader::new(file)).expect("verbs parse error");
 
-            // For compount words, only the last word is conjugated
-            if let Some(index) = verb.word.rfind(' ') {
-                // Make sure that there aren't multiple parts
-                if verb.word.contains([',', ';']) {
-                    panic!("compound verb cannot be conjugated: {}", verb.word);
+        eprintln!(" => {} verbs", verb_list.len());
+        eprintln!("Building stems...");
+
+        // Process the raw verb list by creating maps (Ves and Verbs)
+        let mut ves = Ves::default();
+        let mut verbs = Verbs::default();
+        for mut verb in verb_list {
+            for ve in verb.ve.iter_mut() {
+                // Vinaiyechams starting with a hyphen are incomplete
+                if ve.starts_with('-') {
+                    continue;
                 }
 
-                ve.insert_str(0, &verb.word[..=index]);
-                continue;
+                // For compount words, only the last word is conjugated
+                if let Some(index) = verb.word.rfind(' ') {
+                    // Make sure that there aren't multiple parts
+                    if verb.word.contains([',', ';']) {
+                        panic!("compound verb cannot be conjugated: {}", verb.word);
+                    }
+
+                    ve.insert_str(0, &verb.word[..=index]);
+                    continue;
+                }
+
+                // Record this vinaiyecham and the word it came from (in Ves)
+                let word = intern::word(Word::parse(&verb.word));
+                if let Some(set) = ves.get_mut(ve) {
+                    set.insert(word);
+                } else {
+                    let mut set = BTreeSet::new();
+                    set.insert(word);
+                    ves.insert(ve.clone(), set);
+                }
             }
 
-            // Record this vinaiyecham and the word it came from (in Ves)
-            let word = intern::word(Word::parse(&verb.word));
-            if let Some(set) = ves.get_mut(ve) {
-                set.insert(word);
-            } else {
-                let mut set = BTreeSet::new();
-                set.insert(word);
-                ves.insert(ve.clone(), set);
-            }
+            // Remember the vinaiyecham for this word and subword
+            verbs.insert((verb.word, verb.sub), verb.ve);
         }
 
-        // Remember the vinaiyecham for this word and subword
-        verbs.insert((verb.word, verb.sub), verb.ve);
-    }
+        // Get a map of special words which are expanded differently
+        let specials = get_specials();
 
-    // Get a map of special words which are expanded differently
-    let specials = get_specials();
+        // Create a map of stems using all these data structures
+        let mut stems = Stems::default();
+        for entry in dictionary::entries() {
+            StemData::parse(&mut StemState {
+                stems: &mut stems,
+                ves: &ves,
+                verbs: &verbs,
+                specials: &specials,
+                entry,
+            });
+        }
 
-    // Create a map of stems using all these data structures
-    let mut stems = Stems::default();
-    for entry in ENTRIES.iter() {
-        StemData::parse(&mut StemState {
-            stems: &mut stems,
-            ves: &ves,
-            verbs: &verbs,
-            specials: &specials,
-            entry,
-        });
-    }
+        // Clear the interning metadata since it won't be used anymore
+        intern::done();
 
-    // Clear the interning metadata since it won't be used anymore
-    intern::done();
-
-    eprintln!(" => {} stems", stems.len());
-    stems
-});
+        eprintln!(" => {} stems", stems.len());
+        stems
+    })
+}
 
 struct StemState<'a> {
     stems: &'a mut Stems,
@@ -1310,7 +1319,7 @@ impl StemData {
 }
 
 pub fn supported() -> bool {
-    !STEMS.is_empty()
+    !stems().is_empty()
 }
 
 pub type Choices = Vec<Rc<Choice>>;
@@ -1479,7 +1488,7 @@ fn choices_after(
     }
 
     let full_word = &word.normalized;
-    let stems: &Stems = &STEMS;
+    let stems = stems();
 
     let mut results = BTreeMap::new();
 

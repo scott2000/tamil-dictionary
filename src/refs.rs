@@ -1,8 +1,8 @@
 use std::{iter, sync::RwLock};
 
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::OnceCell;
 
-use crate::dictionary::{EntryIndex, Segment, SegmentKind, ENTRIES};
+use crate::dictionary::{self, EntryIndex, Segment, SegmentKind};
 use crate::search::{tree, Search};
 use crate::tamil::Word;
 use crate::HashMap;
@@ -20,8 +20,7 @@ pub fn get_entry(word: &'static str, sub: u8) -> Option<EntryIndex> {
         }
     }
 
-    // Get the entries once now so it doesn't have to be loaded multiple times
-    let entries = Lazy::force(&ENTRIES);
+    let entries = dictionary::entries();
 
     // Find the index for the corresponding entry
     let index = tree::search_word_prefix()

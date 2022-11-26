@@ -9,7 +9,7 @@ use std::mem;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use serde::Serialize;
 
@@ -25,7 +25,7 @@ use rocket::Request;
 use rocket_dyn_templates::Template;
 
 use crate::annotate::{TextSegment, WordCount};
-use crate::dictionary::*;
+use crate::dictionary::{self, *};
 use crate::query::{ExpandOptions, Pattern, Query, SearchKind};
 use crate::refs::{self, RefWithSub};
 use crate::search::word::WordSearch;
@@ -87,8 +87,11 @@ impl Example {
 }
 
 pub fn current_example() -> &'static Example {
+    static EXAMPLES: OnceCell<Box<[Example]>> = OnceCell::new();
+    static INDICES: OnceCell<Box<[u8]>> = OnceCell::new();
+
     #[rustfmt::skip]
-    static EXAMPLES: Lazy<Box<[Example]>> = Lazy::new(|| {
+    let examples = EXAMPLES.get_or_init(|| {
         let examples = &[
             ("appuram",    word![A, P, P, U, AlveolarR, A, M]),
             ("anubavam",   word![A, AlveolarN, U, P, A, V, A, M]),
@@ -135,8 +138,8 @@ pub fn current_example() -> &'static Example {
         examples.iter().map(Example::new).collect()
     });
 
-    static INDICES: Lazy<Box<[u8]>> = Lazy::new(|| {
-        let count = EXAMPLES.len();
+    let indices = INDICES.get_or_init(|| {
+        let count = examples.len();
         assert!(count <= u8::MAX as usize);
 
         let mut indices = Vec::with_capacity(count * EXAMPLE_CYCLE_PERIOD);
@@ -153,8 +156,8 @@ pub fn current_example() -> &'static Example {
 
     let uptime = crate::uptime();
     let num_refreshes = uptime.as_secs() / EXAMPLE_REFRESH_TIME_SECS;
-    let index = INDICES[num_refreshes as usize % INDICES.len()];
-    &EXAMPLES[index as usize]
+    let index = indices[num_refreshes as usize % indices.len()];
+    &examples[index as usize]
 }
 
 #[derive(Serialize, Debug)]
@@ -519,14 +522,16 @@ impl From<usize> for NumWithPlural {
 }
 
 fn looks_english(s: &str) -> bool {
-    static ENGLISH_REGEX: Lazy<Regex> = Lazy::new(|| {
+    static ENGLISH_REGEX: OnceCell<Regex> = OnceCell::new();
+
+    let english_regex = ENGLISH_REGEX.get_or_init(|| {
         Regex::new(
             r#"^[td]r|[kgcspbw][lrwsy]|[td][lwsy]|s[ckmnpsty]|[fqx]|[kghcjstdpb]$|ng$|[aeiou].e$"#,
         )
         .unwrap()
     });
 
-    ENGLISH_REGEX.is_match(s)
+    english_regex.is_match(s)
 }
 
 #[derive(Serialize, Debug)]
@@ -676,7 +681,7 @@ impl<'a> SearchTemplate<'a> {
             return;
         }
 
-        let entries: &[Entry] = &ENTRIES;
+        let entries = dictionary::entries();
 
         let results = results
             .iter()
@@ -698,7 +703,7 @@ impl<'a> SearchTemplate<'a> {
 pub fn entries(ids: &str) -> Template {
     SEARCH_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    let entry_count = ENTRIES.len();
+    let entry_count = dictionary::entries().len();
 
     let set = ids
         .split(',')

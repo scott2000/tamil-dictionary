@@ -4,7 +4,7 @@ extern crate rocket;
 use std::hash::BuildHasherDefault;
 use std::time::{Duration, Instant};
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use rocket::fs::{relative, FileServer};
 use rocket_dyn_templates::Template;
@@ -50,13 +50,16 @@ pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<SeaH
 pub type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<SeaHasher>>;
 
 pub fn uptime() -> Duration {
-    static START: Lazy<Instant> = Lazy::new(Instant::now);
+    static START: OnceCell<Instant> = OnceCell::new();
 
-    Instant::now().saturating_duration_since(*START)
+    let &start = START.get_or_init(Instant::now);
+    Instant::now().saturating_duration_since(start)
 }
 
 pub fn version() -> &'static str {
-    static VERSION: Lazy<Box<str>> = Lazy::new(|| {
+    static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
+
+    INSTANCE.get_or_init(|| {
         if let Ok(version) = std::env::var("RES_VERSION") {
             assert!(!version.is_empty());
             assert!(version.chars().all(|ch| ch.is_ascii_alphanumeric()));
@@ -64,9 +67,7 @@ pub fn version() -> &'static str {
         } else {
             Box::from("dev")
         }
-    });
-
-    &VERSION
+    })
 }
 
 #[launch]

@@ -1,18 +1,23 @@
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use crate::tamil::Word;
 
-static WORDS: Lazy<Mutex<BTreeSet<&'static Word>>> = Lazy::new(|| Mutex::new(BTreeSet::new()));
+static WORDS: OnceCell<Mutex<BTreeSet<&'static Word>>> = OnceCell::new();
 
 pub fn word(word: Box<Word>) -> &'static Word {
     // Cast the word reference to a pointer
     let ptr = word.as_ref() as *const Word;
 
+    // Get a lock on the WORDS mutex
+    let mut words = WORDS
+        .get_or_init(|| Mutex::new(BTreeSet::new()))
+        .lock()
+        .expect("cannot lock mutex");
+
     // Get any existing interned static copy
-    let mut words = WORDS.lock().expect("cannot lock mutex");
     let existing = unsafe {
         let word: &'static Word = &*ptr;
 
@@ -37,6 +42,8 @@ pub fn word(word: Box<Word>) -> &'static Word {
 }
 
 pub fn done() {
-    let mut words = WORDS.lock().expect("cannot lock mutex");
-    *words = BTreeSet::new();
+    if let Some(mutex) = WORDS.get() {
+        let mut words = mutex.lock().expect("cannot lock mutex");
+        *words = BTreeSet::new();
+    }
 }
