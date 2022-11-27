@@ -724,11 +724,6 @@ impl Word {
 
         // Transformations only at the head of words
         match this {
-            // aaga => aa
-            [LongA, K, A] => {
-                return word![LongA];
-            }
-
             // padhinmoondru => padhimoonu
             [P, A, T, I, AlveolarN, M, LongU, AlveolarN, AlveolarR, U] => {
                 return word![P, A, T, I, M, LongU, RetroN, U];
@@ -873,6 +868,12 @@ impl Word {
                     this = &this[8..];
                 }
 
+                // vendum => venum, vendaam => venaam
+                [V, LongE, RetroN, RetroT, LongA | U, M, ..] => {
+                    word.extend_from_slice(&[V, LongE, RetroN]);
+                    this = &this[4..];
+                }
+
                 // vaithu => vechu
                 [V, Ai, T, T, U, ..] => {
                     word.extend_from_slice(&[V, E, Ch, Ch]);
@@ -885,10 +886,10 @@ impl Word {
                     this = &this[4..];
                 }
 
-                // -rgal => -ngal
-                [R, K, A, RetroL, ..] => {
-                    word.push(Ng);
-                    this = tail;
+                // -vargal => -vangal
+                [V, A, R, K, A, RetroL, ..] => {
+                    word.extend_from_slice(&[V, A, Ng]);
+                    this = &this[3..];
                 }
 
                 // hard consonant assimilation
