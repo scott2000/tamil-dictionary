@@ -73,6 +73,7 @@ dictionary, `sup` creates a superscript, `bld` bolds text, and `wbr` inserts
 {
   "word": "மரம்",
   "sub": 1,
+  "formal": false,
   "hint": "(common word)",
   "kind": ["p"],
   "secs": [
