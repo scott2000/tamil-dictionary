@@ -724,6 +724,18 @@ impl Word {
 
         // Transformations only at the head of words
         match this {
+            // irandu => rendu
+            [I, R, A, RetroN, RetroT, ..] => {
+                word.extend_from_slice(&[R, E]);
+                this = &this[3..];
+            }
+
+            // pannirandu => pannendu
+            [P, A, AlveolarN, AlveolarN, I, R, A, RetroN, RetroT, ..] => {
+                word.extend_from_slice(&[P, A, AlveolarN, AlveolarN, E]);
+                this = &this[7..];
+            }
+
             // padhinmoondru => padhimoonu
             [P, A, T, I, AlveolarN, M, LongU, AlveolarN, AlveolarR, U] => {
                 return word![P, A, T, I, M, LongU, RetroN, U];
@@ -792,6 +804,9 @@ impl Word {
                 this = &this[4..];
             }
 
+            // Don't transform vowels in words where the vowel isn't even pronounced
+            [I, R | AlveolarL, A, ..] | [K | P | RetroT, I, R, A, ..] | [K, I, RetroL, A, ..] => {}
+
             // pi(R)a- => po(R)a-
             &[P, I, c2, A | Ai | Au, ..] if LetterSet::retroflex().matches(c2) => {
                 word.extend_from_slice(&[P, O]);
@@ -856,6 +871,12 @@ impl Word {
                     this = &this[2..];
                 }
 
+                // pe(R)- => po(R)-
+                &[P, E, c2, ..] if LetterSet::retroflex().matches(c2) => {
+                    word.extend_from_slice(&[P, O]);
+                    this = &this[2..];
+                }
+
                 // adharku => adhukku
                 &[v @ (A | I | E), T, A, AlveolarR, K, ..] => {
                     word.extend_from_slice(&[v, T, U, K]);
@@ -892,7 +913,7 @@ impl Word {
                     this = &this[3..];
                 }
 
-                // hard consonant assimilation
+                // Hard consonant assimilation
                 &[AlveolarR | RetroT, right @ (K | Ch | P), ..] => {
                     word.push(right);
                     this = tail;
@@ -991,6 +1012,12 @@ impl Word {
                 // onbadhu => ombadhu
                 [O, AlveolarN, P, A, T, U] => {
                     word.extend_from_slice(&[O, M, P, A, T, U]);
+                    this = &[];
+                }
+
+                // kodu => kudu
+                [K, O, RetroT, U] => {
+                    word.extend_from_slice(&[K, U, RetroT, U]);
                     this = &[];
                 }
 
