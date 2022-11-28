@@ -847,6 +847,7 @@ impl Word {
         const ADVERB: KindSet =
             KindSet::single(EntryKind::VinaiAdai).union(KindSet::single(EntryKind::IdaiChol));
 
+        let is_verb = kind_set.matches(EntryKind::VinaiChol);
         let is_adv = kind_set.matches_any(ADVERB) && self.end_matches(letterset![U, I]);
         let is_adj = kind_set.matches(EntryKind::PeyarAdai) && self.ends_with(word![A]);
 
@@ -938,13 +939,29 @@ impl Word {
                 }
 
                 // indhu => inju
-                &[v @ (I | Ai), N, T, U, ..] if is_adv || is_adj => {
+                &[v @ (I | Ai), N, T, U, ..] if is_verb || is_adv || is_adj => {
                     word.extend_from_slice(&[v, Ny, Ch]);
                     this = &this[3..];
                 }
 
+                // Don't transform -ithu if the thu- is part of a verb (e.g. thuppu)
+                &[v @ (I | Ai), T, T, U, c1, c2, U]
+                    if is_verb && c1.is_consonant() && c2.is_consonant() =>
+                {
+                    word.push(v);
+                    this = tail;
+                }
+
+                // Don't transform -ithu if the thu- is part of a verb (e.g. thulai)
+                &[v1 @ (I | Ai), T, T, U, c, v2]
+                    if is_verb && LetterSet::retroflex().matches(c) && v2.is_vowel() =>
+                {
+                    word.push(v1);
+                    this = tail;
+                }
+
                 // ithu => ichu
-                &[v @ (I | Ai | Y), T, T, U, ..] if is_adv || is_adj => {
+                &[v @ (I | Ai), T, T, U, ..] if is_verb || is_adv || is_adj => {
                     word.extend_from_slice(&[v, Ch, Ch]);
                     this = &this[3..];
                 }
@@ -956,7 +973,7 @@ impl Word {
                 }
 
                 // itha => icha
-                &[v @ (I | Ai | Y), T, T, A] if is_adj => {
+                &[v @ (I | Ai), T, T, A] if is_adj => {
                     word.extend_from_slice(&[v, Ch, Ch, A]);
                     this = &[];
                 }
@@ -973,33 +990,9 @@ impl Word {
                     this = &[];
                 }
 
-                // -indhukol => -injuko
-                &[v @ (I | Ai), N, T, U, K, O, RetroL] => {
-                    word.extend_from_slice(&[v, Ny, Ch, U, K, LongO]);
-                    this = &[];
-                }
-
-                // -ithukkol => -ichukko
-                &[v @ (I | Ai | Y), T, T, U, K, K, O, RetroL] => {
-                    word.extend_from_slice(&[v, Ch, Ch, U, K, K, LongO]);
-                    this = &[];
-                }
-
                 // -vidu => -du
                 &[v @ (I | U), V, I, RetroT, U] if kind_set.matches(EntryKind::VinaiChol) => {
                     word.extend_from_slice(&[v, RetroT, U]);
-                    this = &[];
-                }
-
-                // -indhuvidu => -injidu
-                &[v @ (I | Ai), N, T, U, V, I, RetroT, U] => {
-                    word.extend_from_slice(&[v, Ny, Ch, I, RetroT, U]);
-                    this = &[];
-                }
-
-                // -ithuvidu => -ichidu
-                &[v @ (I | Ai | Y), T, T, U, V, I, RetroT, U] => {
-                    word.extend_from_slice(&[v, Ch, Ch, I, RetroT, U]);
                     this = &[];
                 }
 
