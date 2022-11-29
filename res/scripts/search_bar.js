@@ -12,6 +12,7 @@ window.addEventListener('load', function() {
   var updateTimeout = null;
 
   var focused = false;
+  var definitionFocused = false;
   var composing = false;
   var results = [];
 
@@ -245,6 +246,14 @@ window.addEventListener('load', function() {
     }, 0);
   });
 
+  searchDefinition.onfocus = function() {
+    definitionFocused = true;
+  };
+
+  searchDefinition.onblur = function() {
+    definitionFocused = false;
+  };
+
   function up() {
     if (selected === null) {
       setSelected(results.length - 1);
@@ -323,7 +332,7 @@ window.addEventListener('load', function() {
   });
 
   window.addEventListener('keydown', function(event) {
-    if (!focused && event.code === 'Slash') {
+    if (!focused && !definitionFocused && event.code === 'Slash') {
       searchWord.focus();
       searchWord.select();
       searchWord.scrollIntoView(false);
@@ -374,7 +383,7 @@ window.addEventListener('load', function() {
       ],
       dst: [
         document.getElementById('kind-tv'),
-      ]
+      ],
     },
     {
       src: [
@@ -384,7 +393,7 @@ window.addEventListener('load', function() {
       dst: [
         document.getElementById('kind-sp'),
         document.getElementById('kind-vp'),
-      ]
+      ],
     },
     {
       src: [
@@ -392,7 +401,7 @@ window.addEventListener('load', function() {
       ],
       dst: [
         document.getElementById('kind-ii'),
-      ]
+      ],
     },
   ];
 
@@ -434,5 +443,7 @@ window.addEventListener('load', function() {
   if (document.activeElement === searchWord) {
     focused = true;
     refreshQuery();
+  } else if (this.document.activeElement === searchDefinition) {
+    definitionFocused = true;
   }
 });
