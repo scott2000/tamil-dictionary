@@ -805,28 +805,31 @@ impl Word {
             }
 
             // Don't transform vowels in words where the vowel isn't even pronounced
-            [I, R | AlveolarL, A, ..] | [K | P | RetroT, I, R, A, ..] | [K, I, RetroL, A, ..] => {}
+            [I, R | AlveolarL, A | LongA, ..]
+            | [K | RetroT | T | P, I, R, A | LongA, ..]
+            | [K, I, RetroL, LongA, ..]
+            | [P, I, RetroL, LongA, ..] => {}
 
             // pi(R)a- => po(R)a-
-            &[P, I, c2, A | Ai | Au, ..] if LetterSet::retroflex().matches(c2) => {
+            &[P, I, c2, A | LongA | Ai | Au, ..] if LetterSet::retroflex().matches(c2) => {
                 word.extend_from_slice(&[P, O]);
                 this = &this[2..];
             }
 
             // i_a => e_a
-            &[I, c2, A | Ai | Au, ..] if BEFORE_A.matches(c2) => {
+            &[I, c2, A | LongA | Ai | Au, ..] if BEFORE_A.matches(c2) => {
                 word.push(E);
                 this = &this[1..];
             }
 
             // u_a => o_a
-            &[U, c2, A | Ai | Au, ..] if BEFORE_A.matches(c2) => {
+            &[U, c2, A | LongA | Ai | Au, ..] if BEFORE_A.matches(c2) => {
                 word.push(O);
                 this = &this[1..];
             }
 
             // _i_a => _e_a
-            &[c1, I, c2, A | Ai | Au, ..]
+            &[c1, I, c2, A | LongA | Ai | Au, ..]
                 if c1.is_consonant() && c1 != V && BEFORE_A.matches(c2) =>
             {
                 word.extend_from_slice(&[c1, E]);
@@ -834,7 +837,7 @@ impl Word {
             }
 
             // _u_a => _o_a
-            &[c1, U, c2, A | Ai | Au, ..]
+            &[c1, U, c2, A | LongA | Ai | Au, ..]
                 if c1.is_consonant() && c1 != Y && BEFORE_A.matches(c2) =>
             {
                 word.extend_from_slice(&[c1, O]);
