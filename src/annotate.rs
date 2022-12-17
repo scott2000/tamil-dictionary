@@ -1434,10 +1434,8 @@ fn best_groups(word: &Normalized, exclude: &ExcludeSet) -> Vec<Choices> {
     map.insert(0, ShortestOnly::new());
 
     // Repeatedly expand shortest suffix until matches full word
-    // TODO: use pop_first when stabilized (nightly: map_first_last)
-    while let Some((&end, _)) = map.iter().next() {
+    while let Some((end, choices)) = map.pop_first() {
         // Check for matching full word
-        let choices = map.remove(&end).unwrap();
         if end == len {
             return choices.into_vec();
         }
