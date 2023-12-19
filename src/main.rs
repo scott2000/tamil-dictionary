@@ -71,7 +71,7 @@ pub fn version() -> &'static str {
 }
 
 #[launch]
-fn rocket() -> _ {
+async fn rocket() -> _ {
     // Initialize the examples for the front page
     web::current_example();
 

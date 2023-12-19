@@ -1,6 +1,5 @@
+#![allow(clippy::needless_borrows_for_generic_args)]
 #![allow(clippy::result_large_err)]
-#![allow(clippy::needless_borrow)]
-#![allow(clippy::unnecessary_lazy_evaluations)]
 
 use std::borrow::Cow;
 use std::collections::BTreeSet;

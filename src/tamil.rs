@@ -21,7 +21,7 @@ macro_rules! gen_map {
     };
 
     (@ $from_char:ident, $index:expr, [$ch:literal $($rest:literal)*], [$($to:tt)*] $($ex:tt)*) => {
-        gen_map!(@ $from_char, $index + 1, [$($rest)*], [$($to)*, $ch Letter::from_unchecked($index)] $($ex)*);
+        gen_map!(@ $from_char, $index + 1, [$($rest)*], [$($to)*, $ch Letter::unchecked_transmute_from($index)] $($ex)*);
     };
 
     (@ $from_char:ident, $index:expr, [], [$($to:tt)*] $($ex:tt)*) => {
@@ -166,7 +166,7 @@ impl Letter {
     pub fn expect_from(num: u8) -> Self {
         debug_assert!(num <= Self::LETTER_END);
 
-        unsafe { Self::from_unchecked(num.min(Self::LETTER_END)) }
+        unsafe { Self::unchecked_transmute_from(num.min(Self::LETTER_END)) }
     }
 
     pub fn offset(self, by: u8) -> Self {
@@ -696,7 +696,7 @@ impl Word {
         Some(self.strip_suffix(suffix)? + new)
     }
 
-    pub fn take_prefix<'a, 'b>(&'a self, prefix: &'b Self) -> Option<&'a Self> {
+    pub fn take_prefix<'a>(&'a self, prefix: &Self) -> Option<&'a Self> {
         if prefix.len() > self.len() {
             return None;
         }
