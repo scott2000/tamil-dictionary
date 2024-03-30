@@ -1,3 +1,4 @@
+#![allow(clippy::blocks_in_conditions)]
 #![allow(clippy::needless_borrows_for_generic_args)]
 #![allow(clippy::result_large_err)]
 
