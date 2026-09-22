@@ -1,0 +1,6 @@
+FROM tamil-dictionary:latest AS base
+
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0 /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV ROCKET_ADDRESS=127.0.0.1
+ENV ROCKET_PORT=8080
