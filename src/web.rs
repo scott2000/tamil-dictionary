@@ -1,4 +1,3 @@
-#![allow(clippy::blocks_in_conditions)]
 #![allow(clippy::needless_borrows_for_generic_args)]
 #![allow(clippy::result_large_err)]
 
@@ -144,7 +143,7 @@ pub fn current_example() -> &'static Example {
 
         let mut indices = Vec::with_capacity(count * EXAMPLE_CYCLE_PERIOD);
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..EXAMPLE_CYCLE_PERIOD {
             let mut slice: Box<[u8]> = (0..count).map(|i| i as u8).collect();
             slice.shuffle(&mut rng);
@@ -913,12 +912,12 @@ pub struct AnnotateResponseEntry<'a> {
 }
 
 #[get("/api/annotate/raw?<q>&<n>&<min>")]
-pub fn annotate_raw_get(q: &str, n: Option<u32>, min: Option<u32>) -> Json<AnnotateResponse> {
+pub fn annotate_raw_get(q: &str, n: Option<u32>, min: Option<u32>) -> Json<AnnotateResponse<'_>> {
     annotate_raw(n, min, q)
 }
 
 #[post("/api/annotate/raw?<n>&<min>", format = "plain", data = "<body>")]
-pub fn annotate_raw(n: Option<u32>, min: Option<u32>, body: &str) -> Json<AnnotateResponse> {
+pub fn annotate_raw(n: Option<u32>, min: Option<u32>, body: &str) -> Json<AnnotateResponse<'_>> {
     ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
 
     let n = n.unwrap_or(25).min(100) as usize;

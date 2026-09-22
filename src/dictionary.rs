@@ -3,7 +3,7 @@ use std::io::BufReader;
 
 use once_cell::sync::OnceCell;
 
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 
 use serde::Deserialize;
 
@@ -241,7 +241,7 @@ impl Entry {
     }
 
     pub fn random() -> &'static Self {
-        entries().choose(&mut rand::thread_rng()).unwrap()
+        entries().choose(&mut rand::rng()).unwrap()
     }
 
     pub fn primary_word(&self) -> &str {

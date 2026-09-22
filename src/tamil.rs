@@ -616,7 +616,7 @@ impl Word {
         self.0.get(start..end).map(|slice| slice.into())
     }
 
-    pub fn iter(&self) -> WordIter {
+    pub fn iter(&self) -> WordIter<'_> {
         WordIter::new(self)
     }
 
@@ -1459,7 +1459,7 @@ impl IndexMut<usize> for Word {
     }
 }
 
-impl<'a> Add for &'a Word {
+impl Add for &Word {
     type Output = Box<Word>;
 
     fn add(self, rhs: Self) -> Self::Output {
