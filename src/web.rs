@@ -44,16 +44,16 @@ static ANNOTATE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 pub fn render_template(template: &'static str, context: impl Serialize) -> Template {
     #[derive(Serialize)]
-    struct Versioned<T: Serialize> {
-        version: &'static str,
+    struct WithResourcePath<T: Serialize> {
+        resource_path: &'static str,
         #[serde(flatten)]
         inner: T,
     }
 
     Template::render(
         template,
-        Versioned {
-            version: crate::version(),
+        WithResourcePath {
+            resource_path: crate::resource_path(),
             inner: context,
         },
     )
@@ -999,7 +999,8 @@ pub fn info() -> String {
     format!(
         concat!(
             "uptime={:}:{:02}:{:02}\n",
-            "version={}\n",
+            "resource_version={}\n",
+            "resource_path={}\n",
             "result_count={}\n",
             "search_count={}\n",
             "suggest_count={}\n",
@@ -1008,7 +1009,8 @@ pub fn info() -> String {
         hours,
         mins,
         secs,
-        crate::version(),
+        crate::resource_version(),
+        crate::resource_path(),
         result_count,
         search_count,
         suggest_count,

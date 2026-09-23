@@ -56,7 +56,22 @@ pub fn uptime() -> Duration {
     Instant::now().saturating_duration_since(start)
 }
 
-pub fn version() -> &'static str {
+pub fn resource_path() -> &'static str {
+    static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
+
+    INSTANCE.get_or_init(|| {
+        let base_path = if let Ok(path) = std::env::var("RES_BASE_PATH") {
+            assert!(!path.is_empty());
+            assert!(path.ends_with("/"));
+            path
+        } else {
+            "/res/".to_owned()
+        };
+        format!("{base_path}{}", resource_version()).into_boxed_str()
+    })
+}
+
+pub fn resource_version() -> &'static str {
     static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
 
     INSTANCE.get_or_init(|| {
@@ -83,7 +98,7 @@ async fn rocket() -> _ {
     });
 
     // Host resources at a path including the version number
-    let res_path = format!("/res/{}", version());
+    let res_path = format!("/res/{}", resource_version());
 
     rocket::build()
         .mount(
