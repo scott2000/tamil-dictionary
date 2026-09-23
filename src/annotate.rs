@@ -15,6 +15,24 @@ use crate::{HashMap, HashSet, intern};
 
 use ExpandState::*;
 
+pub fn group_word(word: &Word) -> Option<Vec<Rc<Choice>>> {
+    if !supported() {
+        return None;
+    }
+
+    TextSegment::Tamil(word.into(), ())
+        .group()
+        .into_iter()
+        .map(|segment| {
+            if let TextSegment::Tamil(_, Some(choices)) = segment {
+                Some(choices)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 pub type AnnotatedTextSegment<'a> = TextSegment<'a, Option<Rc<Choice>>>;
 
 #[derive(Debug)]

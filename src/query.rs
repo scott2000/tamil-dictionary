@@ -4,6 +4,8 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
+use crate::annotate::{self};
+use crate::dictionary::{self, Loc, WordData};
 use crate::search::{KindSet, Search, SearchResult, Suggest, SuggestionList, tree};
 use crate::tamil::{Category, Letter, LetterSet, PULLI, Word};
 
@@ -308,7 +310,30 @@ impl Query {
             return Err(tree::SearchError::CommonExclusion);
         }
 
-        let result = SearchResult::filter(intersect, difference, self.kinds);
+        let mut result = SearchResult::filter(intersect, difference, self.kinds);
+
+        // If the query is a literal pattern, then also include results from annotation
+        if let Some(pattern) = self.as_pattern()
+            && let Pattern::Literal(literal) = pattern
+            && let Some(segments) = annotate::group_word(literal)
+        {
+            // Only include unlikely segmentations if the result was empty
+            if result.is_empty()
+                || segments.len() == 1
+                || !segments.iter().any(|segment| segment.unlikely)
+            {
+                for segment in segments {
+                    for &entry in &segment.entries {
+                        let loc = Loc {
+                            entry,
+                            word: WordData::new(dictionary::NO_WORD, false),
+                        };
+                        // Treat this as a "suffix word" so that it shows up in "Related Words"
+                        result.insert(loc, false, true, false);
+                    }
+                }
+            }
+        }
 
         // If there are no results, try again as a definition
         if result.is_empty() && self.pos_def.is_empty() && self.neg_def.is_empty() {
@@ -345,13 +370,13 @@ impl Query {
         Ok((result, SearchKind::AsSpecified))
     }
 
-    pub fn into_pattern(self) -> Option<Pattern> {
+    pub fn as_pattern(&self) -> Option<&Pattern> {
         if self.pos_word.len() == 1
             && self.neg_word.is_empty()
             && self.pos_def.is_empty()
             && self.neg_def.is_empty()
         {
-            self.pos_word.into_iter().next()
+            self.pos_word.first()
         } else {
             None
         }

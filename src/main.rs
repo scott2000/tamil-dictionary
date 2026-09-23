@@ -83,8 +83,10 @@ async fn rocket() -> _ {
 
     // Start building the word, definition, and stem data structures
     task::spawn_blocking(|| {
-        let _ = annotate::supported();
+        // Build the word structures first since they're used most frequently
         let _ = search::tree::search_word();
+
+        let _ = annotate::supported();
         let _ = search::tree::search_definition();
     });
 
