@@ -980,6 +980,11 @@ pub fn annotate_raw(n: Option<u32>, min: Option<u32>, body: &str) -> Json<Annota
     Json(AnnotateResponse { segments, top })
 }
 
+#[get("/api/health")]
+pub fn health() -> String {
+    "OK".into()
+}
+
 #[get("/api/stats")]
 pub fn stats() -> String {
     let secs = crate::uptime().as_secs();

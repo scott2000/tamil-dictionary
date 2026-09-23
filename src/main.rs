@@ -106,6 +106,7 @@ async fn rocket() -> _ {
                 web::annotate_api,
                 web::annotate_raw,
                 web::suggest,
+                web::health,
                 web::stats,
             ],
         )
