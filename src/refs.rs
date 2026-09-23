@@ -2,10 +2,10 @@ use std::{iter, sync::RwLock};
 
 use once_cell::sync::OnceCell;
 
-use crate::dictionary::{self, EntryIndex, Segment, SegmentKind};
-use crate::search::{tree, Search};
-use crate::tamil::Word;
 use crate::HashMap;
+use crate::dictionary::{self, EntryIndex, Segment, SegmentKind};
+use crate::search::{Search, tree};
+use crate::tamil::Word;
 
 pub fn get_entry(word: &'static str, sub: u8) -> Option<EntryIndex> {
     static REF_MAP: OnceCell<RwLock<HashMap<(&'static str, u8), EntryIndex>>> = OnceCell::new();

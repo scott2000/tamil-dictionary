@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::dictionary::{self, Entry, EntryIndex, EntryKind, KindSet};
 use crate::tamil::{Letter, LetterCombination, LetterSet, Word};
-use crate::{intern, HashMap, HashSet};
+use crate::{HashMap, HashSet, intern};
 
 use ExpandState::*;
 
@@ -301,12 +301,12 @@ impl<'a> Normalized<'a> {
         while let Some(lt) = iter.next() {
             use Letter::*;
 
-            if let Some(next) = iter.peek() {
-                if let Some((lt, next)) = normalize_map(lt, next) {
-                    iter.adv();
-                    letters.extend_from_slice(&[lt, next]);
-                    continue;
-                }
+            if let Some(next) = iter.peek()
+                && let Some((lt, next)) = normalize_map(lt, next)
+            {
+                iter.adv();
+                letters.extend_from_slice(&[lt, next]);
+                continue;
             }
 
             match lt {
@@ -364,14 +364,12 @@ impl<'a> Normalized<'a> {
             }
         }
 
-        if fix_last {
-            if let Some(lt) = letters.last_mut() {
-                match lt {
-                    Ng | Ny | N => *lt = M,
-                    RetroT => *lt = RetroL,
-                    AlveolarR => *lt = AlveolarL,
-                    _ => {}
-                }
+        if fix_last && let Some(lt) = letters.last_mut() {
+            match lt {
+                Ng | Ny | N => *lt = M,
+                RetroT => *lt = RetroL,
+                AlveolarR => *lt = AlveolarL,
+                _ => {}
             }
         }
 
@@ -819,14 +817,14 @@ impl StemData {
         // Check for special words
         if !entry.word.contains(' ') {
             let word: &Word = &Word::parse(&entry.word);
-            if let Some(special) = state.specials.get(word) {
-                if entry.kind_set.matches_any(special.if_matches) {
-                    for (word, insert) in special.then_insert.iter() {
-                        Self::insert_with(state, word, insert, special.likelihood);
-                    }
-
-                    return;
+            if let Some(special) = state.specials.get(word)
+                && entry.kind_set.matches_any(special.if_matches)
+            {
+                for (word, insert) in special.then_insert.iter() {
+                    Self::insert_with(state, word, insert, special.likelihood);
                 }
+
+                return;
             }
         }
 

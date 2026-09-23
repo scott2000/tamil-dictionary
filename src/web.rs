@@ -16,11 +16,11 @@ use rand::seq::SliceRandom;
 
 use regex::Regex;
 
-use rocket::http::{uri, RawStr, Status};
-use rocket::response::content::RawHtml;
-use rocket::response::Redirect;
-use rocket::serde::json::Json;
 use rocket::Request;
+use rocket::http::{RawStr, Status, uri};
+use rocket::response::Redirect;
+use rocket::response::content::RawHtml;
+use rocket::serde::json::Json;
 use rocket_dyn_templates::Template;
 
 use crate::annotate::{TextSegment, WordCount};
@@ -784,11 +784,11 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
 
     // Check for trailing "a", and allow other letters as well
     let mut append_a = false;
-    if let Some(last_character) = query.chars().next_back() {
-        if tamil::is_consonant(last_character) {
-            query += "\u{bcd}";
-            append_a = true;
-        }
+    if let Some(last_character) = query.chars().next_back()
+        && tamil::is_consonant(last_character)
+    {
+        query += "\u{bcd}";
+        append_a = true;
     }
 
     // Parse the query into a single pattern

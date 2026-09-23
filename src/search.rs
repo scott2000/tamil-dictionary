@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 
-use crate::dictionary::{self, Entry, EntryIndex, Loc, WordData, WordIndex, NO_WORD};
-use crate::tamil::{Letter, LetterSet, Word};
 use crate::HashSet;
+use crate::dictionary::{self, Entry, EntryIndex, Loc, NO_WORD, WordData, WordIndex};
+use crate::tamil::{Letter, LetterSet, Word};
 
 pub use crate::dictionary::KindSet;
 

@@ -6,8 +6,8 @@ use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 
 use once_cell::sync::OnceCell;
 
-use crate::dictionary::{EntryKind, KindSet};
 use crate::HashSet;
+use crate::dictionary::{EntryKind, KindSet};
 
 pub const PULLI: char = '\u{bcd}';
 pub const COMBINING_LA: char = '\u{bd7}';
@@ -1288,10 +1288,10 @@ impl LetterCombination {
     }
 
     pub const fn base_consonant(&self) -> Option<Letter> {
-        if let LetterBase::Single(lt) = self.base {
-            if lt.is_consonant() {
-                return Some(lt);
-            }
+        if let LetterBase::Single(lt) = self.base
+            && lt.is_consonant()
+        {
+            return Some(lt);
         }
 
         None

@@ -4,8 +4,8 @@ use thiserror::Error;
 
 use unicode_names2 as unicode;
 
-use crate::search::{tree, KindSet, Search, SearchResult, Suggest, SuggestionList};
-use crate::tamil::{Category, Letter, LetterSet, Word, PULLI};
+use crate::search::{KindSet, Search, SearchResult, Suggest, SuggestionList, tree};
+use crate::tamil::{Category, Letter, LetterSet, PULLI, Word};
 
 mod transform;
 

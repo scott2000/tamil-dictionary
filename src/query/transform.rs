@@ -2,9 +2,9 @@ use std::mem;
 
 use once_cell::sync::OnceCell;
 
+use crate::HashMap;
 use crate::search::Search;
 use crate::tamil::{Letter, LetterSet, Word, WordIter};
-use crate::HashMap;
 
 use super::{ExpandLevel, ExpandOptions};
 
@@ -38,10 +38,12 @@ pub struct Joins(HashMap<(Letter, Letter), Vec<JoinEntry>>);
 
 impl Joins {
     pub fn insert_entry(&mut self, from: (Letter, Letter), to: JoinEntry) {
-        debug_assert!(letterset![from.0, from.1]
-            .union(to.left.union(to.right))
-            .intersect(LetterSet::consonant().complement())
-            .is_empty());
+        debug_assert!(
+            letterset![from.0, from.1]
+                .union(to.left.union(to.right))
+                .intersect(LetterSet::consonant().complement())
+                .is_empty()
+        );
 
         if let Some(vec) = self.0.get_mut(&from) {
             if !vec.contains(&to) {
@@ -653,29 +655,72 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
         [_, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A] if letters.index > 2 => {}
 
         // Check for "aaga" and "aana"  with "y" joiner
-        &[lt, Letter::Y, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
-            if LetterSet::vowel_with_y().matches(lt) => {}
+        &[
+            lt,
+            Letter::Y,
+            Letter::LongA,
+            Letter::K | Letter::AlveolarN,
+            Letter::A,
+        ] if LetterSet::vowel_with_y().matches(lt) => {}
 
         // Check for "aaga" and "aana"  with "v" joiner
-        &[lt, Letter::V, Letter::LongA, Letter::K | Letter::AlveolarN, Letter::A]
-            if LetterSet::vowel_with_v().matches(lt) => {}
+        &[
+            lt,
+            Letter::V,
+            Letter::LongA,
+            Letter::K | Letter::AlveolarN,
+            Letter::A,
+        ] if LetterSet::vowel_with_v().matches(lt) => {}
 
         // Check for "endru" and "endra"
-        &[lt, Letter::E, Letter::AlveolarN, Letter::AlveolarR, Letter::U | Letter::A]
-            if LetterSet::tamil_final().matches(lt) => {}
+        &[
+            lt,
+            Letter::E,
+            Letter::AlveolarN,
+            Letter::AlveolarR,
+            Letter::U | Letter::A,
+        ] if LetterSet::tamil_final().matches(lt) => {}
 
         // Check for "endru" and "endra" with "y" joiner
-        &[lt, Letter::Y, Letter::E, Letter::AlveolarN, Letter::AlveolarR, Letter::U | Letter::A]
-            if LetterSet::vowel_with_y().matches(lt) => {}
+        &[
+            lt,
+            Letter::Y,
+            Letter::E,
+            Letter::AlveolarN,
+            Letter::AlveolarR,
+            Letter::U | Letter::A,
+        ] if LetterSet::vowel_with_y().matches(lt) => {}
 
         // Check for "endru" and "endra" with "v" joiner
-        &[lt, Letter::V, Letter::E, Letter::AlveolarN, Letter::AlveolarR, Letter::U | Letter::A]
-            if LetterSet::vowel_with_v().matches(lt) => {}
+        &[
+            lt,
+            Letter::V,
+            Letter::E,
+            Letter::AlveolarN,
+            Letter::AlveolarR,
+            Letter::U | Letter::A,
+        ] if LetterSet::vowel_with_v().matches(lt) => {}
 
         // Check for "padu", "paadu", or "paduthu"
-        &[prev, lt, Letter::P, Letter::A | Letter::LongA, Letter::RetroT, Letter::U]
-        | &[prev, lt, Letter::P, Letter::A, Letter::RetroT, Letter::U, Letter::T, Letter::T, Letter::U] =>
-        {
+        &[
+            prev,
+            lt,
+            Letter::P,
+            Letter::A | Letter::LongA,
+            Letter::RetroT,
+            Letter::U,
+        ]
+        | &[
+            prev,
+            lt,
+            Letter::P,
+            Letter::A,
+            Letter::RetroT,
+            Letter::U,
+            Letter::T,
+            Letter::T,
+            Letter::U,
+        ] => {
             match lt {
                 // Handle doubling of "p"
                 Letter::P => {
@@ -726,8 +771,14 @@ fn check_suffix<S: Search>(search: &mut S, letters: &mut WordIter) -> Result<boo
         &[lt, Letter::T, Letter::A, Letter::AlveolarL]
         | &[lt, Letter::T, Letter::T, Letter::A, Letter::AlveolarL]
         | &[lt, Letter::U, Letter::T, Letter::A, Letter::AlveolarL]
-        | &[lt, Letter::U, Letter::T, Letter::T, Letter::A, Letter::AlveolarL]
-            if letters.index > 3 && LetterSet::tamil_final().matches(lt) => {}
+        | &[
+            lt,
+            Letter::U,
+            Letter::T,
+            Letter::T,
+            Letter::A,
+            Letter::AlveolarL,
+        ] if letters.index > 3 && LetterSet::tamil_final().matches(lt) => {}
 
         _ => return Ok(false),
     }

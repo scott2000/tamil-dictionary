@@ -481,11 +481,7 @@ impl KindSet {
     }
 
     pub const fn to_non_empty(self) -> Self {
-        if self.is_empty() {
-            Self::any()
-        } else {
-            self
-        }
+        if self.is_empty() { Self::any() } else { self }
     }
 
     pub const fn matches(self, kind: EntryKind) -> bool {

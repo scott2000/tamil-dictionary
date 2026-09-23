@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use once_cell::sync::OnceCell;
 
-use rocket::fs::{relative, FileServer};
+use rocket::fs::{FileServer, relative};
 use rocket_dyn_templates::Template;
 
 use seahash::SeaHasher;
@@ -30,11 +30,13 @@ macro_rules! letterset {
 }
 
 macro_rules! word {
-    ($($tt:tt)*) => {{
-        #[allow(unused_imports)]
-        use $crate::tamil::Letter::*;
-        [$($tt)*][..].into()
-    }};
+    ($($tt:tt)*) => {
+        (&{
+            #[allow(unused_imports)]
+            use $crate::tamil::Letter::*;
+            [$($tt)*]
+        })[..].into()
+    };
 }
 
 pub mod annotate;
