@@ -107,7 +107,7 @@ async fn rocket() -> _ {
                 web::annotate_raw,
                 web::suggest,
                 web::health,
-                web::stats,
+                web::info,
             ],
         )
         .mount(res_path, FileServer::from(relative!("res")))

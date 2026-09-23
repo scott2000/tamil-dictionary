@@ -985,8 +985,8 @@ pub fn health() -> String {
     "OK".into()
 }
 
-#[get("/api/stats")]
-pub fn stats() -> String {
+#[get("/api/info")]
+pub fn info() -> String {
     let secs = crate::uptime().as_secs();
     let (mins, secs) = (secs / 60, secs % 60);
     let (hours, mins) = (mins / 60, mins % 60);
