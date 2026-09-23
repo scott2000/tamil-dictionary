@@ -1,12 +1,15 @@
 'use strict';
 
 window.addEventListener('load', function() {
+  const sessionStorageKey = 'search-bar-cache';
+  const sessionStorageMaxCacheEntries = 16;
+
   const delay = 300;
   const count = 6;
 
   const searchWord = document.getElementById('search-word');
   const autocomplete = document.getElementById('autocomplete');
-  const cache = new Map();
+  const cache = loadCache();
 
   var currentQuery = null;
   var updateTimeout = null;
@@ -29,6 +32,23 @@ window.addEventListener('load', function() {
 
   const searchDefinition = document.getElementById('search-def');
   const searchKinds = document.getElementsByClassName('search-kind');
+
+  function loadCache() {
+    const sessionCache = sessionStorage.getItem(sessionStorageKey);
+    if (!sessionCache) {
+      return new Map();
+    }
+
+    return new Map(Object.entries(JSON.parse(sessionCache)));
+  }
+
+  function saveCache() {
+    const nonEmptyEntries = Array.from(cache.entries())
+      .filter(([key, value]) => Boolean(key && value))
+      .slice(-sessionStorageMaxCacheEntries);
+
+    sessionStorage.setItem(sessionStorageKey, JSON.stringify(Object.fromEntries(nonEmptyEntries)));
+  }
 
   function display() {
     if (focused && results.length && !advanced) {
@@ -130,6 +150,7 @@ window.addEventListener('load', function() {
 
       const response = JSON.parse(request.responseText);
       cache.set(query, response);
+      saveCache();
 
       if (query === currentQuery) {
         setResults(response);
@@ -343,7 +364,7 @@ window.addEventListener('load', function() {
 
   window.addEventListener('unload', function() {
     searchWord.value = '';
-    setQuery('');
+    setQuery('', false);
   });
 
   searchAdvLink.onclick = function() {
