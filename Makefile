@@ -1,6 +1,6 @@
 .PHONY: docker docker-lambda run
 
-RES_VERSION := $(shell ./get_version.sh)
+RES_VERSION := $(shell ./get_res_version.sh)
 LAMBDA_RES_BASE_PATH := /res/
 
 docker:
