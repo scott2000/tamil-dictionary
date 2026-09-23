@@ -4,15 +4,13 @@ extern crate rocket;
 use std::hash::BuildHasherDefault;
 use std::time::{Duration, Instant};
 
+use itertools::Itertools;
+
 use once_cell::sync::OnceCell;
 
-use rocket::fs::{FileServer, relative};
 use rocket::http::uri::Origin;
-use rocket_dyn_templates::Template;
 
 use seahash::SeaHasher;
-
-use tokio::task;
 
 #[doc(hidden)]
 macro_rules! letterset_impl {
@@ -101,70 +99,73 @@ pub fn resource_path() -> &'static str {
     })
 }
 
-#[launch]
-async fn rocket() -> _ {
-    // Initialize the examples for the front page
-    web::current_example();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use annotate::*;
+    use std::collections::BTreeSet;
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::io::prelude::*;
 
-    // Build the definition data structures in the background
-    task::spawn_blocking(|| {
-        let _ = search::tree::search_definition();
-    });
+    let mut args = std::env::args();
+    let _ = args.next();
+    let path = args.next().expect("no file provided");
+    let min_count = args
+        .next()
+        .map(|s| s.parse().expect("invalid minimum count"))
+        .unwrap_or(2);
 
-    // Build the word and annotation structures immediately
-    let word_task = task::spawn_blocking(|| {
-        let _ = search::tree::search_word();
-    });
-    let annotation_task = task::spawn_blocking(|| {
-        let _ = annotate::supported();
-    });
+    let file = BufReader::new(File::open(path)?);
 
-    let mut builder = rocket::build()
-        .mount(
-            origin(),
-            routes![
-                // Index and other pages
-                web::index,
-                web::advanced,
-                web::grammar,
-                web::annotate,
-                // Search pages
-                web::entries,
-                web::random,
-                web::search_all,
-                web::search,
-                web::search_no_query,
-                web::word_of_the_day,
-                // API endpoints
-                web::annotate_api_get,
-                web::annotate_top_get,
-                web::annotate_raw_get,
-                web::annotate_api,
-                web::annotate_top,
-                web::annotate_raw,
-                web::suggest,
-                web::word_of_the_day_api,
-                // Other endpoints
-                web::health,
-                web::health_post,
-                web::info,
-            ],
-        )
-        .register("/", catchers![web::error])
-        .attach(Template::fairing());
+    let mut lines = file.lines().peekable();
+    let (exclude, _) = if let Some(Ok(line)) = lines.peek() {
+        TextSegment::strip_exclude(line)
+    } else {
+        eprintln!("empty file!");
+        return Ok(());
+    };
 
-    // Only mount the resource path if it's hosted by this server
-    if resource_path().starts_with("/") {
-        builder = builder.mount(resource_path(), FileServer::from(relative!("res")));
+    if !exclude.is_empty() {
+        eprintln!("excluded words: {}", exclude.len());
     }
 
-    // Wait for the word and annotation tasks to finish
-    word_task
-        .await
-        .expect("word trees should build successfully");
-    annotation_task
-        .await
-        .expect("annotation structures should build successfully");
+    let mut count = WordCount::default();
+    let mut unknown = BTreeSet::new();
+    let mut progress = 0u64;
+    for line in lines {
+        let line = line?;
 
-    builder
+        for seg in TextSegment::parse(&line).flat_map(|seg| seg.group_excluding(&exclude)) {
+            if let TextSegment::Tamil(word, None) = seg {
+                unknown.insert(word);
+                continue;
+            }
+
+            count.insert_segment(&seg);
+
+            progress += 1;
+            if progress.is_multiple_of(1_000_000) {
+                eprintln!("parsed {}M words...", progress / 1_000_000);
+            }
+        }
+    }
+
+    let definition_lengths = dictionary::entries()
+        .iter()
+        .into_grouping_map_by(|entry| entry.primary_word())
+        .fold(0, |acc, _, entry| acc + entry.parsed_text.len());
+
+    println!(r#""word","count","definition_length""#);
+
+    for (word, count) in count.into_vec(min_count) {
+        println!(
+            r#""{word}",{count},{}"#,
+            definition_lengths.get(word).copied().unwrap_or(0)
+        );
+    }
+
+    if !unknown.is_empty() {
+        eprintln!("unknown words: {}", unknown.len());
+    }
+
+    Ok(())
 }
