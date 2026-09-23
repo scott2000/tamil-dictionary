@@ -51,6 +51,9 @@ pub mod web;
 pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<SeaHasher>>;
 pub type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<SeaHasher>>;
 
+// The path the server hosts resources on.
+pub const SERVER_RESOURCE_PATH: &str = "/res";
+
 pub fn uptime() -> Duration {
     static START: OnceCell<Instant> = OnceCell::new();
 
@@ -62,27 +65,13 @@ pub fn resource_path() -> &'static str {
     static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
 
     INSTANCE.get_or_init(|| {
-        let base_path = if let Ok(path) = std::env::var("RES_BASE_PATH") {
-            assert!(!path.is_empty());
-            assert!(path.ends_with("/"));
-            path
+        if let Ok(path) = std::env::var("RESOURCE_PATH")
+            && !path.is_empty()
+        {
+            assert!(!path.ends_with("/"));
+            path.into_boxed_str()
         } else {
-            "/res/".to_owned()
-        };
-        format!("{base_path}{}", resource_version()).into_boxed_str()
-    })
-}
-
-pub fn resource_version() -> &'static str {
-    static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
-
-    INSTANCE.get_or_init(|| {
-        if let Ok(version) = std::env::var("RES_VERSION") {
-            assert!(!version.is_empty());
-            assert!(version.chars().all(|ch| ch.is_ascii_alphanumeric()));
-            version.into_boxed_str()
-        } else {
-            Box::from("dev")
+            Box::from(SERVER_RESOURCE_PATH)
         }
     })
 }
@@ -98,9 +87,6 @@ async fn rocket() -> _ {
         let _ = search::tree::search_word();
         let _ = search::tree::search_definition();
     });
-
-    // Host resources at a path including the version number
-    let res_path = format!("/res/{}", resource_version());
 
     rocket::build()
         .mount(
@@ -127,7 +113,7 @@ async fn rocket() -> _ {
                 web::info,
             ],
         )
-        .mount(res_path, FileServer::from(relative!("res")))
+        .mount(SERVER_RESOURCE_PATH, FileServer::from(relative!("res")))
         .register("/", catchers![web::error])
         .attach(Template::fairing())
 }

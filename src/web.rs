@@ -999,7 +999,6 @@ pub fn info() -> String {
     format!(
         concat!(
             "uptime={:}:{:02}:{:02}\n",
-            "resource_version={}\n",
             "resource_path={}\n",
             "result_count={}\n",
             "search_count={}\n",
@@ -1009,7 +1008,6 @@ pub fn info() -> String {
         hours,
         mins,
         secs,
-        crate::resource_version(),
         crate::resource_path(),
         result_count,
         search_count,
