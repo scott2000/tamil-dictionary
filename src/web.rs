@@ -1041,7 +1041,15 @@ pub fn error(status: Status, req: &Request) -> Template {
     };
 
     if !not_found {
-        error.headers = req.headers().iter().map(|h| h.to_string()).collect();
+        error.headers = req
+            .headers()
+            .iter()
+            .filter(|h| {
+                // Non-standard headers can contain sensitive information
+                !h.name().starts_with("x-")
+            })
+            .map(|h| h.to_string())
+            .collect();
         error.method = req.method().to_string();
     }
 
