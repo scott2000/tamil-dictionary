@@ -3,8 +3,9 @@
 const basePath = document.currentScript.dataset.basePath || "";
 
 window.addEventListener('load', function() {
-  const sessionStorageKey = 'search-bar-cache';
-  const sessionStorageMaxCacheEntries = 16;
+  const localStorageKey = 'tamil-dictionary-search-bar-cache';
+  const localStorageCacheVersion = 1;
+  const localStorageCacheMaxEntries = 16;
 
   const delay = 300;
   const count = 6;
@@ -36,20 +37,28 @@ window.addEventListener('load', function() {
   const searchKinds = document.getElementsByClassName('search-kind');
 
   function loadCache() {
-    const sessionCache = sessionStorage.getItem(sessionStorageKey);
-    if (!sessionCache) {
+    const localStorageCache = localStorage.getItem(localStorageKey);
+    if (!localStorageCache) {
       return new Map();
     }
 
-    return new Map(Object.entries(JSON.parse(sessionCache)));
+    const parsed = JSON.parse(localStorageCache);
+    if (parsed.version !== localStorageCacheVersion) {
+      return new Map();
+    }
+
+    return new Map(Object.entries(parsed.cache));
   }
 
   function saveCache() {
     const nonEmptyEntries = Array.from(cache.entries())
       .filter(([key, value]) => Boolean(key && value))
-      .slice(-sessionStorageMaxCacheEntries);
+      .slice(-localStorageCacheMaxEntries);
 
-    sessionStorage.setItem(sessionStorageKey, JSON.stringify(Object.fromEntries(nonEmptyEntries)));
+    localStorage.setItem(localStorageKey, JSON.stringify({
+      version: localStorageCacheVersion,
+      cache: Object.fromEntries(nonEmptyEntries),
+    }));
   }
 
   function display() {
