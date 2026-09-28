@@ -816,6 +816,12 @@ impl Word {
                 this = &this[2..];
             }
 
+            // mi(R)a- => mo(R)a-
+            &[M, I, c2, A | LongA | Ai | Au, ..] if LetterSet::retroflex().matches(c2) => {
+                word.extend_from_slice(&[M, O]);
+                this = &this[2..];
+            }
+
             // i_a => e_a
             &[I, c2, A | LongA | Ai | Au, ..] if BEFORE_A.matches(c2) => {
                 word.push(E);
