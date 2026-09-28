@@ -44,7 +44,8 @@ static ANNOTATE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 pub fn render_template(template: &'static str, context: impl Serialize) -> Template {
     #[derive(Serialize)]
-    struct WithResourcePath<T: Serialize> {
+    struct WithPaths<T: Serialize> {
+        base_path: &'static str,
         resource_path: &'static str,
         #[serde(flatten)]
         inner: T,
@@ -52,7 +53,8 @@ pub fn render_template(template: &'static str, context: impl Serialize) -> Templ
 
     Template::render(
         template,
-        WithResourcePath {
+        WithPaths {
+            base_path: crate::base_path(),
             resource_path: crate::resource_path(),
             inner: context,
         },
@@ -240,7 +242,7 @@ fn link(word: &str) -> String {
 }
 
 fn link_no_escape(escaped: &str) -> String {
-    uri!(search(escaped, _, _)).to_string()
+    uri!(crate::origin(), search(escaped, _, _)).to_string()
 }
 
 #[derive(Debug)]
@@ -284,7 +286,7 @@ impl ResultSegment {
         };
 
         let uri = refs::get_entry(word, sub)
-            .map(|entry| uri!(entries(entry.to_string())).to_string())
+            .map(|entry| uri!(crate::origin(), entries(entry.to_string())).to_string())
             .unwrap_or_else(|| link(word));
 
         let ref_seg = Self {
@@ -565,9 +567,9 @@ impl<'a> SearchTemplate<'a> {
         let other_uri = if all {
             String::new()
         } else if definition.is_empty() {
-            uri!(search_all(query, _, &kinds)).to_string()
+            uri!(crate::origin(), search_all(query, _, &kinds)).to_string()
         } else {
-            uri!(search_all(query, Some(definition), &kinds)).to_string()
+            uri!(crate::origin(), search_all(query, Some(definition), &kinds)).to_string()
         };
 
         let kind_set = kinds.to_kind_set();
@@ -646,7 +648,8 @@ impl<'a> SearchTemplate<'a> {
                                 && query.implicit_transliteration()
                             {
                                 let d = Some(format!("{} {}", self.query, self.definition));
-                                self.def_uri = Some(uri!(search("", d, _)).to_string());
+                                self.def_uri =
+                                    Some(uri!(crate::origin(), search("", d, _)).to_string());
                             }
                         }
 
@@ -737,7 +740,7 @@ pub fn search(q: &str, d: Option<&str>, k: QueryKindSet) -> Result<Template, Red
 
 #[get("/search")]
 pub fn search_no_query() -> Redirect {
-    Redirect::to(uri!(index()))
+    Redirect::to(uri!(crate::origin(), index()))
 }
 
 fn search_query(q: &str, d: &str, k: QueryKindSet, all: bool) -> Result<Template, Redirect> {
@@ -745,7 +748,7 @@ fn search_query(q: &str, d: &str, k: QueryKindSet, all: bool) -> Result<Template
 
     let mut search = SearchTemplate::new(q, d, k, all);
     if search.is_empty() {
-        return Err(Redirect::to(uri!(index())));
+        return Err(Redirect::to(uri!(crate::origin(), index())));
     }
 
     match Query::parse(search.query, search.definition, search.kind_set) {
@@ -888,7 +891,7 @@ pub fn annotate_api(body: &str) -> RawHtml<String> {
                 write!(
                     html,
                     r#"<a href="{}">{}</a>"#,
-                    uri!(entries(choice.ids())),
+                    uri!(crate::origin(), entries(choice.ids())),
                     word,
                 )
                 .unwrap();
@@ -999,6 +1002,7 @@ pub fn info() -> String {
     format!(
         concat!(
             "uptime={:}:{:02}:{:02}\n",
+            "base_path={}\n",
             "resource_path={}\n",
             "result_count={}\n",
             "search_count={}\n",
@@ -1008,6 +1012,7 @@ pub fn info() -> String {
         hours,
         mins,
         secs,
+        crate::base_path(),
         crate::resource_path(),
         result_count,
         search_count,

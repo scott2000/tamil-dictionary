@@ -6,7 +6,7 @@
         <link rel="stylesheet" href="{{{resource_path}}}/styles/main.css">
         <link rel="stylesheet" href="{{{resource_path}}}/styles/search.css">
         <link rel="stylesheet" href="{{{resource_path}}}/styles/search_bar.css">
-        <script src="{{{resource_path}}}/scripts/search_bar.js"></script>
+        <script src="{{{resource_path}}}/scripts/search_bar.js" data-base-path="{{{base_path}}}"></script>
         {{#if query~}}
             {{#if error~}}
                 <title>Search Error for '{{query}}'</title>

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use once_cell::sync::OnceCell;
 
 use rocket::fs::{FileServer, relative};
+use rocket::http::uri::Origin;
 use rocket_dyn_templates::Template;
 
 use seahash::SeaHasher;
@@ -61,6 +62,30 @@ pub fn uptime() -> Duration {
     Instant::now().saturating_duration_since(start)
 }
 
+pub fn base_path() -> &'static str {
+    static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
+
+    INSTANCE.get_or_init(|| {
+        if let Ok(path) = std::env::var("BASE_PATH") {
+            assert!(!path.ends_with("/"));
+            path.into_boxed_str()
+        } else {
+            Box::from("")
+        }
+    })
+}
+
+pub fn origin() -> Origin<'static> {
+    static INSTANCE: OnceCell<Origin<'static>> = OnceCell::new();
+
+    INSTANCE
+        .get_or_init(|| {
+            let with_slash = format!("{}/", base_path()).leak();
+            Origin::parse(with_slash).expect("base path is valid origin")
+        })
+        .clone()
+}
+
 pub fn resource_path() -> &'static str {
     static INSTANCE: OnceCell<Box<str>> = OnceCell::new();
 
@@ -71,7 +96,7 @@ pub fn resource_path() -> &'static str {
             assert!(!path.ends_with("/"));
             path.into_boxed_str()
         } else {
-            Box::from(SERVER_RESOURCE_PATH)
+            format!("{}{SERVER_RESOURCE_PATH}", base_path()).into_boxed_str()
         }
     })
 }
@@ -90,9 +115,9 @@ async fn rocket() -> _ {
         let _ = search::tree::search_definition();
     });
 
-    rocket::build()
+    let builder = rocket::build()
         .mount(
-            "/",
+            origin(),
             routes![
                 // Index and other pages
                 web::index,
@@ -115,7 +140,13 @@ async fn rocket() -> _ {
                 web::info,
             ],
         )
-        .mount(SERVER_RESOURCE_PATH, FileServer::from(relative!("res")))
         .register("/", catchers![web::error])
-        .attach(Template::fairing())
+        .attach(Template::fairing());
+
+    // Only mount the resource path if it's hosted by this server
+    if resource_path().starts_with("/") {
+        builder.mount(resource_path(), FileServer::from(relative!("res")))
+    } else {
+        builder
+    }
 }

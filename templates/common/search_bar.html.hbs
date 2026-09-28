@@ -1,5 +1,5 @@
 <div id="search-box">
-    <form autocomplete="off" method="get" action="/search">
+    <form autocomplete="off" method="get" action="{{{base_path}}}/search">
         <label class="search-adv" for="search-word"
             {{~#unless advanced}} style="display:none;" {{~/unless~}}>
             Word Contains:
@@ -12,7 +12,7 @@
         </div>
         <p id="search-simpl" class="search-toggle"
             {{~#if advanced}} style="display:none;" {{~/if~}}>
-            <a id="search-adv-link" href="/advanced">Advanced Search</a>
+            <a id="search-adv-link" href="{{{base_path}}}/advanced">Advanced Search</a>
         </p>
         <div class="search-adv"
             {{~#unless advanced}} style="display:none;" {{~/unless~}}>
@@ -37,7 +37,7 @@
             {{> common/checkbox key="tv" name="துணைவினை"}}
             {{> common/checkbox key="vm" name="வினைமுற்று"}}
             </div>
-            <p class="search-toggle"><a id="search-clear-link" href="/">Basic Search</a></p>
+            <p class="search-toggle"><a id="search-clear-link" href="{{{base_path}}}/">Basic Search</a></p>
         </div>
     </form>
 </div>

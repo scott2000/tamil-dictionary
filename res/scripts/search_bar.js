@@ -1,5 +1,7 @@
 'use strict';
 
+const basePath = document.currentScript.dataset.basePath || "";
+
 window.addEventListener('load', function() {
   const sessionStorageKey = 'search-bar-cache';
   const sessionStorageMaxCacheEntries = 16;
@@ -128,7 +130,7 @@ window.addEventListener('load', function() {
     params.append('n', count);
 
     const request = new XMLHttpRequest();
-    request.open('GET', '/api/suggest?' + params, true);
+    request.open('GET', basePath + '/api/suggest?' + params, true);
     request.setRequestHeader('Accept', 'application/json');
 
     function error() {

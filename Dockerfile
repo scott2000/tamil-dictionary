@@ -1,6 +1,8 @@
 ARG RUST_VERSION=1.98.1
 ARG APP_NAME=tamil_dictionary
-ARG RESOURCE_PATH="/res"
+
+ARG BASE_PATH=""
+ARG RESOURCE_PATH=""
 
 ################################################################################
 # Build stage (Rust image)
@@ -28,6 +30,7 @@ RUN --mount=type=bind,source=src,target=src \
 
 FROM cgr.dev/chainguard/static:latest AS final
 
+ARG BASE_PATH
 ARG RESOURCE_PATH
 
 COPY --from=build /bin/server /bin/
@@ -41,6 +44,8 @@ COPY --chmod=a=r dictionary.json .
 COPY --chmod=a=r verbs.json* .
 
 ENV ROCKET_ADDRESS=0.0.0.0
+
+ENV BASE_PATH=${BASE_PATH}
 ENV RESOURCE_PATH=${RESOURCE_PATH}
 
 EXPOSE 8000

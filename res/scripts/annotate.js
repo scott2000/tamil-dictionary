@@ -1,5 +1,7 @@
 'use strict';
 
+const basePath = document.currentScript.dataset.basePath || "";
+
 window.addEventListener('load', function() {
   const sizeLimit = 8192;
 
@@ -49,7 +51,7 @@ window.addEventListener('load', function() {
     annotateButton.disabled = true;
     annotateButton.textContent = 'Loading...';
 
-    fetch('/api/annotate', {
+    fetch(basePath + '/api/annotate', {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',

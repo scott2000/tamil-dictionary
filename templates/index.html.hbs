@@ -6,7 +6,7 @@
         <link rel="stylesheet" href="{{{resource_path}}}/styles/main.css">
         <link rel="stylesheet" href="{{{resource_path}}}/styles/index.css">
         <link rel="stylesheet" href="{{{resource_path}}}/styles/search_bar.css">
-        <script src="{{{resource_path}}}/scripts/search_bar.js"></script>
+        <script src="{{{resource_path}}}/scripts/search_bar.js" data-base-path="{{{base_path}}}"></script>
         <title>Tamil Dictionary</title>
     </head>
     <body>
@@ -20,7 +20,7 @@
                 <li>Match any letter in a set: <code>[ப்வ்]</code></li>
                 <li>Exclude A from results: <code>-A</code></li>
                 <li>Start/end of a word: <code>&lt;</code>, <code>&gt;</code></li>
-                <li><a href="/grammar">View full grammar</a></li>
+                <li><a href="{{{base_path}}}/grammar">View full grammar</a></li>
             </ul>
         </div>
     </body>

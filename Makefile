@@ -1,9 +1,10 @@
 .PHONY: docker docker-lambda run
 
-RESOURCE_PATH := /res
-
 docker:
-	docker build --tag tamil-dictionary --build-arg RESOURCE_PATH=${RESOURCE_PATH} .
+	docker build --tag tamil-dictionary \
+		--build-arg BASE_PATH=${BASE_PATH} \
+		--build-arg RESOURCE_PATH=${RESOURCE_PATH} \
+		.
 
 docker-lambda: docker
 	docker build \
@@ -11,6 +12,7 @@ docker-lambda: docker
 		--tag tamil-dictionary-lambda \
 		--platform linux/amd64 \
 		--provenance false \
+		--build-arg BASE_PATH=${BASE_PATH} \
 		.
 
 run: docker
