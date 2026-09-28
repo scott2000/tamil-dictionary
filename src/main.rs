@@ -106,16 +106,20 @@ async fn rocket() -> _ {
     // Initialize the examples for the front page
     web::current_example();
 
-    // Start building the word, definition, and stem data structures
+    // Build the definition data structures in the background
     task::spawn_blocking(|| {
-        // Build the word structures first since they're used most frequently
-        let _ = search::tree::search_word();
-
-        let _ = annotate::supported();
         let _ = search::tree::search_definition();
     });
 
-    let builder = rocket::build()
+    // Build the word and annotation structures immediately
+    let word_task = task::spawn_blocking(|| {
+        let _ = search::tree::search_word();
+    });
+    let annotation_task = task::spawn_blocking(|| {
+        let _ = annotate::supported();
+    });
+
+    let mut builder = rocket::build()
         .mount(
             origin(),
             routes![
@@ -146,8 +150,16 @@ async fn rocket() -> _ {
 
     // Only mount the resource path if it's hosted by this server
     if resource_path().starts_with("/") {
-        builder.mount(resource_path(), FileServer::from(relative!("res")))
-    } else {
-        builder
+        builder = builder.mount(resource_path(), FileServer::from(relative!("res")));
     }
+
+    // Wait for the word and annotation tasks to finish
+    word_task
+        .await
+        .expect("word trees should build successfully");
+    annotation_task
+        .await
+        .expect("annotation structures should build successfully");
+
+    builder
 }
