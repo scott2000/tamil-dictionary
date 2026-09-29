@@ -38,33 +38,42 @@ window.addEventListener('load', function() {
   const searchKinds = document.getElementsByClassName('search-kind');
 
   function loadCache() {
-    const localStorageCache = localStorage.getItem(localStorageKey);
-    if (!localStorageCache) {
+    try {
+      const localStorageCache = localStorage.getItem(localStorageKey);
+      if (!localStorageCache) {
+        return new Map();
+      }
+
+      const parsed = JSON.parse(localStorageCache);
+      if (parsed.version !== localStorageCacheVersion) {
+        return new Map();
+      }
+
+      const oldestValidCacheTime = new Date().getTime() - localStorageCacheTtl;
+      const entries = Object.entries(parsed.cache)
+        .filter(([key, value]) => value.timestamp >= oldestValidCacheTime);
+
+      return new Map(entries);
+    } catch (err) {
+      console.error(err);
       return new Map();
     }
-
-    const parsed = JSON.parse(localStorageCache);
-    if (parsed.version !== localStorageCacheVersion) {
-      return new Map();
-    }
-
-    const oldestValidCacheTime = new Date().getTime() - localStorageCacheTtl;
-    const entries = Object.entries(parsed.cache)
-      .filter(([key, value]) => value.timestamp >= oldestValidCacheTime);
-
-    return new Map(entries);
   }
 
   function saveCache() {
-    const nonEmptyEntries = Array.from(cache.entries())
-      .filter(([key, value]) => Boolean(key && value))
-      .sort((a, b) => a[1].timestamp - b[1].timestamp)
-      .slice(-localStorageCacheMaxEntries);
+    try {
+      const nonEmptyEntries = Array.from(cache.entries())
+        .filter(([key, value]) => Boolean(key && value))
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)
+        .slice(-localStorageCacheMaxEntries);
 
-    localStorage.setItem(localStorageKey, JSON.stringify({
-      version: localStorageCacheVersion,
-      cache: Object.fromEntries(nonEmptyEntries),
-    }));
+      localStorage.setItem(localStorageKey, JSON.stringify({
+        version: localStorageCacheVersion,
+        cache: Object.fromEntries(nonEmptyEntries),
+      }));
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   function display() {
