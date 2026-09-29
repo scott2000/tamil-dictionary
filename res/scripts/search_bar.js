@@ -4,8 +4,9 @@ const basePath = document.currentScript.dataset.basePath || "";
 
 window.addEventListener('load', function() {
   const localStorageKey = 'tamil-dictionary-search-bar-cache';
-  const localStorageCacheVersion = 1;
-  const localStorageCacheMaxEntries = 16;
+  const localStorageCacheVersion = 2;
+  const localStorageCacheMaxEntries = 512;
+  const localStorageCacheTtl = 24 * 60 * 60 * 1000;
 
   const delay = 300;
   const count = 6;
@@ -47,12 +48,17 @@ window.addEventListener('load', function() {
       return new Map();
     }
 
-    return new Map(Object.entries(parsed.cache));
+    const oldestValidCacheTime = new Date().getTime() - localStorageCacheTtl;
+    const entries = Object.entries(parsed.cache)
+      .filter(([key, value]) => value.timestamp >= oldestValidCacheTime);
+
+    return new Map(entries);
   }
 
   function saveCache() {
     const nonEmptyEntries = Array.from(cache.entries())
       .filter(([key, value]) => Boolean(key && value))
+      .sort((a, b) => a[1].timestamp - b[1].timestamp)
       .slice(-localStorageCacheMaxEntries);
 
     localStorage.setItem(localStorageKey, JSON.stringify({
@@ -122,7 +128,7 @@ window.addEventListener('load', function() {
     const cached = cache.get(query);
     if (cached !== undefined) {
       if (cached !== null) {
-        setResults(cached);
+        setResults(cached.results);
       }
       return;
     }
@@ -160,7 +166,10 @@ window.addEventListener('load', function() {
       }
 
       const response = JSON.parse(request.responseText);
-      cache.set(query, response);
+      cache.set(query, {
+        timestamp: new Date().getTime(),
+        results: response,
+      });
       saveCache();
 
       if (query === currentQuery) {
