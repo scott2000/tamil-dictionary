@@ -905,13 +905,45 @@ pub fn annotate_api(body: &str) -> RawHtml<String> {
 #[derive(Serialize)]
 pub struct AnnotateResponse<'a> {
     segments: Vec<AnnotateResponseEntry<'a>>,
-    top: Vec<(&'static str, usize)>,
+    top: TopWords,
 }
 
 #[derive(Serialize)]
 pub struct AnnotateResponseEntry<'a> {
     word: Cow<'a, str>,
     ids: Option<BTreeSet<EntryIndex>>,
+}
+
+pub type TopWords = Vec<(&'static str, usize)>;
+
+#[get("/api/annotate/top?<q>&<n>&<min>")]
+pub fn annotate_top_get(q: &str, n: Option<u32>, min: Option<u32>) -> Json<TopWords> {
+    annotate_top(n, min, q)
+}
+
+#[post("/api/annotate/top?<n>&<min>", format = "plain", data = "<body>")]
+pub fn annotate_top(n: Option<u32>, min: Option<u32>, body: &str) -> Json<TopWords> {
+    ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    let n = n.unwrap_or(25).min(1000) as usize;
+    let min = min.unwrap_or(2) as usize;
+
+    if n == 0 {
+        return Json(Vec::new());
+    }
+    let mut count = WordCount::default();
+
+    for segment in TextSegment::annotate(body) {
+        if let TextSegment::Tamil(_, Some(choice)) = segment {
+            count.insert(&choice);
+        }
+    }
+
+    let mut vec = count.into_vec(min);
+    if vec.len() > n {
+        vec.drain(n..);
+    }
+    Json(vec)
 }
 
 #[get("/api/annotate/raw?<q>&<n>&<min>")]
@@ -923,7 +955,7 @@ pub fn annotate_raw_get(q: &str, n: Option<u32>, min: Option<u32>) -> Json<Annot
 pub fn annotate_raw(n: Option<u32>, min: Option<u32>, body: &str) -> Json<AnnotateResponse<'_>> {
     ANNOTATE_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    let n = n.unwrap_or(25).min(100) as usize;
+    let n = n.unwrap_or(25).min(1000) as usize;
     let min = min.unwrap_or(2) as usize;
 
     let mut count = if n == 0 {
