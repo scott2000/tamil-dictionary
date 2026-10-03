@@ -22,6 +22,7 @@ use rocket::response::Redirect;
 use rocket::response::content::RawHtml;
 use rocket::serde::json::Json;
 use rocket_dyn_templates::Template;
+use time::Date;
 
 use crate::annotate::{TextSegment, WordCount};
 use crate::dictionary::{self, *};
@@ -722,6 +723,13 @@ pub fn entries(ids: &str) -> Template {
     render_template("search", search)
 }
 
+#[get("/word-of-the-day?<date>")]
+pub fn word_of_the_day(date: Option<Date>) -> Result<Template, Redirect> {
+    let date = date.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
+    let word = Query::escape(Entry::word_of_the_day(&date).primary_word());
+    search_query(&word, "", QueryKindSet::default(), false)
+}
+
 #[get("/random")]
 pub fn random() -> Result<Template, Redirect> {
     let word = Query::escape(Entry::random().primary_word());
@@ -855,6 +863,13 @@ pub fn suggest(q: &str, n: u32) -> Json<Vec<SuggestResponseEntry>> {
     };
 
     Json(list.suggestions().map(SuggestResponseEntry::from).collect())
+}
+
+#[get("/api/word-of-the-day?<date>")]
+pub fn word_of_the_day_api(date: Option<Date>) -> Json<SuggestResponseEntry> {
+    let date = date.unwrap_or_else(|| time::OffsetDateTime::now_utc().date());
+    let entry = Entry::word_of_the_day(&date);
+    Json(entry.into())
 }
 
 #[get("/api/annotate?<q>")]

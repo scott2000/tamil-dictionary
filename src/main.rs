@@ -134,6 +134,7 @@ async fn rocket() -> _ {
                 web::search_all,
                 web::search,
                 web::search_no_query,
+                web::word_of_the_day,
                 // API endpoints
                 web::annotate_api_get,
                 web::annotate_top_get,
@@ -142,6 +143,8 @@ async fn rocket() -> _ {
                 web::annotate_top,
                 web::annotate_raw,
                 web::suggest,
+                web::word_of_the_day_api,
+                // Other endpoints
                 web::health,
                 web::health_post,
                 web::info,

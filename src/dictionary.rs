@@ -3,10 +3,11 @@ use std::io::BufReader;
 
 use once_cell::sync::OnceCell;
 
-use rand::RngExt;
 use rand::seq::IndexedRandom;
+use rand::{RngExt, SeedableRng};
 
 use serde::Deserialize;
+use time::Date;
 
 use crate::intern;
 use crate::tamil::{Letter, Word};
@@ -240,6 +241,11 @@ impl Entry {
 
         // Intern the resulting words
         parsed.into_iter().map(|word| word.into()).collect()
+    }
+
+    pub fn word_of_the_day(date: &Date) -> &'static Self {
+        let mut rng = rand::rngs::ChaCha8Rng::seed_from_u64(date.to_julian_day() as u64);
+        Self::random_with(&mut rng)
     }
 
     pub fn random() -> &'static Self {
