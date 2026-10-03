@@ -3,6 +3,7 @@ use std::io::BufReader;
 
 use once_cell::sync::OnceCell;
 
+use rand::RngExt;
 use rand::seq::IndexedRandom;
 
 use serde::Deserialize;
@@ -242,7 +243,16 @@ impl Entry {
     }
 
     pub fn random() -> &'static Self {
-        entries().choose(&mut rand::rng()).unwrap()
+        Self::random_with(&mut rand::rng())
+    }
+
+    pub fn random_with(rng: &mut dyn rand::Rng) -> &'static Self {
+        let mut entry = entries().choose(rng).unwrap();
+        // Prefer non-formal words, since those are more common.
+        if entry.formal && rng.random_bool(0.75) {
+            entry = entries().choose(rng).unwrap();
+        }
+        entry
     }
 
     pub fn primary_word(&self) -> &str {
