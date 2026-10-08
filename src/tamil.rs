@@ -935,16 +935,30 @@ impl Word {
                     this = &this[2..];
                 }
 
-                // ndr => nn
+                // ndr => NN
                 [AlveolarN, AlveolarR, ..] if word != [N, A] => {
-                    word.extend_from_slice(&[AlveolarN, AlveolarN]);
+                    word.extend_from_slice(&[RetroN, RetroN]);
                     this = &this[2..];
+                }
+
+                // endr => enn
+                [E, AlveolarN, AlveolarR, ..] => {
+                    word.extend_from_slice(&[E, AlveolarN, AlveolarN]);
+                    this = &this[3..];
                 }
 
                 // (N)ndr => (N)n
                 &[v, AlveolarN, AlveolarR, ..] if LetterSet::nedil().matches(v) => {
                     word.extend_from_slice(&[v, RetroN]);
                     this = &this[3..];
+                }
+
+                // Don't transform -ndr at the start of a word (e.g. sendra)
+                &[c, v, AlveolarN, AlveolarR, ..]
+                    if LetterSet::consonant().matches(c) && LetterSet::kuril().matches(v) =>
+                {
+                    word.extend_from_slice(&[c, v, AlveolarN, AlveolarR]);
+                    this = &this[4..];
                 }
 
                 // indhu => inju
