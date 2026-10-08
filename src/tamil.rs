@@ -875,6 +875,30 @@ impl Word {
                     this = tail;
                 }
 
+                // aaych- => aach-
+                [LongA, Y, Ch, Ch, ..] => {
+                    word.extend_from_slice(&[LongA, Ch, Ch]);
+                    this = &this[4..];
+                }
+
+                // aaynd- => aanj-
+                [LongA, Y, N, T, ..] => {
+                    word.extend_from_slice(&[LongA, Ny, Ch]);
+                    this = &this[4..];
+                }
+
+                // -aay(C)- => -aa(C)-
+                &[LongA, Y, c, ..] if word.len() > 1 && LetterSet::consonant().matches(c) => {
+                    word.extend_from_slice(&[LongA]);
+                    this = &this[2..];
+                }
+
+                // -aay => -aa
+                [LongA, Y] if word.len() > 1 => {
+                    word.extend_from_slice(&[LongA]);
+                    this = &[];
+                }
+
                 // pi(R)- => pu(R)-
                 &[P, I, c2, ..] if LetterSet::retroflex().matches(c2) => {
                     word.extend_from_slice(&[P, U]);
@@ -964,6 +988,12 @@ impl Word {
                 // indhu => inju
                 &[v @ (I | Ai), N, T, U, ..] if is_verb || is_adv || is_adj => {
                     word.extend_from_slice(&[v, Ny, Ch]);
+                    this = &this[3..];
+                }
+
+                // yndh => nj
+                [Y, N, T, ..] => {
+                    word.extend_from_slice(&[Ny, Ch]);
                     this = &this[3..];
                 }
 
